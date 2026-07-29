@@ -1,0 +1,40 @@
+# Java / Maven
+backend/target/
+*.class
+*.jar
+*.war
+*.log
+.mvn/timing.properties
+
+# Spring Boot
+backend/logs/
+backend/application-local.yaml
+backend/src/main/resources/application-local.yaml
+
+# Variables y secretos
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+
+# React / Node
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Temporales y respaldos
+*.tmp
+*.bak
+*.backup
