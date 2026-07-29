@@ -38,3 +38,5 @@ desktop.ini
 *.tmp
 *.bak
 *.backup
+
+!.env.example
