@@ -15,3 +15,8 @@ management:
   endpoint:
     health:
       show-details: never
+
+qcc:
+  jwt:
+    secret: ${QCC_JWT_SECRET}
+    expiration-minutes: ${QCC_JWT_EXPIRATION_MINUTES:60}

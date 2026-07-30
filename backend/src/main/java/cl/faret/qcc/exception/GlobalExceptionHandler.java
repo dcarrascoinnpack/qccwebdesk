@@ -11,6 +11,10 @@ import org.springframework.http.ProblemDetail;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
+
+import cl.faret.qcc.usuarios.exception.OperacionNoPermitidaException;
+import cl.faret.qcc.usuarios.exception.UsuarioDuplicadoException;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -29,6 +33,51 @@ public class GlobalExceptionHandler {
         problem.setDetail(exception.getMessage());
         problem.setType(
                 URI.create("https://api.faret.cl/problems/not-found"));
+
+        return problem;
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ProblemDetail handleNoResourceFound(
+            NoResourceFoundException exception) {
+
+        ProblemDetail problem =
+                ProblemDetail.forStatus(HttpStatus.NOT_FOUND);
+
+        problem.setTitle("Recurso no encontrado");
+        problem.setDetail("La ruta solicitada no existe.");
+        problem.setType(
+                URI.create("https://api.faret.cl/problems/not-found"));
+
+        return problem;
+    }
+
+    @ExceptionHandler(UsuarioDuplicadoException.class)
+    public ProblemDetail handleUsuarioDuplicado(
+            UsuarioDuplicadoException exception) {
+
+        ProblemDetail problem =
+                ProblemDetail.forStatus(HttpStatus.CONFLICT);
+
+        problem.setTitle("Usuario duplicado");
+        problem.setDetail(exception.getMessage());
+        problem.setType(
+                URI.create("https://api.faret.cl/problems/usuario-duplicado"));
+
+        return problem;
+    }
+
+    @ExceptionHandler(OperacionNoPermitidaException.class)
+    public ProblemDetail handleOperacionNoPermitida(
+            OperacionNoPermitidaException exception) {
+
+        ProblemDetail problem =
+                ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+
+        problem.setTitle("Operación no permitida");
+        problem.setDetail(exception.getMessage());
+        problem.setType(
+                URI.create("https://api.faret.cl/problems/operacion-no-permitida"));
 
         return problem;
     }

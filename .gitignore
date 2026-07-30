@@ -39,4 +39,10 @@ desktop.ini
 *.bak
 *.backup
 
+# Documentacion y notas de trabajo (contienen contexto interno/sensible)
+*.md
+
+# Configuracion local de Claude Code
+.claude/
+
 !.env.example
