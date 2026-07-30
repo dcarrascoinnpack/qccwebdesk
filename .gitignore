@@ -41,6 +41,7 @@ desktop.ini
 
 # Documentacion y notas de trabajo (contienen contexto interno/sensible)
 *.md
+!README.md
 
 # Configuracion local de Claude Code
 .claude/
