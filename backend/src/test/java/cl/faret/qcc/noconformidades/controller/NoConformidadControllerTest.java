@@ -9,6 +9,7 @@ import static org.mockito.Mockito.when;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -18,12 +19,22 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
+import cl.faret.qcc.noconformidades.dto.AccionCorrectivaResponse;
+import cl.faret.qcc.noconformidades.dto.ActualizarAccionRequest;
+import cl.faret.qcc.noconformidades.dto.ActualizarGestionRequest;
+import cl.faret.qcc.noconformidades.dto.AnalisisResponse;
+import cl.faret.qcc.noconformidades.dto.CerrarNoConformidadRequest;
+import cl.faret.qcc.noconformidades.dto.CrearAccionRequest;
 import cl.faret.qcc.noconformidades.dto.CrearNoConformidadRequest;
 import cl.faret.qcc.noconformidades.dto.CrearNoConformidadResponse;
+import cl.faret.qcc.noconformidades.dto.CrearSeguimientoRequest;
 import cl.faret.qcc.noconformidades.dto.FiltrosOpcionesResponse;
+import cl.faret.qcc.noconformidades.dto.GuardarAnalisisRequest;
+import cl.faret.qcc.noconformidades.dto.NoConformidadIdResponse;
 import cl.faret.qcc.noconformidades.dto.NoConformidadListResponse;
 import cl.faret.qcc.noconformidades.dto.NoConformidadResponse;
 import cl.faret.qcc.noconformidades.dto.NoConformidadResumenResponse;
+import cl.faret.qcc.noconformidades.dto.SeguimientoResponse;
 import cl.faret.qcc.noconformidades.service.NoConformidadService;
 
 @ExtendWith(MockitoExtension.class)
@@ -108,6 +119,122 @@ class NoConformidadControllerTest {
         ResponseEntity<CrearNoConformidadResponse> respuesta = controller.crear(request);
 
         assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(respuesta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void actualizarDevuelve200ConElResultadoDelServicio() {
+        Map<String, Object> campos = Map.of("titulo", "Nuevo titulo");
+        NoConformidadIdResponse esperado = new NoConformidadIdResponse(1L);
+        when(noConformidadService.actualizar(1L, campos)).thenReturn(esperado);
+
+        ResponseEntity<NoConformidadIdResponse> respuesta = controller.actualizar(1L, campos);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(respuesta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void actualizarGestionDevuelve200ConElResultadoDelServicio() {
+        ActualizarGestionRequest request = new ActualizarGestionRequest();
+        NoConformidadIdResponse esperado = new NoConformidadIdResponse(1L);
+        when(noConformidadService.actualizarGestion(1L, request)).thenReturn(esperado);
+
+        ResponseEntity<NoConformidadIdResponse> respuesta = controller.actualizarGestion(1L, request);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(respuesta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void cerrarDevuelve200ConElResultadoDelServicioCuandoNoSeEnviaCuerpo() {
+        NoConformidadIdResponse esperado = new NoConformidadIdResponse(1L);
+        when(noConformidadService.cerrar(eq(1L), any(CerrarNoConformidadRequest.class))).thenReturn(esperado);
+
+        ResponseEntity<NoConformidadIdResponse> respuesta = controller.cerrar(1L, null);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(respuesta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void listarSeguimientoDevuelve200ConLaListaDelServicio() {
+        List<SeguimientoResponse> esperado = List.of();
+        when(noConformidadService.listarSeguimiento(1L)).thenReturn(esperado);
+
+        ResponseEntity<List<SeguimientoResponse>> respuesta = controller.listarSeguimiento(1L);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(respuesta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void crearSeguimientoDevuelve201ConElResultadoDelServicio() {
+        CrearSeguimientoRequest request = new CrearSeguimientoRequest();
+        request.setComentario("Comentario");
+        NoConformidadIdResponse esperado = new NoConformidadIdResponse(1L);
+        when(noConformidadService.crearSeguimiento(1L, request)).thenReturn(esperado);
+
+        ResponseEntity<NoConformidadIdResponse> respuesta = controller.crearSeguimiento(1L, request);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(respuesta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void obtenerAnalisisDevuelve200ConLoQueDevuelveElServicioAunqueSeaNulo() {
+        when(noConformidadService.obtenerAnalisis(1L)).thenReturn(null);
+
+        ResponseEntity<AnalisisResponse> respuesta = controller.obtenerAnalisis(1L);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(respuesta.getBody()).isNull();
+    }
+
+    @Test
+    void guardarAnalisisDevuelve200ConElResultadoDelServicio() {
+        GuardarAnalisisRequest request = new GuardarAnalisisRequest();
+        NoConformidadIdResponse esperado = new NoConformidadIdResponse(5L);
+        when(noConformidadService.guardarAnalisis(1L, request)).thenReturn(esperado);
+
+        ResponseEntity<NoConformidadIdResponse> respuesta = controller.guardarAnalisis(1L, request);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(respuesta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void listarAccionesDevuelve200ConLaListaDelServicio() {
+        List<AccionCorrectivaResponse> esperado = List.of();
+        when(noConformidadService.listarAcciones(1L)).thenReturn(esperado);
+
+        ResponseEntity<List<AccionCorrectivaResponse>> respuesta = controller.listarAcciones(1L);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(respuesta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void crearAccionDevuelve201ConElResultadoDelServicio() {
+        CrearAccionRequest request = new CrearAccionRequest();
+        NoConformidadIdResponse esperado = new NoConformidadIdResponse(9L);
+        when(noConformidadService.crearAccion(1L, request)).thenReturn(esperado);
+
+        ResponseEntity<NoConformidadIdResponse> respuesta = controller.crearAccion(1L, request);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.CREATED);
+        assertThat(respuesta.getBody()).isSameAs(esperado);
+    }
+
+    @Test
+    void actualizarAccionDevuelve200ConElResultadoDelServicio() {
+        ActualizarAccionRequest request = new ActualizarAccionRequest();
+        NoConformidadIdResponse esperado = new NoConformidadIdResponse(9L);
+        when(noConformidadService.actualizarAccion(9L, request)).thenReturn(esperado);
+
+        ResponseEntity<NoConformidadIdResponse> respuesta = controller.actualizarAccion(1L, 9L, request);
+
+        assertThat(respuesta.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(respuesta.getBody()).isSameAs(esperado);
     }
 

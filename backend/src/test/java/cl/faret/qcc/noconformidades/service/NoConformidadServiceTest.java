@@ -11,6 +11,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.Year;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import org.junit.jupiter.api.AfterEach;
@@ -30,11 +31,25 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import cl.faret.qcc.auth.entity.Usuario;
 import cl.faret.qcc.auth.repository.UsuarioRepository;
 import cl.faret.qcc.exception.ResourceNotFoundException;
+import cl.faret.qcc.noconformidades.dto.ActualizarAccionRequest;
+import cl.faret.qcc.noconformidades.dto.ActualizarGestionRequest;
+import cl.faret.qcc.noconformidades.dto.CerrarNoConformidadRequest;
+import cl.faret.qcc.noconformidades.dto.CrearAccionRequest;
 import cl.faret.qcc.noconformidades.dto.CrearNoConformidadRequest;
 import cl.faret.qcc.noconformidades.dto.CrearNoConformidadResponse;
+import cl.faret.qcc.noconformidades.dto.CrearSeguimientoRequest;
+import cl.faret.qcc.noconformidades.dto.GuardarAnalisisRequest;
+import cl.faret.qcc.noconformidades.dto.NoConformidadIdResponse;
 import cl.faret.qcc.noconformidades.dto.NoConformidadListResponse;
 import cl.faret.qcc.noconformidades.dto.NoConformidadResumenResponse;
+import cl.faret.qcc.noconformidades.entity.NcAccionCorrectiva;
+import cl.faret.qcc.noconformidades.entity.NcAnalisis;
+import cl.faret.qcc.noconformidades.entity.NcSeguimiento;
 import cl.faret.qcc.noconformidades.entity.NoConformidad;
+import cl.faret.qcc.noconformidades.exception.ValidacionNoConformidadException;
+import cl.faret.qcc.noconformidades.repository.NcAccionCorrectivaRepository;
+import cl.faret.qcc.noconformidades.repository.NcAnalisisRepository;
+import cl.faret.qcc.noconformidades.repository.NcSeguimientoRepository;
 import cl.faret.qcc.noconformidades.repository.NoConformidadRepository;
 
 @ExtendWith(MockitoExtension.class)
@@ -46,11 +61,21 @@ class NoConformidadServiceTest {
     @Mock
     private UsuarioRepository usuarioRepository;
 
+    @Mock
+    private NcSeguimientoRepository ncSeguimientoRepository;
+
+    @Mock
+    private NcAnalisisRepository ncAnalisisRepository;
+
+    @Mock
+    private NcAccionCorrectivaRepository ncAccionCorrectivaRepository;
+
     private NoConformidadService service;
 
     @BeforeEach
     void setUp() {
-        service = new NoConformidadService(noConformidadRepository, usuarioRepository);
+        service = new NoConformidadService(noConformidadRepository, usuarioRepository, ncSeguimientoRepository,
+                ncAnalisisRepository, ncAccionCorrectivaRepository);
     }
 
     @AfterEach
@@ -230,6 +255,326 @@ class NoConformidadServiceTest {
         org.mockito.Mockito.verify(noConformidadRepository, org.mockito.Mockito.atLeastOnce())
                 .save(captor.capture());
         assertThat(captor.getAllValues().get(0).getPctRecuperacion()).isNull();
+    }
+
+    @Test
+    void actualizarLanzaResourceNotFoundSiNoExiste() {
+        when(noConformidadRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.actualizar(99L, Map.of("titulo", "Nuevo")))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void actualizarLanzaValidacionSiNoSeEnviaNingunCampoEditable() {
+        when(noConformidadRepository.findById(1L)).thenReturn(Optional.of(ncConId(1L, "NC-2026-00001")));
+
+        assertThatThrownBy(() -> service.actualizar(1L, Map.of("campoQueNoExiste", "x")))
+                .isInstanceOf(ValidacionNoConformidadException.class)
+                .hasMessage("No se recibió ningún campo para actualizar");
+    }
+
+    @Test
+    void actualizarSoloTocaLosCamposPresentesEnElPayload() {
+        NoConformidad nc = ncConId(1L, "NC-2026-00001");
+        when(noConformidadRepository.findById(1L)).thenReturn(Optional.of(nc));
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+
+        service.actualizar(1L, Map.of("titulo", "Titulo nuevo"));
+
+        assertThat(nc.getTitulo()).isEqualTo("Titulo nuevo");
+        assertThat(nc.getDescripcion()).isEqualTo("Descripcion");
+    }
+
+    @Test
+    void actualizarPoneEnNuloUnCampoTextoEnviadoVacio() {
+        NoConformidad nc = ncConId(1L, "NC-2026-00001");
+        when(noConformidadRepository.findById(1L)).thenReturn(Optional.of(nc));
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+
+        Map<String, Object> campos = new java.util.HashMap<>();
+        campos.put("norma", "   ");
+        service.actualizar(1L, campos);
+
+        assertThat(nc.getNorma()).isNull();
+    }
+
+    @Test
+    void actualizarLanzaValidacionSiNivelEsInvalido() {
+        when(noConformidadRepository.findById(1L)).thenReturn(Optional.of(ncConId(1L, "NC-2026-00001")));
+
+        assertThatThrownBy(() -> service.actualizar(1L, Map.of("nivel", "Grave")))
+                .isInstanceOf(ValidacionNoConformidadException.class);
+    }
+
+    @Test
+    void actualizarRecalculaElPorcentajeDeRecuperacionConLosValoresResultantes() {
+        NoConformidad nc = ncConId(1L, "NC-2026-00001");
+        nc.setCantRechazada(new BigDecimal("5"));
+        when(noConformidadRepository.findById(1L)).thenReturn(Optional.of(nc));
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+
+        service.actualizar(1L, Map.of("cantRecuperada", new BigDecimal("2.5")));
+
+        assertThat(nc.getPctRecuperacion()).isEqualByComparingTo("50.00");
+        assertThat(nc.getActualizadoPor()).isEqualTo("jperez");
+    }
+
+    @Test
+    void actualizarGestionLanzaResourceNotFoundSiNoExiste() {
+        when(noConformidadRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.actualizarGestion(99L, new ActualizarGestionRequest()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void actualizarGestionLanzaValidacionSiEstadoGestionEsInvalido() {
+        when(noConformidadRepository.findById(1L)).thenReturn(Optional.of(ncConId(1L, "NC-2026-00001")));
+        ActualizarGestionRequest request = new ActualizarGestionRequest();
+        request.setEstadoGestion("NO_EXISTE");
+
+        assertThatThrownBy(() -> service.actualizarGestion(1L, request))
+                .isInstanceOf(ValidacionNoConformidadException.class);
+    }
+
+    @Test
+    void actualizarGestionSobreescribeLosTresCamposAunqueVenganNulos() {
+        NoConformidad nc = ncConId(1L, "NC-2026-00001");
+        nc.setResponsable("Responsable viejo");
+        when(noConformidadRepository.findById(1L)).thenReturn(Optional.of(nc));
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+
+        service.actualizarGestion(1L, new ActualizarGestionRequest());
+
+        assertThat(nc.getResponsable()).isNull();
+        assertThat(nc.getEstadoGestion()).isNull();
+        assertThat(nc.getActualizadoPor()).isEqualTo("jperez");
+    }
+
+    @Test
+    void cerrarLanzaResourceNotFoundSiNoExiste() {
+        when(noConformidadRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.cerrar(99L, new CerrarNoConformidadRequest()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void cerrarFijaEstadoGestionCerradaYResuelveCerradoPorDesdeElJwt() {
+        NoConformidad nc = ncConId(1L, "NC-2026-00001");
+        when(noConformidadRepository.findById(1L)).thenReturn(Optional.of(nc));
+        autenticarComo("jperez");
+        Usuario usuarioActivo = new Usuario(1L, "jperez", "Juan Perez", "hash", "operador", true, null);
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.of(usuarioActivo));
+        CerrarNoConformidadRequest request = new CerrarNoConformidadRequest();
+        request.setComentarioCierre("Cierre de prueba");
+
+        service.cerrar(1L, request);
+
+        assertThat(nc.getEstadoGestion()).isEqualTo("CERRADA");
+        assertThat(nc.getCerradoPor()).isEqualTo("Juan Perez");
+        assertThat(nc.getComentarioCierre()).isEqualTo("Cierre de prueba");
+        assertThat(nc.getFechaCierre()).isNotNull();
+    }
+
+    @Test
+    void cerrarNoValidaQueLaNcNoEsteYaCerrada() {
+        NoConformidad nc = ncConId(1L, "NC-2026-00001");
+        nc.setEstadoGestion("CERRADA");
+        when(noConformidadRepository.findById(1L)).thenReturn(Optional.of(nc));
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+
+        NoConformidadIdResponse respuesta = service.cerrar(1L, new CerrarNoConformidadRequest());
+
+        assertThat(respuesta.getId()).isEqualTo(1L);
+    }
+
+    @Test
+    void listarSeguimientoDelegaEnElRepositorioConElOrdenEsperado() {
+        NcSeguimiento seguimiento = new NcSeguimiento(1L, "Comentario", "jperez");
+        when(ncSeguimientoRepository.findByNoConformidadIdOrderByCreadoEnDescIdDesc(1L))
+                .thenReturn(List.of(seguimiento));
+
+        var items = service.listarSeguimiento(1L);
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).getComentario()).isEqualTo("Comentario");
+    }
+
+    @Test
+    void crearSeguimientoLanzaResourceNotFoundSiLaNcNoExiste() {
+        when(noConformidadRepository.existsById(99L)).thenReturn(false);
+        CrearSeguimientoRequest request = new CrearSeguimientoRequest();
+        request.setComentario("Comentario");
+
+        assertThatThrownBy(() -> service.crearSeguimiento(99L, request))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void crearSeguimientoResuelveAutorDesdeElJwtYGuardaElComentario() {
+        when(noConformidadRepository.existsById(1L)).thenReturn(true);
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+        CrearSeguimientoRequest request = new CrearSeguimientoRequest();
+        request.setComentario("Seguimiento de prueba");
+
+        service.crearSeguimiento(1L, request);
+
+        ArgumentCaptor<NcSeguimiento> captor = ArgumentCaptor.forClass(NcSeguimiento.class);
+        org.mockito.Mockito.verify(ncSeguimientoRepository).save(captor.capture());
+        assertThat(captor.getValue().getComentario()).isEqualTo("Seguimiento de prueba");
+        assertThat(captor.getValue().getAutor()).isEqualTo("jperez");
+        assertThat(captor.getValue().getNoConformidadId()).isEqualTo(1L);
+    }
+
+    @Test
+    void obtenerAnalisisDevuelveNuloSiNoHayNingunoRegistrado() {
+        when(ncAnalisisRepository.findTopByNoConformidadIdOrderByIdDesc(1L)).thenReturn(Optional.empty());
+
+        assertThat(service.obtenerAnalisis(1L)).isNull();
+    }
+
+    @Test
+    void obtenerAnalisisDevuelveElMasRecienteSiExiste() {
+        NcAnalisis analisis = new NcAnalisis(1L, "ISHIKAWA", "Problema", null, null, null, null, null, null, null, "jperez");
+        when(ncAnalisisRepository.findTopByNoConformidadIdOrderByIdDesc(1L)).thenReturn(Optional.of(analisis));
+
+        assertThat(service.obtenerAnalisis(1L).getMetodologia()).isEqualTo("ISHIKAWA");
+    }
+
+    @Test
+    void guardarAnalisisLanzaResourceNotFoundSiLaNcNoExiste() {
+        when(noConformidadRepository.existsById(99L)).thenReturn(false);
+        GuardarAnalisisRequest request = analisisRequestValido();
+
+        assertThatThrownBy(() -> service.guardarAnalisis(99L, request))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void guardarAnalisisInsertaUnoNuevoSiNoExisteNingunoPrevio() {
+        when(noConformidadRepository.existsById(1L)).thenReturn(true);
+        when(ncAnalisisRepository.findTopByNoConformidadIdOrderByIdDesc(1L)).thenReturn(Optional.empty());
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+        when(ncAnalisisRepository.save(any(NcAnalisis.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        NoConformidadIdResponse respuesta = service.guardarAnalisis(1L, analisisRequestValido());
+
+        ArgumentCaptor<NcAnalisis> captor = ArgumentCaptor.forClass(NcAnalisis.class);
+        org.mockito.Mockito.verify(ncAnalisisRepository).save(captor.capture());
+        assertThat(captor.getValue().getCreadoPor()).isEqualTo("jperez");
+        assertThat(respuesta).isNotNull();
+    }
+
+    @Test
+    void guardarAnalisisActualizaElExistenteEnVezDeCrearUnoNuevo() {
+        NcAnalisis existente = new NcAnalisis(1L, "CINCO_PORQUES", "Problema viejo", null, null, null, null, null, null, null, "jperez");
+        when(noConformidadRepository.existsById(1L)).thenReturn(true);
+        when(ncAnalisisRepository.findTopByNoConformidadIdOrderByIdDesc(1L)).thenReturn(Optional.of(existente));
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+        when(ncAnalisisRepository.save(any(NcAnalisis.class))).thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.guardarAnalisis(1L, analisisRequestValido());
+
+        assertThat(existente.getMetodologia()).isEqualTo("ISHIKAWA");
+        assertThat(existente.getActualizadoPor()).isEqualTo("jperez");
+        org.mockito.Mockito.verify(ncAnalisisRepository, org.mockito.Mockito.never())
+                .save(org.mockito.ArgumentMatchers.argThat(a -> a != existente));
+    }
+
+    @Test
+    void listarAccionesDelegaEnElRepositorio() {
+        NcAccionCorrectiva accion = new NcAccionCorrectiva(1L, null, "Descripcion", "Responsable",
+                LocalDate.now(), "ALTA", "jperez");
+        when(ncAccionCorrectivaRepository.findByNoConformidadIdOrderByIdDesc(1L)).thenReturn(List.of(accion));
+
+        var items = service.listarAcciones(1L);
+
+        assertThat(items).hasSize(1);
+        assertThat(items.get(0).getDescripcion()).isEqualTo("Descripcion");
+    }
+
+    @Test
+    void crearAccionLanzaResourceNotFoundSiLaNcNoExiste() {
+        when(noConformidadRepository.existsById(99L)).thenReturn(false);
+        CrearAccionRequest request = crearAccionRequestValido();
+
+        assertThatThrownBy(() -> service.crearAccion(99L, request))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void crearAccionAsignaEstadoPendienteYResuelveCreadoPorDesdeElJwt() {
+        when(noConformidadRepository.existsById(1L)).thenReturn(true);
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+        when(ncAccionCorrectivaRepository.save(any(NcAccionCorrectiva.class)))
+                .thenAnswer(invocation -> invocation.getArgument(0));
+
+        service.crearAccion(1L, crearAccionRequestValido());
+
+        ArgumentCaptor<NcAccionCorrectiva> captor = ArgumentCaptor.forClass(NcAccionCorrectiva.class);
+        org.mockito.Mockito.verify(ncAccionCorrectivaRepository).save(captor.capture());
+        assertThat(captor.getValue().getEstado()).isEqualTo("PENDIENTE");
+        assertThat(captor.getValue().getCreadoPor()).isEqualTo("jperez");
+    }
+
+    @Test
+    void actualizarAccionLanzaResourceNotFoundSiNoExiste() {
+        when(ncAccionCorrectivaRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.actualizarAccion(99L, actualizarAccionRequestValido()))
+                .isInstanceOf(ResourceNotFoundException.class);
+    }
+
+    @Test
+    void actualizarAccionNoValidaTransicionesDeEstado() {
+        NcAccionCorrectiva accion = new NcAccionCorrectiva(1L, null, "Descripcion", "Responsable",
+                LocalDate.now(), "ALTA", "jperez");
+        accion.setEstado("COMPLETADA");
+        when(ncAccionCorrectivaRepository.findById(1L)).thenReturn(Optional.of(accion));
+        autenticarComo("jperez");
+        when(usuarioRepository.findByCodigoUsuarioAndActivoTrue("jperez")).thenReturn(Optional.empty());
+        ActualizarAccionRequest request = actualizarAccionRequestValido();
+        request.setEstado("PENDIENTE");
+
+        service.actualizarAccion(1L, request);
+
+        assertThat(accion.getEstado()).isEqualTo("PENDIENTE");
+        assertThat(accion.getActualizadoPor()).isEqualTo("jperez");
+    }
+
+    private GuardarAnalisisRequest analisisRequestValido() {
+        GuardarAnalisisRequest request = new GuardarAnalisisRequest();
+        request.setMetodologia("ISHIKAWA");
+        request.setProblemaDetectado("Problema de prueba");
+        return request;
+    }
+
+    private CrearAccionRequest crearAccionRequestValido() {
+        CrearAccionRequest request = new CrearAccionRequest();
+        request.setDescripcion("Descripcion de prueba");
+        request.setResponsable("Responsable de prueba");
+        request.setFechaLimite(LocalDate.now().plusDays(7));
+        return request;
+    }
+
+    private ActualizarAccionRequest actualizarAccionRequestValido() {
+        ActualizarAccionRequest request = new ActualizarAccionRequest();
+        request.setDescripcion("Descripcion actualizada");
+        request.setResponsable("Responsable actualizado");
+        request.setFechaLimite(LocalDate.now().plusDays(3));
+        request.setEstado("EN_PROCESO");
+        return request;
     }
 
     private void stubSaveAsignandoId(long id) {

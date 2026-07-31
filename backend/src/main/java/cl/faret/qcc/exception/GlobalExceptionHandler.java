@@ -13,6 +13,8 @@ import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import cl.faret.qcc.controldocumental.exception.ValidacionDocumentoException;
+import cl.faret.qcc.noconformidades.exception.ValidacionNoConformidadException;
 import cl.faret.qcc.usuarios.exception.OperacionNoPermitidaException;
 import cl.faret.qcc.usuarios.exception.UsuarioDuplicadoException;
 
@@ -78,6 +80,36 @@ public class GlobalExceptionHandler {
         problem.setDetail(exception.getMessage());
         problem.setType(
                 URI.create("https://api.faret.cl/problems/operacion-no-permitida"));
+
+        return problem;
+    }
+
+    @ExceptionHandler(ValidacionNoConformidadException.class)
+    public ProblemDetail handleValidacionNoConformidad(
+            ValidacionNoConformidadException exception) {
+
+        ProblemDetail problem =
+                ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+
+        problem.setTitle("Datos inválidos");
+        problem.setDetail(exception.getMessage());
+        problem.setType(
+                URI.create("https://api.faret.cl/problems/no-conformidad-validacion"));
+
+        return problem;
+    }
+
+    @ExceptionHandler(ValidacionDocumentoException.class)
+    public ProblemDetail handleValidacionDocumento(
+            ValidacionDocumentoException exception) {
+
+        ProblemDetail problem =
+                ProblemDetail.forStatus(HttpStatus.BAD_REQUEST);
+
+        problem.setTitle("Datos inválidos");
+        problem.setDetail(exception.getMessage());
+        problem.setType(
+                URI.create("https://api.faret.cl/problems/documento-validacion"));
 
         return problem;
     }
