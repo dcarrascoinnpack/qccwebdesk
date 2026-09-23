@@ -42,7 +42,80 @@ public final class FakeInnpackApi implements AutoCloseable {
             throw new IllegalStateException(e);
         }
         server.createContext("/api/auth/login", this::login);
+        server.createContext("/api/home/dashboard", this::dashboard);
+        server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
+    }
+
+    /** Modo de respuesta de GET api/home/dashboard. */
+    public enum ModoDashboard { NORMAL, ERROR_NEGOCIO, ERROR_500 }
+
+    private final java.util.Set<Integer> revocados = ConcurrentHashMap.newKeySet();
+    private final java.util.List<String> authorizationRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final AtomicInteger llamadasDashboard = new AtomicInteger();
+    private volatile ModoDashboard modoDashboard = ModoDashboard.NORMAL;
+
+    /** Simula que la API invalida los tokens de un usuario (→ 401 en sus próximas llamadas). */
+    public void revocarTokens(int userId) {
+        revocados.add(userId);
+    }
+
+    public void modoDashboard(ModoDashboard modo) {
+        this.modoDashboard = modo;
+    }
+
+    public int llamadasDashboard() {
+        return llamadasDashboard.get();
+    }
+
+    public java.util.List<String> authorizationRecibidos() {
+        return java.util.List.copyOf(authorizationRecibidos);
+    }
+
+    public void reiniciarDashboard() {
+        revocados.clear();
+        authorizationRecibidos.clear();
+        modoDashboard = ModoDashboard.NORMAL;
+    }
+
+    /**
+     * Valida el Bearer como la API real ([Authorize]): 401 sin cuerpo si falta, no lo emitió esta API
+     * o fue revocado. En data devuelve el "sub" del token recibido para que los tests comprueben con
+     * qué identidad llamó el gateway.
+     */
+    private void dashboard(HttpExchange ex) throws IOException {
+        llamadasDashboard.incrementAndGet();
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        switch (modoDashboard) {
+            case ERROR_NEGOCIO -> responder(ex, 400, fallo("No se pudo calcular el dashboard"));
+            case ERROR_500 -> responder(ex, 500, "{\"type\":\"about:blank\",\"title\":\"Internal Server Error\",\"status\":500,\"detail\":\"SqlException: timeout en calidad_db\"}");
+            default -> responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"kpis\":{\"controlesHoy\":42,"
+                    + "\"noConformesHoy\":3,\"mermaHoy\":12.5},\"alertas\":[],\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+        }
+    }
+
+    private Integer subDeBearer(String authorization) {
+        if (authorization == null || !authorization.startsWith("Bearer ")) {
+            return null;
+        }
+        String[] partes = authorization.substring(7).split("\\.");
+        if (partes.length != 3) {
+            return null;
+        }
+        try {
+            JsonNode payload = mapper.readTree(new String(Base64.getUrlDecoder().decode(partes[1]), StandardCharsets.UTF_8));
+            int sub = Integer.parseInt(payload.path("sub").asString(""));
+            return partes[2].equals(firmaDeToken(sub)) ? sub : null;
+        } catch (RuntimeException e) {
+            return null;
+        }
     }
 
     public String baseUrl() {

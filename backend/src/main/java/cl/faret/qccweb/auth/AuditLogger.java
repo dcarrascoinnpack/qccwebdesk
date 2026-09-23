@@ -42,6 +42,21 @@ public final class AuditLogger {
         AUDIT.info("evento=SESION_EXPIRADA usuario={} sesion={}", sanear(usuario), hashSesion(sessionId));
     }
 
+    public void accion(String usuario, String empresa, String accion, boolean ok, long duracionMs) {
+        AUDIT.info("evento=ACCION usuario={} empresa={} accion={} resultado={} ms={}",
+                sanear(usuario), empresa, sanear(accion), ok ? "OK" : "ERROR", duracionMs);
+    }
+
+    public void accionDenegada(String usuario, String empresa, String accion, String motivo) {
+        AUDIT.warn("evento=ACCION_DENEGADA usuario={} empresa={} accion={} motivo={}",
+                sanear(usuario), empresa, sanear(accion), motivo);
+    }
+
+    public void sesionInvalidadaPorUpstream(String usuario, String accion, String sessionId) {
+        AUDIT.warn("evento=SESION_INVALIDADA_UPSTREAM_401 usuario={} accion={} sesion={}",
+                sanear(usuario), sanear(accion), hashSesion(sessionId));
+    }
+
     static String sanear(String valor) {
         if (valor == null) {
             return "-";
