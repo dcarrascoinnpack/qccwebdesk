@@ -170,6 +170,98 @@
         return respuestaError("Error del servidor (" + status + ").");
     }
 
+    // ------------------------------------------------------------------ capacidades de navegador
+    // Acciones de Photino que en web se resuelven 100% en el navegador (nunca llegan al gateway).
+    // tools/contract/photino_contract.py lee las claves de este objeto para el contract check.
+    var MAX_EXCEL_BYTES = 50 * 1024 * 1024;
+
+    var ACCIONES_NAVEGADOR = {
+        // Photino: MessageRouter.GuardarExcel escribe el .xlsx en Descargas y lo abre (Process.Start).
+        // Web: el mismo archivo (lo genera core/excel-exporter.js con SheetJS) se descarga con un Blob.
+        "excel.guardar": guardarExcelEnNavegador
+    };
+
+    function respuestaOk(data) {
+        return { ok: true, success: true, data: data, error: null };
+    }
+
+    function fechaCompacta() {
+        var d = new Date();
+        var p = function (n) { return (n < 10 ? "0" : "") + n; };
+        return "" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) + "_" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+    }
+
+    /**
+     * Equivalente endurecido de Path.GetFileName + ".xlsx" de Photino: solo el último segmento, sin
+     * caracteres inválidos en Windows ni de control, sin marcas Unicode que disfrazan la extensión
+     * (RTLO), sin nombres reservados (CON, NUL...), largo acotado y siempre terminado en .xlsx.
+     */
+    function nombreArchivoSeguro(nombre) {
+        var n = String(nombre == null ? "" : nombre);
+        n = n.split(/[\\/]/).pop();
+        n = n.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "");
+        n = n.replace(/[\u0000-\u001f\u007f<>:"|?*]/g, "_");
+        n = n.replace(/^[\s.]+|[\s.]+$/g, "");
+        if (!n || /^\.?xlsx$/i.test(n)) {
+            n = "qcc_export_" + fechaCompacta() + ".xlsx";
+        }
+        if (!/\.xlsx$/i.test(n)) {
+            n += ".xlsx";
+        }
+        if (n.length > 150) {
+            n = n.slice(0, 145) + ".xlsx";
+        }
+        if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i.test(n)) {
+            n = "_" + n;
+        }
+        return n;
+    }
+
+    function guardarExcelEnNavegador(payload) {
+        var data = payload && payload.data;
+        if (!data || typeof data !== "object") {
+            return Promise.resolve(respuestaError("Falta data para guardar Excel"));
+        }
+        var base64 = typeof data.base64 === "string" ? data.base64.trim() : "";
+        if (!base64) {
+            return Promise.resolve(respuestaError("Excel vacío"));
+        }
+        if (base64.length > Math.ceil(MAX_EXCEL_BYTES / 3) * 4) {
+            return Promise.resolve(respuestaError("El archivo excede el tamaño máximo permitido."));
+        }
+        var bytes;
+        try {
+            var binario = window.atob(base64);
+            bytes = new Uint8Array(binario.length);
+            for (var i = 0; i < binario.length; i++) {
+                bytes[i] = binario.charCodeAt(i);
+            }
+        } catch (e) {
+            return Promise.resolve(respuestaError("Archivo Excel inválido."));
+        }
+        // Un .xlsx es un ZIP: debe empezar con "PK\x03\x04". Evita descargar otro contenido
+        // (HTML, ejecutables...) disfrazado de Excel.
+        if (bytes.length < 4 || bytes[0] !== 0x50 || bytes[1] !== 0x4b || bytes[2] !== 0x03 || bytes[3] !== 0x04) {
+            return Promise.resolve(respuestaError("Archivo Excel inválido."));
+        }
+
+        var nombre = nombreArchivoSeguro(data.fileName);
+        var blob = new Blob([bytes], {
+            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        });
+        var url = URL.createObjectURL(blob);
+        var enlace = document.createElement("a");
+        enlace.href = url;
+        enlace.download = nombre;
+        enlace.rel = "noopener";
+        enlace.style.display = "none";
+        document.body.appendChild(enlace);
+        enlace.click();
+        enlace.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        return Promise.resolve(respuestaOk({ fileName: nombre }));
+    }
+
     /** La sesión del servidor terminó (expirada/cerrada): volver al inicio sin datos de sesión. */
     function sesionPerdida() {
         limpiarSesionUi();
@@ -181,6 +273,14 @@
     function send(payload) {
         payload = payload || {};
         var data = payload.data || {};
+
+        if (Object.prototype.hasOwnProperty.call(ACCIONES_NAVEGADOR, payload.action)) {
+            try {
+                return ACCIONES_NAVEGADOR[payload.action](payload);
+            } catch (e) {
+                return Promise.resolve(respuestaError("No se pudo completar la acción en el navegador."));
+            }
+        }
 
         switch (payload.action) {
             case "auth.login":
@@ -253,5 +353,5 @@
         window.PhotinoBridge = { _callbacks: {}, _id: 0, receive: function () {} };
     }
     window.PhotinoBridge.send = send;
-    window.QCC_WEB = { bridge: "web", bridgeUrl: BRIDGE_URL };
+    window.QCC_WEB = { bridge: "web", bridgeUrl: BRIDGE_URL, accionesNavegador: Object.keys(ACCIONES_NAVEGADOR) };
 })();

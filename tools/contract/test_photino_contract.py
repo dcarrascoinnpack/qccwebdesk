@@ -325,6 +325,79 @@ class BloqueIfLargoTest(unittest.TestCase):
         self.assertNotIn("faretLab.fct.guardar", seg)
 
 
+ROUTER_EXCEL = ROUTER.replace("  }\n}\n", '''
+    private string GuardarExcel(Dictionary<string, object> data)
+    {
+        var fileName = Path.GetFileName("x");
+        if (!fileName.EndsWith(".xlsx")) fileName += ".xlsx";
+        File.WriteAllBytes(fileName, new byte[0]);
+        return "{\\"ok\\":true}";
+    }
+  }
+}
+''')
+
+SHIM = '''
+    var ACCIONES_NAVEGADOR = {
+        // comentario con "falsa.accion": no cuenta
+        "excel.guardar": guardarExcelEnNavegador
+    };
+'''
+
+
+class NavegadorContratoTest(unittest.TestCase):
+    """excel.guardar: Photino lo resuelve en C# (MessageRouter.GuardarExcel), la web en el navegador."""
+
+    def shim(self, contenido=SHIM):
+        fd, ruta = tempfile.mkstemp(suffix=".js")
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
+            fh.write(contenido)
+        self.addCleanup(os.remove, ruta)
+        return ruta
+
+    def fuente(self, router=ROUTER_EXCEL):
+        return repo(**{pc.ROUTER: router, "src/UI/www/core/excel-exporter.js": 'send({ action: "excel.guardar", data: {} })'})
+
+    def web(self):
+        return pc.agregar_acciones_navegador({"acciones": []}, self.shim())
+
+    def test_lee_acciones_del_shim_ignorando_comentarios(self):
+        self.assertEqual(pc.acciones_navegador(self.shim()), ["excel.guardar"])
+        self.assertEqual(self.web()["acciones"], [{"accion": "excel.guardar", "via": "navegador (web-bridge.js)"}])
+
+    def test_huella_del_metodo_del_router_y_estado(self):
+        f = self.fuente()
+        inv = pc.Inventario(f)
+        self.assertEqual(inv.enrutar("excel.guardar"), "MessageRouter.GuardarExcel")
+        web = self.web()
+        baseline = pc.aprobar({}, pc.comparar(inv, web, {}), ["excel.guardar"], f)
+        filas = {x["accion"]: x for x in pc.comparar(inv, web, baseline)}
+        self.assertEqual(filas["excel.guardar"]["estado"], "COMPATIBLE")
+        self.assertEqual(filas["excel.guardar"]["componentesHuella"],
+                         ['MessageRouter.cs action == "excel.guardar"', "MessageRouter.cs#GuardarExcel"])
+
+        cambiado = ROUTER_EXCEL.replace('fileName += ".xlsx";', 'fileName += ".xls";')
+        filas2 = {x["accion"]: x for x in pc.comparar(pc.Inventario(self.fuente(cambiado)), web, baseline)}
+        self.assertEqual(filas2["excel.guardar"]["estado"], "REVISAR")
+
+    def test_markdown_indica_que_se_resuelve_en_navegador(self):
+        f = self.fuente()
+        inv = pc.Inventario(f)
+        web = self.web()
+        baseline = pc.aprobar({}, pc.comparar(inv, web, {}), ["excel.guardar"], f)
+        rep = pc.construir_reporte(f, inv, pc.comparar(inv, web, baseline), web, baseline)
+        with tempfile.TemporaryDirectory() as d:
+            ruta = os.path.join(d, "r.md")
+            pc.escribir_markdown(rep, ruta)
+            with open(ruta, encoding="utf-8") as fh:
+                texto = fh.read()
+        self.assertIn("| `excel.guardar` | OK | OK | COMPATIBLE | vía navegador (web-bridge.js) |", texto)
+
+    def test_accion_declarada_dos_veces_es_error(self):
+        with self.assertRaises(ValueError):
+            pc.agregar_acciones_navegador({"acciones": [{"accion": "excel.guardar", "via": "bridge"}]}, self.shim())
+
+
 class AuthContratoTest(unittest.TestCase):
     """auth.login / auth.me: atendidas en web por AuthController, controladas igual por huella."""
 

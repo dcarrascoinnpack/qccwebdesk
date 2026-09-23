@@ -17,9 +17,14 @@ Informativos (no cuentan para la compatibilidad):
   NO_USADA              la atiende un handler C# pero ningún frontend la llama (código muerto).
   PHOTINO_SIN_HANDLER   el frontend la llama pero ningún handler la atiende (bug de Photino).
 
+Habilitada en web significa: ActionPolicy (vía bridge), AuthController (vía /api/v1/auth/*) o
+ACCIONES_NAVEGADOR de web-bridge.js (resuelta en el navegador, p. ej. excel.guardar). En los tres
+casos la huella es la de la lógica C# de Photino equivalente, así que un cambio allí → REVISAR.
+
 Uso:
   python photino_contract.py --photino-repo RUTA --commit SHA --web-actions web-actions.json
-         --baseline contract/baseline.json --out DIR [--aprobar ACCION ...]
+         --web-shim web-shim/web-bridge.js --baseline contract/baseline.json --out DIR
+         [--aprobar ACCION ...]
 
 Código de salida: 0 = release web permitido; 2 = bloqueado (REVISAR / SOLO_WEB / error);
 1 = error de uso o de lectura. Un resultado bloqueado JAMÁS afecta a Photino.
@@ -70,7 +75,7 @@ class GitSource:
                                capture_output=True)
             if r.returncode != 0:
                 raise RuntimeError("No se pudo leer %s en %s" % (path, self.commit))
-            self._cache[path] = r.stdout.decode("utf-8", "replace").lstrip("﻿")
+            self._cache[path] = r.stdout.decode("utf-8", "replace").lstrip("\ufeff")
         return self._cache[path]
 
 
@@ -229,11 +234,14 @@ class Inventario:
         rutas = []
         for m in re.finditer(r'action\.StartsWith\("([^"]+)"\)|action == "([^"]+)"', src):
             cola = src[m.end(): m.end() + 400]
-            h = re.search(r"new (\w+Handler)\(|_authHandler|GuardarExcel", cola)
+            h = re.search(r"new (\w+Handler)\(|_authHandler|rawResult\s*=\s*([A-Z]\w*)\s*\(", cola)
             if h and h.group(1):
                 handler = h.group(1)
             elif h and "_authHandler" in h.group(0):
                 handler = "AuthHandler"
+            elif h and h.group(2):
+                # Acción atendida por un método del propio router (p. ej. excel.guardar → GuardarExcel).
+                handler = "MessageRouter." + h.group(2)
             else:
                 handler = "MessageRouter"
             rutas.append(("prefijo" if m.group(1) else "exacta", m.group(1) or m.group(2), handler))
@@ -330,6 +338,8 @@ class Inventario:
         enrutada = self.enrutar(accion)
         if not declaraciones or not enrutada:
             return None, "sin handler en Photino", []
+        if enrutada.startswith("MessageRouter."):
+            return self._huella_metodo_router(accion, enrutada.split(".", 1)[1])
         propias = [d for d in declaraciones if d[0] == enrutada and d[2] is not None]
         if not propias:
             return None, "el router envía '%s' a %s, que no la declara" % (accion, enrutada), []
@@ -357,6 +367,15 @@ class Inventario:
                 pendientes += self._llamadas_a_campos(src, cuerpo)
         digest = hashlib.sha256("\n".join(sorted(partes)).encode("utf-8")).hexdigest()
         return digest, None, componentes[:2] + sorted(componentes[2:])
+
+    def _huella_metodo_router(self, accion, metodo):
+        """Acción atendida directamente por un método de MessageRouter (ruta exacta)."""
+        cuerpo = extraer_metodo(self.fuente.read(ROUTER), metodo)
+        if cuerpo is None:
+            return None, "MessageRouter.%s no encontrado" % metodo, []
+        partes = ["router:MessageRouter.%s" % metodo, "ruta:%s" % accion, "MessageRouter.cs#%s:%s" % (metodo, normalizar(cuerpo))]
+        digest = hashlib.sha256("\n".join(partes).encode("utf-8")).hexdigest()
+        return digest, None, ['MessageRouter.cs action == "%s"' % accion, "MessageRouter.cs#%s" % metodo]
 
     def _llamadas_a_campos(self, src_handler, codigo):
         """_api.Metodo( → (archivo de la clase del campo, Metodo)."""
@@ -500,8 +519,10 @@ def escribir_markdown(reporte, ruta):
     for f in sorted(reporte["acciones"], key=lambda x: (orden.get(x["estado"], 9), x["accion"])):
         photino = "OK" if (f["frontend"] and f["handler"]) else ("solo handler" if f["handler"] else
                                                                   ("solo frontend" if f["frontend"] else "NO"))
+        via = (f["web"] or {}).get("via") or ""
+        detalle = f["motivo"] or ("vía " + via if via and via != "bridge" else "")
         lineas.append("| `%s` | %s | %s | %s | %s |" % (f["accion"], photino, "OK" if f["web"] else "NO",
-                                                       f["estado"], (f["motivo"] or "").replace("|", "/")))
+                                                       f["estado"], detalle.replace("|", "/")))
     with open(ruta, "w", encoding="utf-8", newline="\n") as fh:
         fh.write("\n".join(lineas) + "\n")
 
@@ -520,6 +541,30 @@ def aprobar(baseline, filas, acciones, fuente):
     return {"descripcion": "Huellas de la lógica C# de Photino validadas para cada acción habilitada en web. "
                            "Solo se actualiza con --aprobar tras revisar el cambio.",
             "photinoCommit": fuente.commit, "photinoVersion": version_photino(fuente), "acciones": nuevas}
+
+
+def acciones_navegador(ruta_shim):
+    """
+    Claves de ACCIONES_NAVEGADOR en web-bridge.js: acciones de Photino que la web resuelve 100%
+    en el navegador (sin gateway). El shim es la única fuente de verdad de esta lista.
+    """
+    with open(ruta_shim, encoding="utf-8") as fh:
+        codigo = fh.read()
+    m = re.search(r"var\s+ACCIONES_NAVEGADOR\s*=\s*\{(.*?)\n\s*\};", codigo, re.S)
+    if not m:
+        raise ValueError("No se encontró ACCIONES_NAVEGADOR en %s" % ruta_shim)
+    cuerpo = re.sub(r"//[^\n]*", "", m.group(1))
+    return re.findall(r'"([a-zA-Z]+(?:\.[a-zA-Z0-9_]+)+)"\s*:', cuerpo)
+
+
+def agregar_acciones_navegador(web_actions, ruta_shim):
+    existentes = {a["accion"] for a in web_actions.get("acciones", [])}
+    nuevas = list(web_actions.get("acciones", []))
+    for accion in acciones_navegador(ruta_shim):
+        if accion in existentes:
+            raise ValueError("'%s' está declarada a la vez en ActionPolicy/AuthController y en el navegador" % accion)
+        nuevas.append({"accion": accion, "via": "navegador (web-bridge.js)"})
+    return dict(web_actions, acciones=nuevas)
 
 
 def leer_json(ruta, por_defecto=None):
@@ -541,12 +586,15 @@ def main(argv=None):
     ap.add_argument("--web-actions", required=True, help="export de la ActionPolicy (web-actions.json)")
     ap.add_argument("--baseline", required=True, help="contract/baseline.json (versionado en el repo web)")
     ap.add_argument("--out", required=True, help="carpeta de salida de contract-report.{json,md}")
+    ap.add_argument("--web-shim", help="web-shim/web-bridge.js: acciones resueltas en el navegador")
     ap.add_argument("--aprobar", nargs="*", default=[], help="acciones cuya huella actual se valida")
     args = ap.parse_args(argv)
 
     try:
         fuente = GitSource(args.photino_repo, args.commit)
         web_actions = leer_json(args.web_actions)
+        if args.web_shim:
+            web_actions = agregar_acciones_navegador(web_actions, args.web_shim)
         baseline = leer_json(args.baseline, {"acciones": {}})
         inv = Inventario(fuente)
         filas = comparar(inv, web_actions, baseline)

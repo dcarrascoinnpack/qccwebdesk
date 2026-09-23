@@ -143,6 +143,7 @@ if ($SinContrato) {
     & $Python (Join-Path $PSScriptRoot "contract\photino_contract.py") `
         --photino-repo $PhotinoRepo --commit $sha `
         --web-actions $webActions `
+        --web-shim $shimSrc `
         --baseline (Join-Path $webRepo "contract\baseline.json") `
         --out $contractDir | Out-Host
     $contractExit = $LASTEXITCODE
