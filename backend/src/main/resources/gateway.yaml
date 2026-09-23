@@ -11,12 +11,41 @@ server:
     include-message: never
     include-stacktrace: never
     include-exception: false
+  servlet:
+    session:
+      # Sesión server-side: el navegador solo recibe un id opaco en esta cookie.
+      timeout: ${QCC_WEB_SESSION_IDLE:30m}
+      persistent: false          # nunca escribir sesiones (con el JWT upstream) a disco
+      tracking-modes: cookie     # nunca ;jsessionid en la URL
+      cookie:
+        name: QCC_SESSION
+        http-only: true
+        secure: ${QCC_WEB_COOKIE_SECURE:true}   # los navegadores aceptan Secure en http://localhost
+        same-site: strict
+        path: /
 
 qcc:
   web:
     # Generados por tools/sync-photino-www.ps1 (relativos a backend/ al ejecutar con mvnw)
     www-dir: ${QCC_WEB_WWW_DIR:../web-dist/photino-www}
     manifest-file: ${QCC_WEB_MANIFEST_FILE:../web-dist/web-manifest.json}
+    auth:
+      # Misma API y endpoint de login que usa Photino (config.json → QualityControlInnpackApi).
+      innpack-api-base-url: ${QCC_INNPACK_API_BASE_URL:https://api.faret.cl/innpack}
+      connect-timeout: 5s
+      read-timeout: 15s
+      session-idle-timeout: ${QCC_WEB_SESSION_IDLE:30m}
+      session-max-duration: ${QCC_WEB_SESSION_MAX:8h}   # además se respeta el exp del JWT upstream
+      login-min-duration: 500ms
+      # IPs del reverse proxy IIS (separadas por coma). Vacío = no se confía en X-Forwarded-For.
+      trusted-proxies: ${QCC_WEB_TRUSTED_PROXIES:}
+      cookie-secure: ${QCC_WEB_COOKIE_SECURE:true}
+      rate-limit:
+        max-intentos-por-ip: ${QCC_WEB_LOGIN_MAX_POR_IP:30}
+        ventana-ip: 5m
+        fallos-antes-de-bloqueo: 5
+        bloqueo-base: 30s
+        bloqueo-maximo: 15m
 
 management:
   endpoints:
@@ -31,3 +60,4 @@ logging:
   level:
     root: INFO
     cl.faret.qccweb: INFO
+    qcc.audit: INFO

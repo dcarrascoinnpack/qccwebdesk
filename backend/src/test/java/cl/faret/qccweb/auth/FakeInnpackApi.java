@@ -1,0 +1,139 @@
+package cl.faret.qccweb.auth;
+
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Base64;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Supplier;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+
+/**
+ * API INNPACK simulada para tests (NUNCA se usan credenciales reales ni la API de producción).
+ * Replica el comportamiento real de QualityControlInnpack.Api AuthController/AuthService:
+ * 400 si faltan campos; 401 con "Usuario no existe" / "Usuario desactivado" / "Contraseña
+ * incorrecta"; 200 con ApiResponse { success, message, data { token, userId, codigoUsuario,
+ * nombreCompleto, rol } } y un JWT cuyo payload trae exp.
+ */
+public final class FakeInnpackApi implements AutoCloseable {
+
+    public record Usuario(int id, String codigo, String password, String nombre, String rol, boolean activo) {}
+
+    private final HttpServer server;
+    private final ObjectMapper mapper = new ObjectMapper();
+    private final Map<String, Usuario> usuarios = new ConcurrentHashMap<>();
+    private final AtomicInteger llamadas = new AtomicInteger();
+    private volatile Supplier<Instant> expiracionToken;
+    private volatile boolean caida;
+
+    public FakeInnpackApi(Clock clock) {
+        this.expiracionToken = () -> clock.instant().plusSeconds(8 * 3600);
+        try {
+            server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        } catch (IOException e) {
+            throw new IllegalStateException(e);
+        }
+        server.createContext("/api/auth/login", this::login);
+        server.start();
+    }
+
+    public String baseUrl() {
+        return "http://127.0.0.1:" + server.getAddress().getPort();
+    }
+
+    public void agregar(Usuario u) {
+        usuarios.put(u.codigo().toLowerCase(), u);
+    }
+
+    public int llamadas() {
+        return llamadas.get();
+    }
+
+    public void expiracionToken(Supplier<Instant> exp) {
+        this.expiracionToken = exp;
+    }
+
+    public void caida(boolean valor) {
+        this.caida = valor;
+    }
+
+    /** Token que emitiría la API para un usuario (para comprobar que nunca llega al navegador/logs). */
+    public static String firmaDeToken(int userId) {
+        return "firma-secreta-del-token-" + userId;
+    }
+
+    /** Cabeceras de encuadre del último login recibido: "Content-Length|Transfer-Encoding". */
+    public String ultimoEncuadre() {
+        return ultimoEncuadre;
+    }
+
+    private volatile String ultimoEncuadre;
+
+    private void login(HttpExchange ex) throws IOException {
+        llamadas.incrementAndGet();
+        ultimoEncuadre = ex.getRequestHeaders().getFirst("Content-Length") + "|"
+                + ex.getRequestHeaders().getFirst("Transfer-Encoding");
+        if (caida) {
+            responder(ex, 500, "{\"title\":\"error interno\"}");
+            return;
+        }
+        JsonNode body = mapper.readTree(ex.getRequestBody().readAllBytes());
+        String codigo = body.path("codigoUsuario").asString("");
+        String password = body.path("password").asString("");
+        if (codigo.isBlank() || password.isBlank()) {
+            responder(ex, 400, fallo("Código de usuario y contraseña son requeridos."));
+            return;
+        }
+        Usuario u = usuarios.get(codigo.toLowerCase());
+        if (u == null) {
+            responder(ex, 401, fallo("Usuario no existe"));
+            return;
+        }
+        if (!u.activo()) {
+            responder(ex, 401, fallo("Usuario desactivado"));
+            return;
+        }
+        if (!u.password().equals(password)) {
+            responder(ex, 401, fallo("Contraseña incorrecta"));
+            return;
+        }
+        String token = jwt(u);
+        responder(ex, 200, "{\"success\":true,\"message\":\"Login correcto\",\"data\":{\"token\":\"" + token
+                + "\",\"userId\":" + u.id() + ",\"codigoUsuario\":\"" + u.codigo() + "\",\"nombreCompleto\":\""
+                + u.nombre() + "\",\"rol\":\"" + u.rol() + "\"},\"errors\":null}");
+    }
+
+    private String jwt(Usuario u) {
+        Base64.Encoder b64 = Base64.getUrlEncoder().withoutPadding();
+        String header = b64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
+        String payload = b64.encodeToString(("{\"sub\":\"" + u.id() + "\",\"role\":\"" + u.rol() + "\",\"exp\":"
+                + expiracionToken.get().getEpochSecond() + "}").getBytes(StandardCharsets.UTF_8));
+        return header + "." + payload + "." + firmaDeToken(u.id());
+    }
+
+    private static String fallo(String mensaje) {
+        return "{\"success\":false,\"message\":\"" + mensaje + "\",\"data\":null,\"errors\":null}";
+    }
+
+    private static void responder(HttpExchange ex, int status, String json) throws IOException {
+        byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
+        ex.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
+        ex.sendResponseHeaders(status, bytes.length);
+        try (OutputStream os = ex.getResponseBody()) {
+            os.write(bytes);
+        }
+    }
+
+    @Override
+    public void close() {
+        server.stop(0);
+    }
+}
