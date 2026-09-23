@@ -8,10 +8,16 @@
     2. Copia web-shim/web-bridge.js a <snapshot>/web/web-bridge.js.
     3. Inyecta UNA línea <script src="web/web-bridge.js"> en el index.html del snapshot, justo
        antes de shared/utils.js (después de la definición inline de PhotinoBridge).
-    4. Escribe web-dist/web-manifest.json (versión/commit Photino, hashes, fecha).
+    4. Contract check (tools/contract/photino_contract.py) del MISMO commit contra la ActionPolicy
+       Java exportada: web-dist/contract/contract-report.{json,md}.
+    5. Escribe web-dist/web-manifest.json (versión/commit Photino, hashes, fecha, contrato).
 
-    Solo LEE el repo Photino (git rev-parse / show / archive). No modifica nada allí.
-    Solo escribe dentro de <repo web>/web-dist/.
+    Código de salida: 0 = listo; 2 = contract check BLOQUEANTE (acciones REVISAR / SOLO_WEB): no
+    empaquetar ni desplegar esta versión web (el gateway además se niega a arrancar con ella).
+    Un bloqueo aquí NUNCA afecta a Photino.
+
+    Solo LEE el repo Photino (git rev-parse / show / archive / cat-file). No modifica nada allí.
+    Solo escribe dentro de <repo web>/web-dist/ y backend/target/.
 
 .PARAMETER PhotinoRepo
     Ruta al repo Photino. Por defecto ..\qualitycontrol_desktop_faret (hermano de este repo).
@@ -25,7 +31,11 @@
 [CmdletBinding()]
 param(
     [string]$PhotinoRepo,
-    [string]$Commit = "HEAD"
+    [string]$Commit = "HEAD",
+    # Ejecutable de Python (solo herramienta de build para el contract check; no es runtime).
+    [string]$Python = "python",
+    # Solo desarrollo: genera el snapshot sin contract check (/version mostrará NO_EVALUADO).
+    [switch]$SinContrato
 )
 
 $ErrorActionPreference = "Stop"
@@ -114,6 +124,49 @@ $webCommit = $null
 try { $webCommit = (& git -C $webRepo rev-parse HEAD).Trim() } catch { }
 $webDirty = [bool](& git -C $webRepo status --porcelain)
 
+# --- 5. Contract check Photino <-> Web (mismo commit) -------------------------------------------
+# Nunca afecta a Photino: solo decide si esta versión WEB puede empaquetarse/desplegarse.
+$contrato = $null
+$contractDir = Join-Path $outDir "contract"
+if ($SinContrato) {
+    Write-Warning "Contract check OMITIDO (-SinContrato): /version mostrará NO_EVALUADO."
+} else {
+    Write-Host "Exportando ActionPolicy (mvnw -Dtest=ActionPolicyExportTest test)..."
+    $backend = Join-Path $webRepo "backend"
+    Push-Location $backend
+    try {
+        & .\mvnw.cmd -q "-Dtest=ActionPolicyExportTest" test | Out-Host
+        if ($LASTEXITCODE -ne 0) { throw "El export de la ActionPolicy fallo (exit $LASTEXITCODE)" }
+    } finally { Pop-Location }
+
+    $webActions = Join-Path $backend "target\contract\web-actions.json"
+    & $Python (Join-Path $PSScriptRoot "contract\photino_contract.py") `
+        --photino-repo $PhotinoRepo --commit $sha `
+        --web-actions $webActions `
+        --baseline (Join-Path $webRepo "contract\baseline.json") `
+        --out $contractDir | Out-Host
+    $contractExit = $LASTEXITCODE
+    if ($contractExit -eq 1) { throw "El contract check no pudo ejecutarse (ver error arriba)." }
+
+    $reporte = [System.IO.File]::ReadAllText((Join-Path $contractDir "contract-report.json"), [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+    $r = $reporte.resumen
+    $estado = if ($reporte.bloqueante) { "BLOQUEADO" } elseif ($r.compatibles -eq $r.accionesFrontend) { "COMPLETA" } else { "PARCIAL" }
+    $contrato = [ordered]@{
+        estado           = $estado
+        texto            = $r.texto
+        compatibles      = $r.compatibles
+        accionesFrontend = $r.accionesFrontend
+        pendientes       = $r.pendientes
+        revisar          = $r.revisar
+        soloWeb          = $r.soloWeb
+        bloqueante       = [bool]$reporte.bloqueante
+        motivosBloqueo   = @($reporte.motivosBloqueo)
+        photinoCommit    = $reporte.photino.commit
+        generado         = $reporte.generado
+        reporte          = "contract/contract-report.md"
+    }
+}
+
 $manifest = [ordered]@{
     photinoVersion    = $photinoVersion
     photinoCommit     = $sha
@@ -123,10 +176,19 @@ $manifest = [ordered]@{
     syncedAt          = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     webRepoCommit     = $webCommit
     webRepoDirty      = $webDirty
+    contrato          = $contrato
 }
-$json = $manifest | ConvertTo-Json
+$json = $manifest | ConvertTo-Json -Depth 5
 [System.IO.File]::WriteAllText((Join-Path $outDir "web-manifest.json"), $json, (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host "Snapshot listo: $wwwOut"
 Write-Host "Manifest:      $(Join-Path $outDir 'web-manifest.json')"
 Write-Host "wwwSha256 (original Photino): $wwwSha256"
+if ($contrato) {
+    Write-Host "Contrato:      $($contrato.texto) [$($contrato.estado)] -> $(Join-Path $contractDir 'contract-report.md')"
+    if ($contrato.bloqueante) {
+        Write-Host "RELEASE WEB BLOQUEADO (Photino no se ve afectado):" -ForegroundColor Red
+        $contrato.motivosBloqueo | ForEach-Object { Write-Host "  - $_" -ForegroundColor Red }
+        exit 2
+    }
+}

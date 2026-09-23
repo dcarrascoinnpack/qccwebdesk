@@ -80,4 +80,21 @@ public final class ActionPolicy {
     public Set<String> accionesRegistradas() {
         return reglas.keySet();
     }
+
+    /**
+     * Descripción serializable de la política para el contract check (tools/contract): acción,
+     * empresas, roles y campos de identidad. No incluye nada del handler ni secretos.
+     */
+    public List<Map<String, Object>> describir() {
+        return reglas.values().stream()
+                .map(r -> {
+                    Map<String, Object> d = new LinkedHashMap<>();
+                    d.put("accion", r.accion());
+                    d.put("empresas", r.empresas().stream().sorted().toList());
+                    d.put("roles", r.roles().stream().sorted().toList());
+                    d.put("identidad", new java.util.TreeMap<>(r.identidad()));
+                    return d;
+                })
+                .toList();
+    }
 }
