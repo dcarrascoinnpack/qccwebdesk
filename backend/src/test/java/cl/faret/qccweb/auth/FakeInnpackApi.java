@@ -43,6 +43,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         }
         server.createContext("/api/auth/login", this::login);
         server.createContext("/api/home/dashboard", this::dashboard);
+        server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -75,6 +76,7 @@ public final class FakeInnpackApi implements AutoCloseable {
     public void reiniciarDashboard() {
         revocados.clear();
         authorizationRecibidos.clear();
+        queriesMaquinas.clear();
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -99,6 +101,40 @@ public final class FakeInnpackApi implements AutoCloseable {
             default -> responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"kpis\":{\"controlesHoy\":42,"
                     + "\"noConformesHoy\":3,\"mermaHoy\":12.5},\"alertas\":[],\"usuarioDelToken\":" + sub + "},\"errors\":null}");
         }
+    }
+
+    private final java.util.List<String> queriesMaquinas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** Queries recibidas en GET api/maquinas-seguimiento/resumen (para verificar el mapeo de parámetros). */
+    public java.util.List<String> queriesMaquinas() {
+        return java.util.List.copyOf(queriesMaquinas);
+    }
+
+    /** Respuesta con la forma real de MaquinasSeguimientoResumenDto (camelCase, ApiResponse). */
+    public static String dataMaquinas(int sub) {
+        return "{\"totalMaquinas\":2,\"maquinasConRegistros\":1,\"registrosMaquinaSeleccionada\":1,"
+                + "\"rechazosMaquinaSeleccionada\":0,\"maquinas\":[{\"id\":5,\"nombre\":\"Corrugadora 1\",\"proceso\":\"Corrugado\"},"
+                + "{\"id\":7,\"nombre\":\"Troqueladora 2\",\"proceso\":\"Troquelado\"}],\"registros\":[{\"id\":901,"
+                + "\"fechaRegistro\":\"23-09-2026\",\"horaRegistro\":\"10:15\",\"usuario\":\"Operador Uno\",\"proceso\":\"Corrugado\","
+                + "\"maquina\":\"Corrugadora 1\",\"formulario\":\"Control visual\",\"np\":\"3996\",\"producto\":\"Caja 40x30\","
+                + "\"turno\":\"A\",\"estado\":\"Validado\",\"observacion\":\"ñandú — ok\"}],\"usuarioDelToken\":" + sub + "}";
+    }
+
+    private void maquinasResumen(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        queriesMaquinas.add(String.valueOf(ex.getRequestURI().getRawQuery()));
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Máquina no encontrada"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataMaquinas(sub) + ",\"errors\":null}");
     }
 
     private Integer subDeBearer(String authorization) {

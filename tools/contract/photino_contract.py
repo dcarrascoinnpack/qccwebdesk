@@ -369,12 +369,31 @@ class Inventario:
 
     @staticmethod
     def _segmento_case(src, offset):
-        """Desde el literal de la acción hasta el siguiente case / rama / default."""
+        """
+        Código de la rama de la acción:
+          - `if (action == "x") { ... }` → el bloque completo (llaves balanceadas, sin tope de largo);
+            `if (action == "x") return ...;` → hasta el fin de la sentencia.
+          - `case "x":` / `"x" => ...` → desde el literal hasta el siguiente case / rama / default.
+        """
+        inicio = src.rfind("\n", 0, offset) + 1
         fin_linea = src.find("\n", offset)
+        linea = src[inicio:fin_linea if fin_linea >= 0 else len(src)]
+        if re.search(r"\bif\s*\(", linea) and re.search(r"action\s*==", linea):
+            i = offset
+            while i < len(src):
+                c = src[i]
+                if c == '"' or (c in "@$" and i + 1 < len(src) and src[i + 1] in '"@$'):
+                    i = _fin_string(src, i)
+                    continue
+                if c == "{":
+                    return src[inicio:_cerrar_llave(src, i) + 1]
+                if c == ";":
+                    return src[inicio:i + 1]
+                i += 1
+            return src[inicio:]
         resto = src[fin_linea if fin_linea >= 0 else offset:]
         m = re.search(r'\n\s*(case\s+"|default\s*:|_\s*=>|"[a-zA-Z]+\.[^"]*"\s*(=>|or\b)|.*action\s*==\s*")', resto)
-        fin = (fin_linea + m.start()) if m else min(len(src), offset + 2000)
-        inicio = src.rfind("\n", 0, offset) + 1
+        fin = (fin_linea + m.start()) if m else len(src)
         return src[inicio:fin]
 
 

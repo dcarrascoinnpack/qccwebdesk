@@ -241,6 +241,134 @@ class HuellaTest(unittest.TestCase):
         self.assertIn("no se pudo calcular", filas["excel.guardar"]["motivo"])
 
 
+AUTH_ROUTER = ROUTER.replace('if (action.StartsWith("inicio"))',
+                             'if (action.StartsWith("auth")) { rawResult = await _authHandler.Handle(action, d); }\n'
+                             '      else if (action.StartsWith("inicio"))')
+
+AUTH_HANDLER = '''
+public class AuthHandler {
+    private readonly AuthService _authService;
+    public async Task<string> Handle(string action, JsonElement data) {
+        return action switch {
+            "auth.login" => await Login(data),
+            "auth.logout" => Logout(),
+            "auth.me" => Me(),
+            _ => "x",
+        };
+    }
+    private async Task<string> Login(JsonElement data) { var r = await _authService.LoginAsync(data); return r; }
+    private string Logout() { _authService.Logout(); return ""; }
+    private string Me() { return _authService.GetCurrentUser(); }
+}
+'''
+
+AUTH_SERVICE = '''
+public class AuthService {
+    private readonly InnpackApiClient _api;
+    public async Task<string> LoginAsync(JsonElement r) {
+        var (ok, body) = await _api.PostJsonAsync("api/auth/login", r);
+        return ok ? body : "Error al comunicarse con la API";
+    }
+    public void Logout() { }
+    public string GetCurrentUser() { return "u"; }
+}
+'''
+
+AUTH_JS = 'send({ action: "auth.login", data: {} }); send({ action: "auth.me", data: {} });'
+
+
+MAQUINAS_HANDLER = '''
+public class MaquinasHandler {
+    private readonly MaquinasApi _api;
+    public async Task<string> Handle(string action, Dictionary<string, object> data) {
+        if (action == "maquinas.resumen")
+        {
+            int? id = null;
+%s
+            var (ok, body) = await _api.ResumenAsync(id);
+            return JsonSerializer.Serialize(new { ok = true, data = body });
+        }
+        return "no";
+    }
+}
+''' % "\n".join("            // parseo largo %d { \"}\" }" % i + "\n            id = id ?? %d;" % i for i in range(60))
+
+
+class BloqueIfLargoTest(unittest.TestCase):
+    """Rama `if (action == ...) { ... }` más larga que cualquier tope: se toma el bloque completo."""
+
+    WEB = {"acciones": [{"accion": "maquinas.resumen"}]}
+
+    def fuente(self, handler):
+        router = ROUTER.replace('if (action.StartsWith("inicio"))',
+                                'if (action.StartsWith("maquinas")) { var handler = new MaquinasHandler(_c); }\n'
+                                '      else if (action.StartsWith("inicio"))')
+        return repo(**{pc.ROUTER: router, "src/Backend/Modules/M/MaquinasHandler.cs": handler,
+                       "src/UI/www/m.js": 'send({ action: "maquinas.resumen" })'})
+
+    def test_cambio_al_final_de_un_bloque_largo_pasa_a_revisar(self):
+        self.assertGreater(len(MAQUINAS_HANDLER), 3000)
+        base_f = self.fuente(MAQUINAS_HANDLER)
+        inv = pc.Inventario(base_f)
+        baseline = pc.aprobar({}, pc.comparar(inv, self.WEB, {}), ["maquinas.resumen"], base_f)
+
+        cambiado = MAQUINAS_HANDLER.replace("new { ok = true, data = body }", "new { ok = true, data = body, extra = 1 }")
+        filas = {f["accion"]: f for f in pc.comparar(pc.Inventario(self.fuente(cambiado)), self.WEB, baseline)}
+        self.assertEqual(filas["maquinas.resumen"]["estado"], "REVISAR")
+
+        sin_cambio = {f["accion"]: f for f in pc.comparar(pc.Inventario(self.fuente(MAQUINAS_HANDLER)), self.WEB, baseline)}
+        self.assertEqual(sin_cambio["maquinas.resumen"]["estado"], "COMPATIBLE")
+
+    def test_if_de_una_linea_sin_llaves(self):
+        seg = pc.Inventario._segmento_case(LAB, LAB.index('"faretLab.rct.guardar"'))
+        self.assertTrue(seg.strip().endswith("return await Guardar();"))
+        self.assertNotIn("faretLab.fct.guardar", seg)
+
+
+class AuthContratoTest(unittest.TestCase):
+    """auth.login / auth.me: atendidas en web por AuthController, controladas igual por huella."""
+
+    WEB = {"acciones": [{"accion": "auth.login", "via": "AuthController POST /api/v1/auth/login"},
+                        {"accion": "auth.me", "via": "AuthController GET /api/v1/auth/session"}]}
+
+    @staticmethod
+    def fuente(**cambios):
+        base = {pc.ROUTER: AUTH_ROUTER,
+                "src/Backend/Modules/Auth/AuthHandler.cs": AUTH_HANDLER,
+                "src/Backend/Modules/Auth/AuthService.cs": AUTH_SERVICE,
+                "src/UI/www/modules/auth/auth.controller.js": AUTH_JS}
+        base.update(cambios)
+        return repo(**base)
+
+    def filas(self, fuente, baseline):
+        inv = pc.Inventario(fuente)
+        return {f["accion"]: f for f in pc.comparar(inv, self.WEB, baseline)}
+
+    def baseline(self):
+        f = self.fuente()
+        inv = pc.Inventario(f)
+        return pc.aprobar({}, pc.comparar(inv, self.WEB, {}), ["auth.login", "auth.me"], f)
+
+    def test_compatibles_con_baseline(self):
+        filas = self.filas(self.fuente(), self.baseline())
+        self.assertEqual(filas["auth.login"]["estado"], "COMPATIBLE")
+        self.assertEqual(filas["auth.me"]["estado"], "COMPATIBLE")
+        self.assertIn("AuthService.cs#LoginAsync", filas["auth.login"]["componentesHuella"])
+        self.assertEqual(filas["auth.logout"]["estado"], "NO_USADA")
+
+    def test_cambio_en_la_logica_de_login_pasa_a_revisar(self):
+        servicio = AUTH_SERVICE.replace('"api/auth/login"', '"api/v2/auth/login"')
+        filas = self.filas(self.fuente(**{"src/Backend/Modules/Auth/AuthService.cs": servicio}), self.baseline())
+        self.assertEqual(filas["auth.login"]["estado"], "REVISAR")
+        self.assertEqual(filas["auth.me"]["estado"], "COMPATIBLE")
+
+    def test_cambio_en_sesion_de_photino_pasa_auth_me_a_revisar(self):
+        servicio = AUTH_SERVICE.replace('return "u";', 'return "otro";')
+        filas = self.filas(self.fuente(**{"src/Backend/Modules/Auth/AuthService.cs": servicio}), self.baseline())
+        self.assertEqual(filas["auth.me"]["estado"], "REVISAR")
+        self.assertEqual(filas["auth.login"]["estado"], "COMPATIBLE")
+
+
 class ReporteTest(unittest.TestCase):
 
     def test_resumen_texto_y_bloqueo(self):
@@ -300,12 +428,13 @@ class PhotinoRealTest(unittest.TestCase):
         inv = pc.Inventario(fuente)
         raiz = os.path.join(os.path.dirname(__file__), "..", "..")
         baseline = pc.leer_json(os.path.join(raiz, "contract", "baseline.json"))
-        rep = pc.construir_reporte(fuente, inv, pc.comparar(inv, WEB_DASHBOARD, baseline), WEB_DASHBOARD, baseline)
+        web = {"acciones": [{"accion": a} for a in baseline["acciones"]]}
+        rep = pc.construir_reporte(fuente, inv, pc.comparar(inv, web, baseline), web, baseline)
         self.assertEqual(rep["resumen"]["accionesFrontend"], 236)
         self.assertEqual(rep["resumen"]["noUsadas"], 29)
         self.assertEqual(rep["resumen"]["photinoSinHandler"], 0)
         self.assertEqual(rep["resumen"]["dinamicasSinResolver"], 0)
-        self.assertEqual(rep["resumen"]["texto"], "Photino 1.8.12 · Web compatible 1/236")
+        self.assertEqual(rep["resumen"]["compatibles"], len(baseline["acciones"]))
         self.assertFalse(rep["bloqueante"])
 
 

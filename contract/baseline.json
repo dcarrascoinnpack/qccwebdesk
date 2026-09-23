@@ -9,6 +9,27 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-23T19:12:46Z"
+    },
+    "auth.login": {
+      "huella": "b33a653147dbd2d8c1f7d1ded9aba613dbb0bc9964dd10e8dce902fad3d70565",
+      "handler": "AuthHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-23T19:25:01Z"
+    },
+    "auth.me": {
+      "huella": "128d558dcd4ac4103ee54a9852df2db1d5d5c3b9f96e693ed8cc450d2211a28d",
+      "handler": "AuthHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-23T19:25:01Z"
+    },
+    "maquinasSeguimiento.obtenerResumen": {
+      "huella": "2b77fcdb0483751ce51026c05ecdfc40a31574970a8e56acb1480b9b88da98e7",
+      "handler": "MaquinasSeguimientoHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-23T19:29:39Z"
     }
   }
 }

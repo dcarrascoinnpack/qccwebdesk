@@ -176,8 +176,9 @@ class BridgeFase1cTest {
     }
 
     @Test
-    void soloAccionHabilitadaEnFase1c() {
-        assertThat(policy.accionesRegistradas()).containsExactly("inicio.getDashboard");
+    void soloAccionesHabilitadasHastaFase2a() {
+        assertThat(policy.accionesRegistradas())
+                .containsExactlyInAnyOrder("inicio.getDashboard", "maquinasSeguimiento.obtenerResumen");
     }
 
     // ------------------------------------------------------ manipulación desde DevTools

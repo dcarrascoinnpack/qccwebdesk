@@ -35,6 +35,16 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/auth")
 public class AuthController {
 
+    /**
+     * Acciones de Photino que la web atiende aquí (vía web-bridge.js) y no en /api/v1/bridge.
+     * Se declaran en el contract check para que un cambio en la lógica de autenticación de Photino
+     * (AuthHandler / AuthService) las pase a REVISAR. auth.logout no se incluye: el frontend de
+     * Photino nunca la llama (el shim invalida la sesión web por su cuenta).
+     */
+    public static final Map<String, String> ACCIONES_PHOTINO = Map.of(
+            "auth.login", "POST /api/v1/auth/login",
+            "auth.me", "GET /api/v1/auth/session");
+
     static final String EMPRESA_INNPACK = "INNPACK";
     static final String MENSAJE_CREDENCIALES = "Usuario o contraseña incorrectos.";
     static final String MENSAJE_REQUERIDOS = "Completa todos los campos";

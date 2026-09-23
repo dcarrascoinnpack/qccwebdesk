@@ -2,6 +2,7 @@ package cl.faret.qccweb.bridge;
 
 import cl.faret.qccweb.auth.AuthProperties;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import java.util.List;
 import java.util.Map;
@@ -32,10 +33,20 @@ public class BridgeConfig {
     }
 
     @Bean
-    public ActionPolicy actionPolicy(InicioBridgeHandler inicio) {
+    public MaquinasSeguimientoBridgeHandler maquinasSeguimientoBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new MaquinasSeguimientoBridgeHandler(api, mapper);
+    }
+
+    @Bean
+    public ActionPolicy actionPolicy(InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas) {
         return new ActionPolicy(List.of(
-                // Fase 1c: única acción habilitada. Solo lectura; no reenvía nada del payload.
+                // Fase 1c — Inicio. Solo lectura; no reenvía nada del payload.
                 new ActionPolicy.Regla(
-                        "inicio.getDashboard", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), inicio::getDashboard)));
+                        "inicio.getDashboard", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), inicio::getDashboard),
+                // Fase 2a — Máquinas y Procesos. Solo lectura; solo maquinaId/sinLimite (sin identidad).
+                // Photino y la API no restringen por rol (cualquier usuario INNPACK autenticado).
+                new ActionPolicy.Regla(
+                        "maquinasSeguimiento.obtenerResumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        maquinas::obtenerResumen)));
     }
 }
