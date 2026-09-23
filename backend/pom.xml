@@ -28,6 +28,9 @@
 	</scm>
 	<properties>
 		<java.version>17</java.version>
+		<!-- El JAR y spring-boot:run arrancan el gateway web. App legacy (JPA/MySQL, deprecada):
+		     mvnw spring-boot:run -Dspring-boot.run.main-class=cl.faret.qcc.QccApiApplication -->
+		<start-class>cl.faret.qccweb.QccWebGatewayApplication</start-class>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -138,6 +141,14 @@
 						</exclude>
 					</excludes>
 				</configuration>
+				<executions>
+					<execution>
+						<!-- META-INF/build-info.properties: versión y fecha del gateway para GET /version -->
+						<goals>
+							<goal>build-info</goal>
+						</goals>
+					</execution>
+				</executions>
 			</plugin>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>

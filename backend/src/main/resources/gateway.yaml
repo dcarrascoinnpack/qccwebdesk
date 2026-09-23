@@ -1,0 +1,33 @@
+# Configuración del gateway web (cl.faret.qccweb). Independiente de application.yaml (app legacy).
+# Rutas y puertos se sobrescriben por variables de entorno; aquí no hay secretos.
+
+spring:
+  application:
+    name: qcc-web-gateway
+
+server:
+  port: ${QCC_WEB_PORT:8086}
+  error:
+    include-message: never
+    include-stacktrace: never
+    include-exception: false
+
+qcc:
+  web:
+    # Generados por tools/sync-photino-www.ps1 (relativos a backend/ al ejecutar con mvnw)
+    www-dir: ${QCC_WEB_WWW_DIR:../web-dist/photino-www}
+    manifest-file: ${QCC_WEB_MANIFEST_FILE:../web-dist/web-manifest.json}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      show-details: never
+
+logging:
+  level:
+    root: INFO
+    cl.faret.qccweb: INFO
