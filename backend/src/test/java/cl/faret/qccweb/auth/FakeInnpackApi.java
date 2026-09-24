@@ -49,6 +49,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/registros-produccion/filtros", ex -> registrosProduccionLectura(ex, true));
         server.createContext("/api/registros-produccion/resumen", ex -> registrosProduccionLectura(ex, false));
         server.createContext("/api/registros-control", this::registrosControl);
+        server.createContext("/api/producto-terminado", this::productoTerminado);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -85,6 +86,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesDashboard.clear();
         peticionesProduccion.clear();
         peticionesControl.clear();
+        peticionesProductoTerminado.clear();
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -299,6 +301,123 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataRegistrosControl(sub, query) + ",\"errors\":null}");
+    }
+
+    private final java.util.List<String> peticionesProductoTerminado = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "GET <ruta>?<query cruda>" recibidos en api/producto-terminado* (para verificar el mapeo exacto). */
+    public java.util.List<String> peticionesProductoTerminado() {
+        return java.util.List.copyOf(peticionesProductoTerminado);
+    }
+
+    public static String dataProductoTerminadoFiltros(String empresa) {
+        return "{\"maquinas\":[\"Termoformadora 1\",\"Pegadora 3\"],\"inspectores\":[{\"id\":10,\"nombre\":\"Operador Uno\"},"
+                + "{\"id\":20,\"nombre\":\"María José Peña\"}],\"defectos\":[{\"id\":1,\"nombre\":\"Rebaba\"}],"
+                + "\"origenes\":[{\"id\":3,\"nombre\":\"Máquina\"}],\"empresaConsultada\":\"" + empresa + "\"}";
+    }
+
+    public static String dataProductoTerminadoResumen(int sub, String empresa) {
+        return "{\"totalInspecciones\":45,\"conformes\":40,\"noConformes\":5,\"porcentajeConformidad\":88.9,"
+                + "\"pareto\":[{\"defecto\":\"Rebaba\",\"cantidad\":3}],\"origenes\":[{\"origen\":\"Máquina\",\"cantidad\":2}],"
+                + "\"tendencia\":[{\"fecha\":\"2026-09-23\",\"inspecciones\":20,\"noConformes\":2}],"
+                + "\"comparacion\":[{\"proceso\":\"Pegado\",\"inspecciones\":25,\"noConformes\":3}],"
+                + "\"empresaConsultada\":\"" + empresa + "\",\"usuarioDelToken\":" + sub + "}";
+    }
+
+    /** Filas de la lista/exportación (22 campos, los que arma construirTablaExportTemp en Photino). */
+    private static String filaProductoTerminado(int i) {
+        return "{\"inspeccionId\":" + (9000 + i) + ",\"fecha\":\"24-09-2026\",\"inspector\":\"María José Peña\",\"np\":\"41" + String.format("%02d", i % 100)
+                + "\",\"cliente\":\"Cliente Ñandú «E2E»\",\"codigoProducto\":\"CP-" + i + "\",\"descripcionProducto\":\"Estuche cartón =SUMA(1;2)\","
+                + "\"proceso\":\"Pegado\",\"cantidadLote\":\"1.500\",\"maquina\":\"Pegadora 3\",\"nivelInspeccion\":\"II\",\"aql\":\"1,5\","
+                + "\"letraCodigo\":\"K\",\"tamanoMuestra\":125,\"ac\":5,\"re\":6,\"unidadesNoConformes\":" + (i % 3) + ",\"defectosTotales\":" + (i % 4)
+                + ",\"resultado\":\"" + (i % 3 == 0 ? "NO CONFORME" : "CONFORME") + "\",\"hallazgoCorrelativo\":" + (i % 2 == 0 ? "null" : "1")
+                + ",\"defecto\":\"" + (i % 2 == 0 ? "" : "Rebaba") + "\",\"origen\":\"" + (i % 2 == 0 ? "" : "Máquina") + "\"}";
+    }
+
+    /** Lista paginada { items, total, page, limit }: np=VACIO → 0; np=GRANDE → 500 en una página; si no 2 de 45. */
+    public static String dataProductoTerminadoList(int sub, String query) {
+        boolean vacio = query.contains("np=VACIO");
+        boolean grande = query.contains("np=GRANDE");
+        int n = vacio ? 0 : (grande ? 500 : 2);
+        int page = 1;
+        int limit = 50;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:^|&)page=(\\d+)").matcher(query);
+        if (m.find()) {
+            page = Integer.parseInt(m.group(1));
+        }
+        m = java.util.regex.Pattern.compile("(?:^|&)limit=(\\d+)").matcher(query);
+        if (m.find()) {
+            limit = Integer.parseInt(m.group(1));
+        }
+        StringBuilder items = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            items.append(i > 0 ? "," : "").append(filaProductoTerminado(i));
+        }
+        return "{\"items\":[" + items + "],\"total\":" + (vacio ? 0 : (grande ? 500 : 45)) + ",\"page\":" + page + ",\"limit\":" + limit
+                + ",\"usuarioDelToken\":" + sub + "}";
+    }
+
+    /** exportar-detalle devuelve un array plano de filas (una por inspección/hallazgo). */
+    public static String dataProductoTerminadoExport(String query) {
+        int n = query.contains("np=VACIO") ? 0 : (query.contains("np=GRANDE") ? 500 : 3);
+        StringBuilder sb = new StringBuilder("[");
+        for (int i = 0; i < n; i++) {
+            sb.append(i > 0 ? "," : "").append(filaProductoTerminado(i));
+        }
+        return sb.append("]").toString();
+    }
+
+    public static String dataProductoTerminadoDetalle(int id, String empresa, int sub) {
+        return "{\"id\":" + id + ",\"fechaRegistro\":\"24-09-2026\",\"horaRegistro\":\"10:15\",\"inspector\":\"María José Peña\","
+                + "\"np\":\"4101\",\"resultado\":\"CONFORME\",\"hallazgos\":[{\"correlativo\":1,\"defecto\":\"Rebaba\",\"origen\":\"Máquina\",\"cantidad\":2}],"
+                + "\"empresaConsultada\":\"" + empresa + "\",\"usuarioDelToken\":" + sub + "}";
+    }
+
+    private void productoTerminado(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        String query = String.valueOf(ex.getRequestURI().getRawQuery());
+        peticionesProductoTerminado.add(ex.getRequestMethod() + " " + path + "?" + query);
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (!ex.getRequestMethod().equals("GET")) {
+            responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
+            return;
+        }
+        // Misma validación que ProductoTerminadoController: empresa obligatoria INNPACK|FARET.
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:^|&)empresa=([^&]*)").matcher(query);
+        String empresa = m.find() ? m.group(1) : "";
+        if (!empresa.equals("INNPACK") && !empresa.equals("FARET")) {
+            responder(ex, 400, fallo("Falta indicar la empresa (INNPACK o FARET)"));
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Rango de fechas inválido"));
+            return;
+        }
+        String data;
+        if (path.equals("/api/producto-terminado/filtros")) {
+            data = dataProductoTerminadoFiltros(empresa);
+        } else if (path.equals("/api/producto-terminado/resumen")) {
+            data = dataProductoTerminadoResumen(sub, empresa);
+        } else if (path.equals("/api/producto-terminado/exportar-detalle")) {
+            data = dataProductoTerminadoExport(query);
+        } else if (path.equals("/api/producto-terminado")) {
+            data = dataProductoTerminadoList(sub, query);
+        } else {
+            int id = Integer.parseInt(path.substring("/api/producto-terminado/".length()));
+            if (id == 404) {
+                responder(ex, 404, fallo("Inspección no encontrada"));
+                return;
+            }
+            data = dataProductoTerminadoDetalle(id, empresa, sub);
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 
     private Integer subDeBearer(String authorization) {

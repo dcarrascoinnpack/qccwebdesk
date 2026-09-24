@@ -72,6 +72,41 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-24T14:02:47Z"
+    },
+    "productoTerminado.filtros": {
+      "huella": "400970aaaedb36eefc37081925b9f5c2f433d09a43c985df9065d8f5daf6e11c",
+      "handler": "ProductoTerminadoHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T14:34:33Z"
+    },
+    "productoTerminado.resumen": {
+      "huella": "73a13dd04c87d9721e781e2c4f35239dd23c45c9769a436178748a7197a86060",
+      "handler": "ProductoTerminadoHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T14:34:33Z"
+    },
+    "productoTerminado.list": {
+      "huella": "68af25a60e71a91b3af279a09f8428b2e77c73ac12d3850d2988d7a6a2b78381",
+      "handler": "ProductoTerminadoHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T14:34:33Z"
+    },
+    "productoTerminado.detalle": {
+      "huella": "3bec08eb19dc8f1f0b34166768d7dca1533db5863f2e3276017079a3d0f097cf",
+      "handler": "ProductoTerminadoHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T14:34:33Z"
+    },
+    "productoTerminado.exportarDetalle": {
+      "huella": "ce344d6bde87e952331c664c9dab65a501de4d9d7ddbe96518027f570133f24e",
+      "handler": "ProductoTerminadoHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T14:34:33Z"
     }
   }
 }

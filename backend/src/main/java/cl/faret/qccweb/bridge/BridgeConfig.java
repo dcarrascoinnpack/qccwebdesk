@@ -4,6 +4,7 @@ import cl.faret.qccweb.auth.AuthProperties;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.ProductoTerminadoBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosControlBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
 import cl.faret.qccweb.upstream.InnpackApiClient;
@@ -56,9 +57,18 @@ public class BridgeConfig {
     }
 
     @Bean
+    public ProductoTerminadoBridgeHandler productoTerminadoBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new ProductoTerminadoBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ActionPolicy actionPolicy(
             InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard,
-            RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl) {
+            RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl,
+            ProductoTerminadoBridgeHandler productoTerminado) {
+        // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
+        // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
+        Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
         return new ActionPolicy(List.of(
                 // Fase 1c — Inicio. Solo lectura; no reenvía nada del payload.
                 new ActionPolicy.Regla(
@@ -88,6 +98,20 @@ public class BridgeConfig {
                 // eliminarRegistro quedan fuera (deny-by-default).
                 new ActionPolicy.Regla(
                         "registrosControl.obtenerRegistros", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
-                        registrosControl::obtenerRegistros)));
+                        registrosControl::obtenerRegistros),
+                // Fase 2f — Producto Terminado, SOLO LECTURA (5 acciones). Escrituras
+                // productoTerminado.eliminar / actualizarFecha fuera (deny-by-default). Solo INNPACK:
+                // no existe login FARET en la web todavía.
+                new ActionPolicy.Regla(
+                        "productoTerminado.filtros", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, productoTerminado::filtros),
+                new ActionPolicy.Regla(
+                        "productoTerminado.resumen", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, productoTerminado::resumen),
+                new ActionPolicy.Regla(
+                        "productoTerminado.list", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, productoTerminado::list),
+                new ActionPolicy.Regla(
+                        "productoTerminado.detalle", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, productoTerminado::detalle),
+                new ActionPolicy.Regla(
+                        "productoTerminado.exportarDetalle", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion,
+                        productoTerminado::exportarDetalle)));
     }
 }

@@ -4,7 +4,7 @@ Migración web **en paralelo** del Quality Control Center de TI Faret (hoy Photi
 `C:\Users\dcarrasco\Desktop\Proyectos\qualitycontrol_desktop_faret`). Photino sigue siendo el
 sistema principal y productivo — esta versión web no lo reemplaza ni lo modifica.
 
-> **Estado (24-09-2026):** en desarrollo activo, sin deploy todavía. Arquitectura base + 5 módulos
+> **Estado (24-09-2026):** en desarrollo activo, sin deploy todavía. Arquitectura base + 6 módulos
 > de solo lectura funcionando de punta a punta contra una API INNPACK simulada. Ver
 > [`contex.md`](contex.md) (no versionado) para el detalle completo sesión a sesión.
 
@@ -143,10 +143,16 @@ dentro de los tests) — nunca credenciales ni endpoints reales.
 | 2b | `excel.guardar` resuelto en el navegador (sin tocar el servidor) | ✅ commit `accc142` |
 | 2c | Módulo **Inspecciones Calidad**, solo lectura (`dashboard.obtenerFiltros`/`obtenerResumen`) | ✅ commit `d84cc0a` |
 | 2d | Módulo **Inspecciones Producción**, solo lectura (`registrosProduccion.obtenerFiltros`/`obtenerResumen`) | ✅ commit `542b5a5` |
-| 2e | Módulo **Data / Registros de Control**, solo lectura (`registrosControl.obtenerRegistros`: grilla, filtros, paginación, Exportar Excel e Imprimir) | ✅ |
+| 2e | Módulo **Data / Registros de Control**, solo lectura (`registrosControl.obtenerRegistros`: grilla, filtros, paginación, Exportar Excel e Imprimir) | ✅ commit `1a7f114` |
+| 2f | Módulo **Producto Terminado**, solo lectura (`productoTerminado.filtros`/`resumen`/`list`/`detalle`/`exportarDetalle`; Exportar Excel vía navegador) | ✅ |
 
 **Compatibilidad actual con Photino** (`GET /version` → `compatibilidad.texto`):
-**Photino 1.8.12 · Web compatible 10/236**.
+**Photino 1.8.12 · Web compatible 15/236**.
+
+**`empresa` en Producto Terminado (Fase 2f):** es contexto de sesión, no un filtro. En Photino
+cada módulo frontend la manda hardcodeada (`"INNPACK"` / `"FARET"`) y la API la valida pero no la
+liga al JWT. La web **ignora el valor del payload** y reenvía exclusivamente
+`SessionUser.empresa()` (`IdentityOverride` en la regla + el handler la lee de la sesión).
 
 **Diferencia defensiva documentada (Fase 2e):** en `registrosControl.obtenerRegistros`, si un
 filtro de texto o `id` llega como booleano/objeto/array (solo posible manipulando el payload; la
