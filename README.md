@@ -4,7 +4,7 @@ Migración web **en paralelo** del Quality Control Center de TI Faret (hoy Photi
 `C:\Users\dcarrasco\Desktop\Proyectos\qualitycontrol_desktop_faret`). Photino sigue siendo el
 sistema principal y productivo — esta versión web no lo reemplaza ni lo modifica.
 
-> **Estado (24-09-2026):** en desarrollo activo, sin deploy todavía. Arquitectura base + 4 módulos
+> **Estado (24-09-2026):** en desarrollo activo, sin deploy todavía. Arquitectura base + 5 módulos
 > de solo lectura funcionando de punta a punta contra una API INNPACK simulada. Ver
 > [`contex.md`](contex.md) (no versionado) para el detalle completo sesión a sesión.
 
@@ -142,18 +142,24 @@ dentro de los tests) — nunca credenciales ni endpoints reales.
 | 2a | Módulo **Máquinas y Procesos** (`maquinasSeguimiento.obtenerResumen`) | ✅ commit `01b2dd3` |
 | 2b | `excel.guardar` resuelto en el navegador (sin tocar el servidor) | ✅ commit `accc142` |
 | 2c | Módulo **Inspecciones Calidad**, solo lectura (`dashboard.obtenerFiltros`/`obtenerResumen`) | ✅ commit `d84cc0a` |
-| 2d | Módulo **Inspecciones Producción**, solo lectura (`registrosProduccion.obtenerFiltros`/`obtenerResumen`) | 🟡 implementado y probado, **pendiente de aprobación/commit** |
+| 2d | Módulo **Inspecciones Producción**, solo lectura (`registrosProduccion.obtenerFiltros`/`obtenerResumen`) | ✅ commit `542b5a5` |
+| 2e | Módulo **Data / Registros de Control**, solo lectura (`registrosControl.obtenerRegistros`: grilla, filtros, paginación, Exportar Excel e Imprimir) | ✅ |
 
-**Compatibilidad actual con Photino** (`GET /version` → `compatibilidad.texto`): con lo ya
-commiteado, **Photino 1.8.12 · Web compatible 7/236**; con el trabajo de la Fase 2d aplicado (sin
-commitear todavía), **9/236**.
+**Compatibilidad actual con Photino** (`GET /version` → `compatibilidad.texto`):
+**Photino 1.8.12 · Web compatible 10/236**.
+
+**Diferencia defensiva documentada (Fase 2e):** en `registrosControl.obtenerRegistros`, si un
+filtro de texto o `id` llega como booleano/objeto/array (solo posible manipulando el payload; la
+UI siempre envía strings), Photino lo convierte con `.ToString()` y lo reenvía a la API; la web
+responde `Parámetro de filtro inválido.` sin llamar a la API. Strings, números y null se tratan
+igual que Photino.
 
 ## Próximo paso sugerido
 
-Revisar si conviene sumar `registros-control` (filtros + exportación "traer todo sin límite",
-patrón ya conocido) en solo lectura. Después, una fase dedicada a las primeras escrituras
-(validar/rechazar/eliminar en Dashboard, Producción y Máquinas), que requiere definir la matriz de
-roles permitidos — hoy la API INNPACK no restringe por rol en esos módulos.
+Siguiente módulo de lectura por revisar (flujo real primero, sin implementar a ciegas). Después,
+una fase dedicada a las primeras escrituras (validar/rechazar/eliminar en Dashboard, Producción,
+Registros de Control y Máquinas), que requiere definir la matriz de roles permitidos — hoy la API
+INNPACK no restringe por rol en esos módulos.
 
 ## Reglas de trabajo
 

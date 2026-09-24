@@ -4,6 +4,7 @@ import cl.faret.qccweb.auth.AuthProperties;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.RegistrosControlBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import java.util.List;
@@ -50,9 +51,14 @@ public class BridgeConfig {
     }
 
     @Bean
+    public RegistrosControlBridgeHandler registrosControlBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new RegistrosControlBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ActionPolicy actionPolicy(
             InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard,
-            RegistrosProduccionBridgeHandler registrosProduccion) {
+            RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl) {
         return new ActionPolicy(List.of(
                 // Fase 1c — Inicio. Solo lectura; no reenvía nada del payload.
                 new ActionPolicy.Regla(
@@ -76,6 +82,12 @@ public class BridgeConfig {
                         registrosProduccion::obtenerFiltros),
                 new ActionPolicy.Regla(
                         "registrosProduccion.obtenerResumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
-                        registrosProduccion::obtenerResumen)));
+                        registrosProduccion::obtenerResumen),
+                // Fase 2e — Registros de Control, SOLO LECTURA (grilla paginada + "traer todo" de
+                // Exportar/Imprimir). Las escrituras registrosControl.validarRegistro/rechazarRegistro/
+                // eliminarRegistro quedan fuera (deny-by-default).
+                new ActionPolicy.Regla(
+                        "registrosControl.obtenerRegistros", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        registrosControl::obtenerRegistros)));
     }
 }

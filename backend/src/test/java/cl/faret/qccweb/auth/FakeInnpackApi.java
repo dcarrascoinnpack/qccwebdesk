@@ -48,6 +48,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/dashboard/resumen", ex -> dashboardLectura(ex, false));
         server.createContext("/api/registros-produccion/filtros", ex -> registrosProduccionLectura(ex, true));
         server.createContext("/api/registros-produccion/resumen", ex -> registrosProduccionLectura(ex, false));
+        server.createContext("/api/registros-control", this::registrosControl);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -83,6 +84,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         queriesMaquinas.clear();
         peticionesDashboard.clear();
         peticionesProduccion.clear();
+        peticionesControl.clear();
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -241,6 +243,62 @@ public final class FakeInnpackApi implements AutoCloseable {
         }
         String data = filtros ? dataDashboardFiltros() : dataProduccionResumen(sub, query);
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
+    }
+
+    private final java.util.List<String> peticionesControl = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "<ruta>?<query cruda>" recibidos en api/registros-control* (para verificar el mapeo exacto). */
+    public java.util.List<String> peticionesControl() {
+        return java.util.List.copyOf(peticionesControl);
+    }
+
+    /**
+     * Forma real de la respuesta paginada de GET api/registros-control: { items, total, page, pages }.
+     * Con np=VACIO devuelve 0 items; con limit=999999 devuelve todo (300 items en una página);
+     * si no, 2 items de un total de 45 y "page" = el recibido.
+     */
+    public static String dataRegistrosControl(int sub, String query) {
+        boolean vacio = query != null && query.contains("np=VACIO");
+        boolean todo = query != null && query.contains("limit=999999");
+        int items = vacio ? 0 : (todo ? 300 : 2);
+        int total = vacio ? 0 : (todo ? 300 : 45);
+        int page = 1;
+        if (query != null) {
+            java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:^|&)page=(\\d+)").matcher(query);
+            if (m.find()) {
+                page = Integer.parseInt(m.group(1));
+            }
+        }
+        int pages = vacio ? 1 : (todo ? 1 : 3);
+        StringBuilder lista = new StringBuilder();
+        for (int i = 0; i < items; i++) {
+            lista.append(i > 0 ? "," : "").append("{\"id\":").append(7000 + i)
+                    .append(",\"fechaRegistro\":\"24-09-2026\",\"horaRegistro\":\"08:").append(String.format("%02d", i % 60))
+                    .append("\",\"usuario\":\"María José Peña\",\"proceso\":\"Pegado\",\"parametro\":\"Adhesivo\",\"maquina\":\"Pegadora 3\","
+                            + "\"np\":\"41").append(String.format("%02d", i % 100)).append("\",\"producto\":\"Estuche cartón ñandú «E2E»\","
+                            + "\"turno\":\"A\",\"valor\":\"12.5\",\"unidad\":\"g\",\"estado\":\"Conforme\",\"estadoValidacion\":\"Pendiente\","
+                            + "\"observacion\":\"=SUMA(1;2) sin fórmula\",\"imagenUrl\":\"\"}");
+        }
+        return "{\"items\":[" + lista + "],\"total\":" + total + ",\"page\":" + page + ",\"pages\":" + pages
+                + ",\"usuarioDelToken\":" + sub + "}";
+    }
+
+    private void registrosControl(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesControl.add(ex.getRequestMethod() + " " + ex.getRequestURI().getRawPath() + "?" + query);
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Rango de fechas inválido"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataRegistrosControl(sub, query) + ",\"errors\":null}");
     }
 
     private Integer subDeBearer(String authorization) {

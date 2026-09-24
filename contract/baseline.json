@@ -65,6 +65,13 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-24T13:10:46Z"
+    },
+    "registrosControl.obtenerRegistros": {
+      "huella": "c143ba8cb101668357f89785a31f37486c29eee463d7681969842970081b02a3",
+      "handler": "RegistrosControlHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T14:02:47Z"
     }
   }
 }
