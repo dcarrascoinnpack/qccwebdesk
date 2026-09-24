@@ -186,8 +186,20 @@
     // cuya respuesta {fileName, base64} se convierte en una descarga del navegador. Photino escribía
     // el archivo en Descargas y lo abría con Process.Start; aquí no hay archivos temporales ni rutas.
     var ACCIONES_DESCARGA = {
-        "certificadosLiberacion.calidadPdf.descargar": descargarPdfEnNavegador
+        "certificadosLiberacion.calidadPdf.descargar": descargarPdfEnNavegador,
+        // Photino: imágenes/PDF se previsualizan en la modal (data: URI) y el resto se escribía en
+        // %TEMP% y se abría con Process.Start. Web: previsualizable → mismo contrato; el resto se
+        // descarga con un Blob.
+        "controlDocumental.adjunto.abrir": abrirAdjuntoEnNavegador
     };
+    var MAX_ADJUNTO_BYTES = 25 * 1024 * 1024;
+    var MIME_PREVISUALIZABLES = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/gif", "image/bmp", "image/webp"];
+    var MIME_DESCARGA = MIME_PREVISUALIZABLES.concat([
+        "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-excel", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-powerpoint", "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "text/plain", "text/csv"
+    ]);
 
     function respuestaOk(data) {
         return { ok: true, success: true, data: data, error: null };
@@ -225,6 +237,65 @@
             n = "_" + n;
         }
         return n;
+    }
+
+    /** Como nombreArchivoSeguro pero conservando la extensión original (adjuntos de cualquier tipo). */
+    function nombreArchivoGenerico(nombre, porDefecto) {
+        var n = String(nombre == null ? "" : nombre);
+        n = n.split(/[\\/]/).pop();
+        n = n.replace(/[‎‏‪-‮⁦-⁩﻿]/g, "");
+        n = n.replace(/[\u0000-\u001f\u007f<>:"|?*]/g, "_");
+        n = n.replace(/^[\s.]+|[\s.]+$/g, "");
+        if (!n) {
+            n = porDefecto;
+        }
+        if (n.length > 150) {
+            n = n.slice(0, 150);
+        }
+        if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i.test(n)) {
+            n = "_" + n;
+        }
+        return n;
+    }
+
+    function bytesDeBase64(base64) {
+        var binario = window.atob(base64);
+        var bytes = new Uint8Array(binario.length);
+        for (var i = 0; i < binario.length; i++) {
+            bytes[i] = binario.charCodeAt(i);
+        }
+        return bytes;
+    }
+
+    /**
+     * Respuesta ok del gateway para controlDocumental.adjunto.abrir: {previsualizable, nombreArchivo,
+     * tipoMime, contenidoBase64} ya validados en el servidor (firma real vs. MIME). Previsualizable →
+     * se devuelve tal cual (el controller de Photino lo muestra en la modal con data: URI). Si no →
+     * descarga con Blob (MIME de la lista segura o application/octet-stream) y responde
+     * {previsualizable:false, nombreArchivo} como Photino.
+     */
+    function abrirAdjuntoEnNavegador(respuesta) {
+        var data = respuesta && respuesta.data;
+        var base64 = data && typeof data.contenidoBase64 === "string" ? data.contenidoBase64.trim() : "";
+        if (!base64) {
+            return respuestaError("El adjunto no trae contenido");
+        }
+        if (base64.length > Math.ceil(MAX_ADJUNTO_BYTES / 3) * 4) {
+            return respuestaError("El adjunto excede el tamaño máximo permitido.");
+        }
+        var tipoMime = String(data.tipoMime || "").toLowerCase();
+        var nombre = nombreArchivoGenerico(data.nombreArchivo, "adjunto_" + fechaCompacta());
+        if (data.previsualizable === true && MIME_PREVISUALIZABLES.indexOf(tipoMime) >= 0) {
+            return respuestaOk({ previsualizable: true, nombreArchivo: nombre, tipoMime: tipoMime, contenidoBase64: base64 });
+        }
+        var bytes;
+        try {
+            bytes = bytesDeBase64(base64);
+        } catch (e) {
+            return respuestaError("El adjunto no es válido.");
+        }
+        descargarBlob(bytes, MIME_DESCARGA.indexOf(tipoMime) >= 0 ? tipoMime : "application/octet-stream", nombre);
+        return respuestaOk({ previsualizable: false, nombreArchivo: nombre });
     }
 
     function descargarBlob(bytes, tipoMime, nombre) {

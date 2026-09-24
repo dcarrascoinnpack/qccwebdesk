@@ -121,6 +121,27 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-24T14:59:47Z"
+    },
+    "controlDocumental.list": {
+      "huella": "5dbbd751625e677ff4087b1c1584ae3f9953eb893cb99fdefe7c4b2adebea121",
+      "handler": "ControlDocumentalHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T17:02:10Z"
+    },
+    "controlDocumental.get": {
+      "huella": "ef36e8bd9b283f8a8a60e34398b1c1811298f6715dcc9f9ecca59d744de363a5",
+      "handler": "ControlDocumentalHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T17:02:10Z"
+    },
+    "controlDocumental.adjunto.abrir": {
+      "huella": "fb93ba3cbf961fa41f8b253a17be54dd1bd9bdcd72974ee15c458a6bba67c100",
+      "handler": "ControlDocumentalHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T17:02:10Z"
     }
   }
 }

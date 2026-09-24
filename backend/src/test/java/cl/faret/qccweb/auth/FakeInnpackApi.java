@@ -51,6 +51,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/registros-control", this::registrosControl);
         server.createContext("/api/producto-terminado", this::productoTerminado);
         server.createContext("/api/certificados-liberacion", this::certificadosLiberacion);
+        server.createContext("/api/control-documental", this::controlDocumental);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -89,6 +90,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesControl.clear();
         peticionesProductoTerminado.clear();
         peticionesCertificados.clear();
+        peticionesControlDocumental.clear();
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -505,6 +507,117 @@ public final class FakeInnpackApi implements AutoCloseable {
         String fileName = folio == 900 ? "..\\..\\evil<>:\"|?*.exe" : "CertificadoCalidad_" + folio + ".pdf";
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"folio\":" + folio + ",\"fileName\":\"" + fileName.replace("\\", "\\\\").replace("\"", "\\\"")
                 + "\",\"base64\":\"" + base64 + "\",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    private final java.util.List<String> peticionesControlDocumental = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "<método> <ruta>[?<query cruda>]" recibidos en api/control-documental* (para verificar el mapeo). */
+    public java.util.List<String> peticionesControlDocumental() {
+        return java.util.List.copyOf(peticionesControlDocumental);
+    }
+
+    private static String documento(int i) {
+        return "{\"id\":" + (300 + i) + ",\"codigo\":\"PR-CAL-" + String.format("%03d", i) + "\",\"titulo\":\"Procedimiento ñandú «" + i + "»\","
+                + "\"tipoDocumento\":\"Procedimiento\",\"area\":\"Calidad\",\"estado\":\"VIGENTE\",\"alcanceEmpresa\":\"" + (i % 3 == 0 ? "AMBAS" : (i % 3 == 1 ? "INNPACK" : "FARET"))
+                + "\",\"versionVigente\":\"1." + (i % 5) + "\",\"versionVigenteId\":" + (1000 + i) + ",\"tieneAdjuntoVigente\":" + (i % 2 == 0)
+                + ",\"fechaVigencia\":\"2026-09-24\",\"actualizadoPor\":\"María José Peña\"}";
+    }
+
+    /** Lista paginada { items, total, page, pageSize, pages }: texto=VACIO → 0; texto=GRANDE → 300; si no 3 de 42. */
+    public static String dataControlDocumentalList(int sub, String query) {
+        boolean vacio = query.contains("texto=VACIO");
+        boolean grande = query.contains("texto=GRANDE");
+        int n = vacio ? 0 : (grande ? 300 : 3);
+        int page = 1;
+        int pageSize = 50;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:^|&)page=(\\d+)").matcher(query);
+        if (m.find()) {
+            page = Integer.parseInt(m.group(1));
+        }
+        m = java.util.regex.Pattern.compile("(?:^|&)pageSize=(\\d+)").matcher(query);
+        if (m.find()) {
+            pageSize = Integer.parseInt(m.group(1));
+        }
+        StringBuilder items = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            items.append(i > 0 ? "," : "").append(documento(i));
+        }
+        int total = vacio ? 0 : (grande ? 300 : 42);
+        return "{\"items\":[" + items + "],\"total\":" + total + ",\"page\":" + page + ",\"pageSize\":" + pageSize
+                + ",\"pages\":" + Math.max(1, (total + pageSize - 1) / pageSize) + ",\"usuarioDelToken\":" + sub + "}";
+    }
+
+    public static String dataControlDocumentalGet(int id, int sub) {
+        return "{\"id\":" + id + ",\"codigo\":\"PR-CAL-001\",\"titulo\":\"Procedimiento ñandú «1»\",\"descripcion\":\"=SUMA(1;2) sin fórmula\","
+                + "\"tipoDocumento\":\"Procedimiento\",\"area\":\"Calidad\",\"estado\":\"VIGENTE\",\"alcanceEmpresa\":\"AMBAS\",\"versiones\":[{\"id\":1001,"
+                + "\"version\":\"1.1\",\"vigente\":true,\"tieneAdjunto\":true,\"nombreArchivo\":\"PR-CAL-001_v1.1.pdf\"}],\"usuarioDelToken\":" + sub + "}";
+    }
+
+    /** PNG de 1x1 válido (firma + IHDR). */
+    public static byte[] pngMinimo() {
+        return Base64.getDecoder().decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==");
+    }
+
+    /** Adjunto por versionId: 1 PDF, 2 PNG, 3 DOCX (zip), 4 HTML declarado como PDF, 5 texto plano; errores 404/600/700/800/900. */
+    private void controlDocumental(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesControlDocumental.add(ex.getRequestMethod() + " " + path + (query == null ? "" : "?" + query));
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (!ex.getRequestMethod().equals("GET")) {
+            responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Filtro de fecha inválido"));
+            return;
+        }
+        if (path.equals("/api/control-documental")) {
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataControlDocumentalList(sub, String.valueOf(query)) + ",\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher adj = java.util.regex.Pattern.compile("^/api/control-documental/adjunto/(\\d+)$").matcher(path);
+        if (adj.matches()) {
+            int versionId = Integer.parseInt(adj.group(1));
+            String nombre = "adjunto_" + versionId;
+            String mime = "application/octet-stream";
+            String base64 = "";
+            switch (versionId) {
+                case 404 -> { responder(ex, 404, fallo("Esta versión no tiene ningún archivo adjunto")); return; }
+                case 1 -> { nombre = "PR-CAL-001_v1.1.pdf"; mime = "application/pdf"; base64 = Base64.getEncoder().encodeToString(pdfMinimo(1)); }
+                case 2 -> { nombre = "diagrama.png"; mime = "image/png"; base64 = Base64.getEncoder().encodeToString(pngMinimo()); }
+                case 3 -> { nombre = "instructivo ñ.docx"; mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                    base64 = Base64.getEncoder().encodeToString(new byte[] {0x50, 0x4b, 0x03, 0x04, 0x14, 0, 0, 0, 1, 2, 3}); }
+                case 4 -> { nombre = "falso.pdf"; mime = "application/pdf"; base64 = Base64.getEncoder().encodeToString("<html><script>alert(1)</script></html>".getBytes(StandardCharsets.UTF_8)); }
+                case 5 -> { nombre = "notas.txt"; mime = "text/plain"; base64 = Base64.getEncoder().encodeToString("hola ñandú".getBytes(StandardCharsets.UTF_8)); }
+                case 600 -> { nombre = "vacio.pdf"; mime = "application/pdf"; }
+                case 700 -> { nombre = "grande.pdf"; mime = "application/pdf"; base64 = "A".repeat(((25 * 1024 * 1024 + 2) / 3) * 4 + 4); }
+                case 800 -> { nombre = "roto.pdf"; mime = "application/pdf"; base64 = "%%%no-base64%%%"; }
+                case 900 -> { nombre = "..\\..\\evil<>:\"|?*.exe"; mime = "text/html"; base64 = Base64.getEncoder().encodeToString("<b>x</b>".getBytes(StandardCharsets.UTF_8)); }
+                default -> { nombre = "PR-CAL-001_v1.0.pdf"; mime = "application/pdf"; base64 = Base64.getEncoder().encodeToString(pdfMinimo(versionId)); }
+            }
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"nombreArchivo\":\"" + nombre.replace("\\", "\\\\").replace("\"", "\\\"")
+                    + "\",\"tipoMime\":\"" + mime + "\",\"contenidoBase64\":\"" + base64 + "\",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher doc = java.util.regex.Pattern.compile("^/api/control-documental/(\\d+)$").matcher(path);
+        if (doc.matches()) {
+            int id = Integer.parseInt(doc.group(1));
+            if (id == 404) {
+                responder(ex, 404, fallo("Documento no encontrado"));
+                return;
+            }
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataControlDocumentalGet(id, sub) + ",\"errors\":null}");
+            return;
+        }
+        responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
     }
 
     private Integer subDeBearer(String authorization) {

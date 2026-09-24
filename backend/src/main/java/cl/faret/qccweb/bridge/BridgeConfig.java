@@ -2,6 +2,7 @@ package cl.faret.qccweb.bridge;
 
 import cl.faret.qccweb.auth.AuthProperties;
 import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
@@ -68,10 +69,16 @@ public class BridgeConfig {
     }
 
     @Bean
+    public ControlDocumentalBridgeHandler controlDocumentalBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new ControlDocumentalBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ActionPolicy actionPolicy(
             InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard,
             RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl,
-            ProductoTerminadoBridgeHandler productoTerminado, CertificadosLiberacionBridgeHandler certificados) {
+            ProductoTerminadoBridgeHandler productoTerminado, CertificadosLiberacionBridgeHandler certificados,
+            ControlDocumentalBridgeHandler controlDocumental) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -127,6 +134,17 @@ public class BridgeConfig {
                         "certificadosLiberacion.buscar", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), certificados::buscar),
                 new ActionPolicy.Regla(
                         "certificadosLiberacion.calidadPdf.descargar", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
-                        certificados::calidadPdfDescargar)));
+                        certificados::calidadPdfDescargar),
+                // Fase 2h — Control Documental, SOLO LECTURA (payload plano). "alcanceEmpresa" es filtro
+                // de negocio validado en el handler. adjunto.abrir: previsualiza o descarga en el
+                // navegador, sin archivos temporales. Escrituras (create/update/version.crear/eliminar/
+                // adjunto.subir) fuera (deny-by-default).
+                new ActionPolicy.Regla(
+                        "controlDocumental.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), controlDocumental::list),
+                new ActionPolicy.Regla(
+                        "controlDocumental.get", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), controlDocumental::get),
+                new ActionPolicy.Regla(
+                        "controlDocumental.adjunto.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        controlDocumental::adjuntoAbrir)));
     }
 }

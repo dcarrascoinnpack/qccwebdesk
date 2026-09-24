@@ -4,7 +4,7 @@ Migración web **en paralelo** del Quality Control Center de TI Faret (hoy Photi
 `C:\Users\dcarrasco\Desktop\Proyectos\qualitycontrol_desktop_faret`). Photino sigue siendo el
 sistema principal y productivo — esta versión web no lo reemplaza ni lo modifica.
 
-> **Estado (24-09-2026):** en desarrollo activo, sin deploy todavía. Arquitectura base + 7 módulos
+> **Estado (24-09-2026):** en desarrollo activo, sin deploy todavía. Arquitectura base + 8 módulos
 > de solo lectura funcionando de punta a punta contra una API INNPACK simulada. Ver
 > [`contex.md`](contex.md) (no versionado) para el detalle completo sesión a sesión.
 
@@ -145,10 +145,18 @@ dentro de los tests) — nunca credenciales ni endpoints reales.
 | 2d | Módulo **Inspecciones Producción**, solo lectura (`registrosProduccion.obtenerFiltros`/`obtenerResumen`) | ✅ commit `542b5a5` |
 | 2e | Módulo **Data / Registros de Control**, solo lectura (`registrosControl.obtenerRegistros`: grilla, filtros, paginación, Exportar Excel e Imprimir) | ✅ commit `1a7f114` |
 | 2f | Módulo **Producto Terminado**, solo lectura (`productoTerminado.filtros`/`resumen`/`list`/`detalle`/`exportarDetalle`; Exportar Excel vía navegador) | ✅ commit `75ab0a9` |
-| 2g | Módulo **Certificados de Liberación** (`certificadosLiberacion.buscar` + `calidadPdf.descargar`: PDF validado en el gateway, descargado en el navegador) | ✅ |
+| 2g | Módulo **Certificados de Liberación** (`certificadosLiberacion.buscar` + `calidadPdf.descargar`: PDF validado en el gateway, descargado en el navegador) | ✅ commit `651b95a` |
+| 2h | Módulo **Control Documental**, solo lectura (`controlDocumental.list`/`get`/`adjunto.abrir`: imágenes/PDF previsualizados en la modal, otros adjuntos descargados en el navegador; Exportar Excel vía navegador) | ✅ |
 
 **Compatibilidad actual con Photino** (`GET /version` → `compatibilidad.texto`):
-**Photino 1.8.12 · Web compatible 17/236**.
+**Photino 1.8.12 · Web compatible 20/236**.
+
+**Adjuntos de Control Documental (Fase 2h):** Photino previsualizaba imágenes/PDF y para el
+resto escribía el archivo en `%TEMP%\QCC_ControlDocumental` y lo abría con `Process.Start`. En la
+web el gateway valida (contenido, ≤ 25 MB, **firma real vs. MIME declarado**, nombre saneado) y
+el navegador previsualiza (mismo contrato) o descarga con Blob (MIME de una lista segura o
+`application/octet-stream`). `alcanceEmpresa` es un filtro real del usuario (Todos / INNPACK /
+FARET / AMBAS; dato compartido entre empresas) y solo admite esos valores.
 
 **PDF de certificados (Fase 2g):** Photino escribía el PDF en `Descargas` y lo abría con
 `Process.Start`. En la web el gateway llama a la API con el JWT server-side, valida (contenido,

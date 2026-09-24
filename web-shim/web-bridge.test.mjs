@@ -196,7 +196,7 @@ test("calidadPdf.descargar pasa por el gateway (con CSRF) y descarga el PDF en e
     assert.equal(shim.blobs[0].size, Buffer.from(PDF_MINIMO, "base64").length);
     // No es una acción "de navegador": el contract check la ve en la ActionPolicy del gateway.
     assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesNavegador), ["excel.guardar"]);
-    assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesDescarga), [ACCION_PDF]);
+    assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesDescarga), [ACCION_PDF, "controlDocumental.adjunto.abrir"]);
 });
 
 test("un error del gateway en calidadPdf.descargar se devuelve tal cual, sin descarga", async () => {
@@ -252,4 +252,62 @@ test("el shim nunca guarda token ni rutas locales al descargar el PDF", async ()
     assert.deepEqual(Object.keys(plano(res.data)), ["fileName"]);
     assert.equal(shim.localStorage.datos.size, 0);
     assert.equal([...shim.ctx.sessionStorage.datos.values()].some((v) => /jwt-que-no-debe-salir|Downloads/.test(v)), false);
+});
+
+// ------------------------------------------------------------------ Fase 2h: adjuntos de Control Documental
+const ACCION_ADJ = "controlDocumental.adjunto.abrir";
+const DOCX_MINIMO = Buffer.from([0x50, 0x4b, 0x03, 0x04, 0x14, 0, 0, 0, 1, 2, 3]).toString("base64");
+
+test("adjunto previsualizable (PDF/imagen) se devuelve tal cual para la modal de Photino, sin descarga", async () => {
+    for (const [tipoMime, base64] of [["application/pdf", PDF_MINIMO], ["image/png", "iVBORw0KGgo="]]) {
+        const shim = shimConPdf({ previsualizable: true, nombreArchivo: "PR-CAL-001_v1.1.pdf", tipoMime, contenidoBase64: base64 });
+        const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ADJ, documentoVersionId: 1 });
+        assert.deepEqual(plano(res), { ok: true, success: true, data: { previsualizable: true, nombreArchivo: "PR-CAL-001_v1.1.pdf", tipoMime, contenidoBase64: base64 }, error: null });
+        assert.equal(shim.registro.fetch.length, 1);
+        assert.equal(JSON.parse(shim.registro.fetch[0].opciones.body).documentoVersionId, 1, "payload plano, sin data");
+        assert.equal(shim.registro.descargas.length, 0);
+    }
+    assert.deepEqual(plano(cargarShim().ctx.QCC_WEB.accionesDescarga), [ACCION_PDF, ACCION_ADJ]);
+});
+
+test("adjunto no previsualizable se descarga con Blob y responde {previsualizable:false, nombreArchivo} como Photino", async () => {
+    const shim = shimConPdf({ previsualizable: false, nombreArchivo: "instructivo ñ.docx",
+        tipoMime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", contenidoBase64: DOCX_MINIMO });
+    const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ADJ, documentoVersionId: 3 });
+    assert.deepEqual(plano(res), { ok: true, success: true, data: { previsualizable: false, nombreArchivo: "instructivo ñ.docx" }, error: null });
+    assert.equal(shim.registro.descargas.length, 1);
+    assert.equal(shim.registro.descargas[0].nombre, "instructivo ñ.docx");
+    assert.equal(shim.blobs[0].type, "application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+    assert.equal(shim.blobs[0].size, 11);
+});
+
+test("MIME fuera de la lista segura baja como octet-stream; 'previsualizable' del servidor no basta si el MIME no lo es", async () => {
+    let shim = shimConPdf({ previsualizable: false, nombreArchivo: "..\\..\\evil<>:\"|?*.exe", tipoMime: "text/html", contenidoBase64: Buffer.from("<b>x</b>").toString("base64") });
+    let res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ADJ, documentoVersionId: 900 });
+    assert.equal(res.data.nombreArchivo, "evil_______.exe");
+    assert.equal(shim.blobs[0].type, "application/octet-stream");
+    // El servidor dice previsualizable pero el MIME es text/html → descarga, nunca modal.
+    shim = shimConPdf({ previsualizable: true, nombreArchivo: "x.html", tipoMime: "text/html", contenidoBase64: Buffer.from("<script>").toString("base64") });
+    res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ADJ, documentoVersionId: 1 });
+    assert.equal(res.data.previsualizable, false);
+    assert.equal(shim.registro.descargas.length, 1);
+    assert.equal(shim.blobs[0].type, "application/octet-stream");
+});
+
+test("adjunto vacío, corrupto o excesivo se rechaza limpiamente; el error del gateway pasa tal cual", async () => {
+    const casos = [
+        [{ previsualizable: false, nombreArchivo: "a.docx", tipoMime: "text/plain", contenidoBase64: "" }, "El adjunto no trae contenido"],
+        [{ previsualizable: false, nombreArchivo: "a.docx", tipoMime: "text/plain", contenidoBase64: "%%%" }, "El adjunto no es válido."],
+        [{ previsualizable: false, nombreArchivo: "a.docx", tipoMime: "text/plain", contenidoBase64: "A".repeat(Math.ceil(25 * 1024 * 1024 / 3) * 4 + 4) }, "El adjunto excede el tamaño máximo permitido."],
+    ];
+    for (const [data, error] of casos) {
+        const shim = shimConPdf(data);
+        const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ADJ, documentoVersionId: 1 });
+        assert.deepEqual(plano(res), { ok: false, success: false, data: null, error });
+        assert.equal(shim.registro.descargas.length, 0);
+    }
+    const shim = shimConPdf(null, { ok: false, success: false, data: null, error: "Esta versión no tiene ningún archivo adjunto" });
+    const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ADJ, documentoVersionId: 404 });
+    assert.equal(res.error, "Esta versión no tiene ningún archivo adjunto");
+    assert.equal(shim.registro.descargas.length, 0);
 });
