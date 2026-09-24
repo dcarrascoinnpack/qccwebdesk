@@ -1,0 +1,681 @@
+<div class="module muestra-laboratorio-module faret-laboratorio-module">
+
+  <div class="module-header">
+    <div>
+      <div class="module-title">Laboratorio - Muestras</div>
+      <div class="subtitle">Muestra &rarr; Ensayos &rarr; Mediciones &rarr; Cumplimiento. Ensayos disponibles en esta primera etapa: Humedad, Gramaje, Cobb.</div>
+    </div>
+    <div class="module-actions">
+      <button class="btn-secondary" id="flbBtnEspecificaciones">Especificaciones</button>
+      <button class="btn-primary" id="flbBtnNuevaMuestra">+ Nueva Muestra</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="filtros-row" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+      <div class="form-group">
+        <label for="flbFiltroEstado">Estado</label>
+        <select id="flbFiltroEstado">
+          <option value="">Todos</option>
+          <option value="Pendiente">Pendiente</option>
+          <option value="En analisis">En análisis</option>
+          <option value="Finalizada">Finalizada</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label for="flbFiltroNp">NP</label>
+        <input type="text" id="flbFiltroNp" placeholder="Ej: 22443">
+      </div>
+      <button class="btn-secondary" id="flbBtnFiltrar">Filtrar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-container">
+      <table class="table" id="flbTablaMuestras">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha Ingreso</th>
+            <th>Origen</th>
+            <th>Tipo Muestra</th>
+            <th>NP</th>
+            <th>Cliente</th>
+            <th>Código</th>
+            <th>Ensayos</th>
+            <th>Estado</th>
+            <th>Evaluación</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="flbMuestrasBody">
+          <tr><td colspan="11" style="text-align:center;">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MODAL: Nueva muestra -->
+  <div id="flbModalNuevaMuestra" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal">
+      <div class="module-title" style="font-size:16px; margin-bottom:12px;">Nueva Muestra</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo">
+          <label>Origen *</label>
+          <select id="flbNmOrigen">
+            <option value="ControlRecepcion">Control de recepción</option>
+            <option value="Corrugado">Corrugado</option>
+            <option value="Emplacado">Emplacado</option>
+            <option value="Troquelado">Troquelado</option>
+            <option value="Pegado">Pegado</option>
+            <option value="ProductoTerminado">Producto terminado</option>
+            <option value="MuestraExterna">Muestra externa</option>
+            <option value="Pruebas">Pruebas</option>
+          </select>
+        </div>
+        <div class="flb-form-campo">
+          <label>Tipo de muestra *</label>
+          <select id="flbNmTipoMuestra">
+            <option value="Papel">Papel / Bobina</option>
+            <option value="Monotapa">Monotapa</option>
+            <option value="CartonCorrugadoEmplacado">Cartón corrugado emplacado</option>
+            <option value="PliegoImpreso">Pliego impreso</option>
+            <option value="CajaPegada">Caja pegada</option>
+            <option value="CajaMaster">Caja máster</option>
+            <option value="AdhesivoPVA">Adhesivo PVA</option>
+            <option value="AdhesivoCorrugado">Adhesivo de corrugado</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>NP</label><input type="text" id="flbNmNp"></div>
+        <div class="flb-form-campo"><label>Cliente</label><input type="text" id="flbNmCliente"></div>
+        <div class="flb-form-campo"><label>Código producto</label><input type="text" id="flbNmCodigo"></div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Descripción</label><input type="text" id="flbNmDescripcion">
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Máquina</label><input type="text" id="flbNmMaquina"></div>
+        <div class="flb-form-campo"><label>Turno</label><input type="text" id="flbNmTurno"></div>
+        <div class="flb-form-campo"><label>Lote</label><input type="text" id="flbNmLote"></div>
+        <div class="flb-form-campo"><label>Proveedor</label><input type="text" id="flbNmProveedor"></div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbNmObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbNmCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbNmGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Detalle de muestra -->
+  <div id="flbModalDetalle" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal flb-modal-ancho">
+      <div class="module-title" style="font-size:16px;">Muestra #<span id="flbDetId"></span></div>
+      <div class="flb-detalle-resumen" id="flbDetResumen"></div>
+      <div id="flbDetNc"></div>
+
+      <div class="module-title" style="font-size:14px; margin-top:16px;">Ensayos</div>
+      <div class="table-container">
+        <table class="table" id="flbTablaEnsayos">
+          <thead>
+            <tr>
+              <th>Tipo</th>
+              <th>Método</th>
+              <th>Analista</th>
+              <th>Fecha</th>
+              <th>Resultado</th>
+              <th>Especificación</th>
+              <th>Cumplimiento</th>
+              <th>Estado</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="flbEnsayosBody">
+            <tr><td colspan="9" style="text-align:center;">Sin ensayos todavía</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="flb-form-acciones" style="justify-content:flex-start; margin-top:14px;">
+        <button class="btn-secondary" id="flbBtnNuevoHumedad">+ Humedad</button>
+        <button class="btn-secondary" id="flbBtnNuevoGramaje">+ Gramaje</button>
+        <button class="btn-secondary" id="flbBtnNuevoCobb">+ Cobb</button>
+        <button class="btn-secondary" id="flbBtnNuevoEspesor">+ Espesor</button>
+        <button class="btn-secondary" id="flbBtnNuevoRct">+ RCT</button>
+        <button class="btn-secondary" id="flbBtnNuevoFct">+ FCT</button>
+        <button class="btn-secondary" id="flbBtnNuevoEct">+ ECT</button>
+        <button class="btn-secondary" id="flbBtnNuevoBctMedido">+ BCT Medido</button>
+        <button class="btn-secondary" id="flbBtnNuevoBctTeorico">+ BCT Teórico (McKee)</button>
+        <button class="btn-secondary" id="flbBtnNuevoViscosidad">+ Viscosidad</button>
+        <button class="btn-secondary" id="flbBtnNuevoPh">+ pH</button>
+        <button class="btn-secondary" id="flbBtnNuevoSolidos">+ Sólidos totales</button>
+        <button class="btn-secondary" id="flbBtnNuevoLugol">+ Lugol</button>
+      </div>
+
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbBtnInforme">Generar informe</button>
+        <button class="btn-secondary" id="flbDetCerrar">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ensayo Humedad -->
+  <div id="flbModalHumedad" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal">
+      <div class="module-title" style="font-size:16px;">Ensayo de Humedad</div>
+      <div class="flb-form-campo">
+        <label>Método de equipo *</label>
+        <select id="flbHumMetodoEquipo">
+          <option value="Higrometro">Higrómetro</option>
+          <option value="Termobalanza">Termobalanza</option>
+          <option value="Horno">Horno</option>
+        </select>
+      </div>
+
+      <div id="flbHumHigrometroCampos" class="flb-form-row">
+        <div class="flb-form-campo"><label>Punto izquierdo (%)</label><input type="number" step="0.01" id="flbHumIzq"></div>
+        <div class="flb-form-campo"><label>Punto centro (%)</label><input type="number" step="0.01" id="flbHumCentro"></div>
+        <div class="flb-form-campo"><label>Punto derecho (%)</label><input type="number" step="0.01" id="flbHumDer"></div>
+      </div>
+
+      <div id="flbHumTermobalanzaCampos" class="flb-form-row" style="display:none;">
+        <div class="flb-form-campo"><label>Valor termobalanza (%)</label><input type="number" step="0.01" id="flbHumTermo"></div>
+      </div>
+
+      <div id="flbHumHornoCampos" style="display:none;">
+        <div class="flb-form-row">
+          <div class="flb-form-campo"><label>Horno 1 - Peso inicial (g)</label><input type="number" step="0.0001" id="flbHum1i"></div>
+          <div class="flb-form-campo"><label>Horno 1 - Peso final (g)</label><input type="number" step="0.0001" id="flbHum1f"></div>
+        </div>
+        <div class="flb-form-row">
+          <div class="flb-form-campo"><label>Horno 2 - Peso inicial (g)</label><input type="number" step="0.0001" id="flbHum2i"></div>
+          <div class="flb-form-campo"><label>Horno 2 - Peso final (g)</label><input type="number" step="0.0001" id="flbHum2f"></div>
+        </div>
+        <div class="flb-form-row">
+          <div class="flb-form-campo"><label>Horno 3 - Peso inicial (g)</label><input type="number" step="0.0001" id="flbHum3i"></div>
+          <div class="flb-form-campo"><label>Horno 3 - Peso final (g)</label><input type="number" step="0.0001" id="flbHum3f"></div>
+        </div>
+      </div>
+
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Método (texto)</label><input type="text" id="flbHumMetodo" placeholder="Ej: TAPPI T 412">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbHumObservacion" rows="2"></textarea>
+      </div>
+
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbHumCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbHumGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ensayo Gramaje -->
+  <div id="flbModalGramaje" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal">
+      <div class="module-title" style="font-size:16px;">Ensayo de Gramaje</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo">
+          <label>Tipo de material *</label>
+          <select id="flbGraTipoMaterial">
+            <option value="Papel">Papel</option>
+            <option value="Cartulina">Cartulina</option>
+            <option value="Pliego">Pliego</option>
+            <option value="ComplejoCorrugado">Complejo corrugado</option>
+          </select>
+        </div>
+        <div class="flb-form-campo">
+          <label>Modalidad *</label>
+          <select id="flbGraModalidad">
+            <option value="ProbetaPeso">Peso de probeta 10x10 cm</option>
+            <option value="Directo">Resultado directo en g/m²</option>
+          </select>
+        </div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Muestra 1</label><input type="number" step="0.0001" id="flbGra1"></div>
+        <div class="flb-form-campo"><label>Muestra 2</label><input type="number" step="0.0001" id="flbGra2"></div>
+        <div class="flb-form-campo"><label>Muestra 3</label><input type="number" step="0.0001" id="flbGra3"></div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Método (texto)</label><input type="text" id="flbGraMetodo" placeholder="Ej: TAPPI T 410">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbGraObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbGraCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbGraGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ensayo Cobb -->
+  <div id="flbModalCobb" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal flb-modal-ancho">
+      <div class="module-title" style="font-size:16px;">Ensayo Cobb</div>
+      <div class="subtitle">Área efectiva 100 cm². Cobb (g/m²) = (peso final - peso inicial) x 100</div>
+
+      <div class="flb-cobb-probetas">
+        <div class="flb-form-row">
+          <div class="flb-form-campo"><label>P1 - Bobina/origen</label><input type="text" id="flbCobb1Bobina"></div>
+          <div class="flb-form-campo"><label>P1 - Cara</label>
+            <select id="flbCobb1Cara"><option value="Externa">Externa</option><option value="Interna">Interna</option></select>
+          </div>
+          <div class="flb-form-campo"><label>P1 - Peso inicial (g)</label><input type="number" step="0.0001" id="flbCobb1Inicial"></div>
+          <div class="flb-form-campo"><label>P1 - Peso final (g)</label><input type="number" step="0.0001" id="flbCobb1Final"></div>
+          <div class="flb-form-campo"><label>P1 - Tiempo exposición</label><input type="text" id="flbCobb1Tiempo"></div>
+        </div>
+        <div class="flb-form-row">
+          <div class="flb-form-campo"><label>P2 - Bobina/origen</label><input type="text" id="flbCobb2Bobina"></div>
+          <div class="flb-form-campo"><label>P2 - Cara</label>
+            <select id="flbCobb2Cara"><option value="Externa">Externa</option><option value="Interna">Interna</option></select>
+          </div>
+          <div class="flb-form-campo"><label>P2 - Peso inicial (g)</label><input type="number" step="0.0001" id="flbCobb2Inicial"></div>
+          <div class="flb-form-campo"><label>P2 - Peso final (g)</label><input type="number" step="0.0001" id="flbCobb2Final"></div>
+          <div class="flb-form-campo"><label>P2 - Tiempo exposición</label><input type="text" id="flbCobb2Tiempo"></div>
+        </div>
+        <div class="flb-form-row">
+          <div class="flb-form-campo"><label>P3 - Bobina/origen</label><input type="text" id="flbCobb3Bobina"></div>
+          <div class="flb-form-campo"><label>P3 - Cara</label>
+            <select id="flbCobb3Cara"><option value="Externa">Externa</option><option value="Interna">Interna</option></select>
+          </div>
+          <div class="flb-form-campo"><label>P3 - Peso inicial (g)</label><input type="number" step="0.0001" id="flbCobb3Inicial"></div>
+          <div class="flb-form-campo"><label>P3 - Peso final (g)</label><input type="number" step="0.0001" id="flbCobb3Final"></div>
+          <div class="flb-form-campo"><label>P3 - Tiempo exposición</label><input type="text" id="flbCobb3Tiempo"></div>
+        </div>
+      </div>
+
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Método (texto)</label><input type="text" id="flbCobbMetodo" placeholder="Ej: TAPPI T 441">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbCobbObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbCobbCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbCobbGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ensayo Espesor -->
+  <div id="flbModalEspesor" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal">
+      <div class="module-title" style="font-size:16px;">Ensayo de Espesor</div>
+      <div class="flb-form-campo">
+        <label>Tipo de medición *</label>
+        <select id="flbEspTipoMedicion">
+          <option value="Ubicacion">Izquierda / Centro / Derecha</option>
+          <option value="Muestra">Muestra 1 / 2 / 3</option>
+        </select>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Medición 1 (mm)</label><input type="number" step="0.0001" id="flbEsp1"></div>
+        <div class="flb-form-campo"><label>Medición 2 (mm)</label><input type="number" step="0.0001" id="flbEsp2"></div>
+        <div class="flb-form-campo"><label>Medición 3 (mm)</label><input type="number" step="0.0001" id="flbEsp3"></div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Método (texto)</label><input type="text" id="flbEspMetodo" placeholder="Ej: TAPPI T 411">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbEspObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbEspCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbEspGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ensayo RCT -->
+  <div id="flbModalRct" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal flb-modal-ancho">
+      <div class="module-title" style="font-size:16px;">Ensayo RCT</div>
+      <div class="flb-form-campo">
+        <label>Componente *</label>
+        <select id="flbRctComponente"><option value="Liner">Liner</option><option value="Onda">Onda</option></select>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>P1 - Bobina</label><input type="text" id="flbRct1Bobina"></div>
+        <div class="flb-form-campo"><label>P1 - Force (lbf)</label><input type="number" step="0.0001" id="flbRct1Force"></div>
+        <div class="flb-form-campo"><label>P1 - Strength (opcional)</label><input type="number" step="0.0001" id="flbRct1Strength"></div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>P2 - Bobina</label><input type="text" id="flbRct2Bobina"></div>
+        <div class="flb-form-campo"><label>P2 - Force (lbf)</label><input type="number" step="0.0001" id="flbRct2Force"></div>
+        <div class="flb-form-campo"><label>P2 - Strength (opcional)</label><input type="number" step="0.0001" id="flbRct2Strength"></div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>P3 - Bobina</label><input type="text" id="flbRct3Bobina"></div>
+        <div class="flb-form-campo"><label>P3 - Force (lbf)</label><input type="number" step="0.0001" id="flbRct3Force"></div>
+        <div class="flb-form-campo"><label>P3 - Strength (opcional)</label><input type="number" step="0.0001" id="flbRct3Strength"></div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Unidad del Strength (si aplica)</label><input type="text" id="flbRctStrengthUnidad" placeholder="Ej: lbf/in"></div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Método (texto)</label><input type="text" id="flbRctMetodo" placeholder="Ej: TAPPI T 818">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbRctObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbRctCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbRctGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ensayo FCT -->
+  <div id="flbModalFct" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal flb-modal-ancho">
+      <div class="module-title" style="font-size:16px;">Ensayo FCT</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>P1 - Force (lbf)</label><input type="number" step="0.0001" id="flbFct1Force"></div>
+        <div class="flb-form-campo"><label>P1 - Strength (opcional)</label><input type="number" step="0.0001" id="flbFct1Strength"></div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>P2 - Force (lbf)</label><input type="number" step="0.0001" id="flbFct2Force"></div>
+        <div class="flb-form-campo"><label>P2 - Strength (opcional)</label><input type="number" step="0.0001" id="flbFct2Strength"></div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>P3 - Force (lbf)</label><input type="number" step="0.0001" id="flbFct3Force"></div>
+        <div class="flb-form-campo"><label>P3 - Strength (opcional)</label><input type="number" step="0.0001" id="flbFct3Strength"></div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Unidad del Strength (si aplica)</label><input type="text" id="flbFctStrengthUnidad" placeholder="Ej: lbf/in"></div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Método (texto)</label><input type="text" id="flbFctMetodo" placeholder="Ej: TAPPI T 825">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbFctObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbFctCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbFctGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Ensayo ECT -->
+  <div id="flbModalEct" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal flb-modal-ancho">
+      <div class="module-title" style="font-size:16px;">Ensayo ECT</div>
+      <div class="subtitle">Probeta: altura 2,5 cm, borde comprimido 10 cm. Strength [lbf/m] = Force / 0,1 m (calculado). El resultado principal es el promedio de Strength.</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>P1 - Force (lbf)</label><input type="number" step="0.0001" id="flbEct1"></div>
+        <div class="flb-form-campo"><label>P2 - Force (lbf)</label><input type="number" step="0.0001" id="flbEct2"></div>
+        <div class="flb-form-campo"><label>P3 - Force (lbf)</label><input type="number" step="0.0001" id="flbEct3"></div>
+        <div class="flb-form-campo"><label>P4 - Force (lbf)</label><input type="number" step="0.0001" id="flbEct4"></div>
+        <div class="flb-form-campo"><label>P5 - Force (lbf)</label><input type="number" step="0.0001" id="flbEct5"></div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Método (texto)</label><input type="text" id="flbEctMetodo" placeholder="Ej: TAPPI T 811 / T 839">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbEctObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbEctCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbEctGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BCT Medido -->
+  <div id="flbModalBctMedido" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal flb-modal-ancho">
+      <div class="module-title" style="font-size:16px;">BCT Medido</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo">
+          <label>Cajas ensayadas *</label>
+          <select id="flbBctMedCajas">
+            <option value="3">3</option>
+            <option value="2">2</option>
+            <option value="1">1</option>
+          </select>
+        </div>
+        <div class="flb-form-campo flb-form-campo-full" id="flbBctMedMotivoBloque" style="display:none;">
+          <label>Motivo por ensayar menos de 3 cajas *</label>
+          <input type="text" id="flbBctMedMotivo">
+        </div>
+      </div>
+
+      <div id="flbBctMedCajasBloque"></div>
+
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Método (texto)</label><input type="text" id="flbBctMedMetodo" placeholder="Ej: TAPPI T 804">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbBctMedObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbBctMedCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbBctMedGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: BCT Teorico (McKee) -->
+  <div id="flbModalBctTeorico" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal">
+      <div class="module-title" style="font-size:16px;">BCT Teórico (McKee)</div>
+      <div class="subtitle">No es un ensayo físico — se calcula desde un ECT y un Espesor ya finalizados de esta misma muestra. Resultado teórico estimado, no reemplaza el ensayo físico BCT.</div>
+      <div class="flb-form-campo">
+        <label>ECT finalizado *</label>
+        <select id="flbBctTeoEct"></select>
+      </div>
+      <div class="flb-form-campo">
+        <label>Espesor finalizado *</label>
+        <select id="flbBctTeoEspesor"></select>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Largo interno (mm) *</label><input type="number" step="0.01" id="flbBctTeoLargo"></div>
+        <div class="flb-form-campo"><label>Ancho interno (mm) *</label><input type="number" step="0.01" id="flbBctTeoAncho"></div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbBctTeoObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbBctTeoCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbBctTeoGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Viscosidad -->
+  <div id="flbModalViscosidad" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal">
+      <div class="module-title" style="font-size:16px;">Viscosidad (PVA)</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Tipo de adhesivo</label><input type="text" id="flbViscTipoAdhesivo"></div>
+        <div class="flb-form-campo"><label>Temperatura (°C)</label><input type="number" step="0.1" id="flbViscTemperatura"></div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Equipo</label><input type="text" id="flbViscEquipo"></div>
+        <div class="flb-form-campo"><label>Husillo</label><input type="text" id="flbViscHusillo"></div>
+        <div class="flb-form-campo"><label>Velocidad (rpm)</label><input type="number" step="0.1" id="flbViscRpm"></div>
+      </div>
+      <div class="flb-form-campo">
+        <label>Resultado (cP)</label><input type="number" step="0.01" id="flbViscResultado">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbViscObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbViscCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbViscGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: pH -->
+  <div id="flbModalPh" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal">
+      <div class="module-title" style="font-size:16px;">pH (tiras indicadoras, PVA)</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Valor o rango *</label><input type="text" id="flbPhValor" placeholder="Ej: 6-7 o 6.5"></div>
+        <div class="flb-form-campo"><label>Color observado (opcional)</label><input type="text" id="flbPhColor"></div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbPhObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbPhCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbPhGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Solidos totales -->
+  <div id="flbModalSolidos" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal flb-modal-ancho">
+      <div class="module-title" style="font-size:16px;">Sólidos Totales (PVA)</div>
+      <div class="subtitle">% sólidos = ((M3 - M1) / (M2 - M1)) x 100. M2 debe ser mayor que M1; M3 debe ser mayor o igual que M1.</div>
+
+      <div class="module-title" style="font-size:13px;">Determinación 1</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>M1 - Cápsula vacía</label><input type="number" step="0.0001" id="flbSol1M1"></div>
+        <div class="flb-form-campo"><label>M2 - Cápsula + muestra</label><input type="number" step="0.0001" id="flbSol1M2"></div>
+        <div class="flb-form-campo"><label>M3 - Cápsula + residuo seco</label><input type="number" step="0.0001" id="flbSol1M3"></div>
+      </div>
+      <div class="module-title" style="font-size:13px;">Determinación 2</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>M1 - Cápsula vacía</label><input type="number" step="0.0001" id="flbSol2M1"></div>
+        <div class="flb-form-campo"><label>M2 - Cápsula + muestra</label><input type="number" step="0.0001" id="flbSol2M2"></div>
+        <div class="flb-form-campo"><label>M3 - Cápsula + residuo seco</label><input type="number" step="0.0001" id="flbSol2M3"></div>
+      </div>
+      <div class="module-title" style="font-size:13px;">Determinación 3</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>M1 - Cápsula vacía</label><input type="number" step="0.0001" id="flbSol3M1"></div>
+        <div class="flb-form-campo"><label>M2 - Cápsula + muestra</label><input type="number" step="0.0001" id="flbSol3M2"></div>
+        <div class="flb-form-campo"><label>M3 - Cápsula + residuo seco</label><input type="number" step="0.0001" id="flbSol3M3"></div>
+      </div>
+
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbSolObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbSolCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbSolGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Lugol -->
+  <div id="flbModalLugol" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal">
+      <div class="module-title" style="font-size:16px;">Lugol (adhesivo de corrugado)</div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Punto o muestra</label><input type="text" id="flbLugolPunto"></div>
+        <div class="flb-form-campo"><label>Coloración</label><input type="text" id="flbLugolColoracion"></div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo">
+          <label>Resultado *</label>
+          <select id="flbLugolResultado">
+            <option value="Negativo">Negativo</option>
+            <option value="Positivo">Positivo</option>
+            <option value="NoConcluyente">No concluyente</option>
+          </select>
+        </div>
+        <div class="flb-form-campo">
+          <label>Cumplimiento *</label>
+          <select id="flbLugolCumplimiento">
+            <option value="Cumple">Cumple</option>
+            <option value="No cumple">No cumple</option>
+            <option value="Sin especificacion">Sin especificación</option>
+          </select>
+        </div>
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Interpretación</label><input type="text" id="flbLugolInterpretacion">
+      </div>
+      <div class="flb-form-campo flb-form-campo-full">
+        <label>Observación</label><textarea id="flbLugolObservacion" rows="2"></textarea>
+      </div>
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbLugolCancelar">Cancelar</button>
+        <button class="btn-primary" id="flbLugolGuardar">Guardar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Especificaciones -->
+  <div id="flbModalEspecificaciones" class="flb-modal-overlay" style="display:none;">
+    <div class="card flb-modal flb-modal-ancho">
+      <div class="module-title" style="font-size:16px;">Especificaciones de Laboratorio</div>
+      <div class="subtitle">Límites por tipo de muestra + tipo de ensayo (opcionalmente por código de producto). Se congelan en cada ensayo al momento de evaluarlo — cambiarlas acá no altera resultados ya guardados.</div>
+
+      <div class="table-container">
+        <table class="table" id="flbEspecTabla">
+          <thead>
+            <tr><th>Tipo Muestra</th><th>Ensayo</th><th>Código</th><th>Mínimo</th><th>Máximo</th><th>Unidad</th><th>Activo</th><th></th></tr>
+          </thead>
+          <tbody id="flbEspecBody">
+            <tr><td colspan="8" style="text-align:center;">Cargando...</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="module-title" style="font-size:14px; margin-top:14px;" id="flbEspecFormTitulo">Nueva especificación</div>
+      <input type="hidden" id="flbEspecId">
+      <div class="flb-form-row">
+        <div class="flb-form-campo">
+          <label>Tipo de muestra *</label>
+          <select id="flbEspecTipoMuestra">
+            <option value="Papel">Papel / Bobina</option>
+            <option value="Monotapa">Monotapa</option>
+            <option value="CartonCorrugadoEmplacado">Cartón corrugado emplacado</option>
+            <option value="PliegoImpreso">Pliego impreso</option>
+            <option value="CajaPegada">Caja pegada</option>
+            <option value="CajaMaster">Caja máster</option>
+            <option value="AdhesivoPVA">Adhesivo PVA</option>
+            <option value="AdhesivoCorrugado">Adhesivo de corrugado</option>
+            <option value="Otro">Otro</option>
+          </select>
+        </div>
+        <div class="flb-form-campo">
+          <label>Tipo de ensayo *</label>
+          <select id="flbEspecTipoEnsayo">
+            <option value="HUMEDAD">Humedad</option>
+            <option value="GRAMAJE">Gramaje</option>
+            <option value="COBB">Cobb</option>
+            <option value="ESPESOR">Espesor</option>
+            <option value="RCT">RCT</option>
+            <option value="FCT">FCT</option>
+            <option value="ECT">ECT</option>
+            <option value="BCT_MEDIDO">BCT medido</option>
+            <option value="BCT_TEORICO">BCT teórico (McKee)</option>
+            <option value="VISCOSIDAD">Viscosidad</option>
+            <option value="PH">pH</option>
+            <option value="SOLIDOS">Sólidos totales</option>
+          </select>
+        </div>
+        <div class="flb-form-campo"><label>Código producto (opcional)</label><input type="text" id="flbEspecCodigo"></div>
+      </div>
+      <div class="flb-form-row">
+        <div class="flb-form-campo"><label>Límite mínimo</label><input type="number" step="0.0001" id="flbEspecMin"></div>
+        <div class="flb-form-campo"><label>Límite máximo</label><input type="number" step="0.0001" id="flbEspecMax"></div>
+        <div class="flb-form-campo"><label>Unidad</label><input type="text" id="flbEspecUnidad"></div>
+      </div>
+      <div class="flb-form-acciones" style="justify-content:flex-start;">
+        <button class="btn-secondary" id="flbEspecLimpiar">Limpiar formulario</button>
+        <button class="btn-primary" id="flbEspecGuardar">Guardar especificación</button>
+      </div>
+
+      <div class="flb-form-acciones">
+        <button class="btn-secondary" id="flbEspecCerrar">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+</div>

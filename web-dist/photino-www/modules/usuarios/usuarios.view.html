@@ -1,0 +1,91 @@
+<div class="module">
+
+    <div class="module-header">
+        <div>
+            <div class="module-title">Gestión de Usuarios</div>
+            <div class="subtitle">Administración de usuarios, roles y accesos del sistema</div>
+        </div>
+
+        <div class="module-actions">
+            <button id="btnExportarUsuarios" class="btn-secondary">Exportar Excel</button>
+            <button id="btnNuevoUsuario" class="btn-primary">+ Nuevo usuario</button>
+        </div>
+    </div>
+
+    <div id="usuarios-message" class="module-message"></div>
+
+    <div id="usuarios-form-card" class="card" style="display: none;">
+        <div class="module-header" style="margin-bottom: 16px;">
+            <div>
+                <div class="module-title" style="font-size: 18px;">Crear nuevo usuario</div>
+                <div class="subtitle">Completa los datos para agregar un usuario al sistema</div>
+            </div>
+        </div>
+
+        <div class="filters usuarios-form-grid">
+            <div class="filter-field">
+                <label for="nuevoCodigoUsuario">Código de usuario</label>
+                <input type="text" id="nuevoCodigoUsuario" placeholder="Ej: PROD-OP3" />
+            </div>
+
+            <div class="filter-field">
+                <label for="nuevoNombreCompleto">Nombre completo</label>
+                <input type="text" id="nuevoNombreCompleto" placeholder="Nombre completo" />
+            </div>
+
+            <div class="filter-field">
+                <label for="nuevoPassword">Contraseña</label>
+                <input type="password" id="nuevoPassword" placeholder="Mínimo 6 caracteres" />
+            </div>
+
+            <div class="filter-field">
+                <label for="nuevoRol">Rol</label>
+                <select id="nuevoRol">
+                    <option value="operador">operador</option>
+                    <option value="admin">admin</option>
+                </select>
+            </div>
+
+            <div class="filter-field">
+                <label for="nuevoActivo">Estado</label>
+                <select id="nuevoActivo">
+                    <option value="true">Activo</option>
+                    <option value="false">Inactivo</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="module-actions" style="margin-top: 16px;">
+            <button id="btnGuardarUsuario" class="btn-primary">Guardar usuario</button>
+            <button id="btnCancelarUsuario" class="btn-secondary">Cancelar</button>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="module-title" style="font-size: 18px; margin-bottom: 14px;">Usuarios registrados</div>
+
+        <div class="table-container">
+            <table class="table" id="tablaUsuarios">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Código</th>
+                        <th>Nombre</th>
+                        <th>Rol</th>
+                        <th>Activo</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+
+                <tbody id="usuarios-table-body">
+                    <tr>
+                        <td colspan="6" style="text-align:center; opacity:0.6;">
+                            Cargando usuarios...
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>

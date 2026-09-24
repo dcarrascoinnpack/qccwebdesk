@@ -1,0 +1,47 @@
+<div class="auth-page">
+    <div class="auth-card">
+
+        <div class="auth-brand">
+            <img src="LOGO-FARET-spa-256.png" alt="FARET" class="auth-logo" />
+        </div>
+
+        <div class="auth-header">
+            <h2>Ingreso Faret</h2>
+            <p>Accede con tu RUT, correo o usuario</p>
+        </div>
+
+        <form id="faret-login-form" class="auth-form" novalidate>
+            <div class="auth-field">
+                <label for="faret-identificador">Identificador</label>
+                <input type="text" id="faret-identificador" name="identificador"
+                    placeholder="RUT, correo o usuario"
+                    autocomplete="username" maxlength="100" required />
+            </div>
+
+            <div class="auth-field">
+                <label for="faret-password">Contraseña</label>
+                <input type="password" id="faret-password" name="password"
+                    placeholder="Ingresa tu contraseña"
+                    autocomplete="current-password" maxlength="100" required />
+            </div>
+
+            <div class="auth-field" style="flex-direction: row; align-items: center; gap: 8px;">
+                <input type="checkbox" id="faret-recordar-checkbox" style="width: auto;">
+                <label for="faret-recordar-checkbox" style="margin: 0;">Recordar usuario</label>
+            </div>
+
+            <button type="submit" id="faret-login-btn" class="auth-submit-btn">
+                Ingresar a Faret
+            </button>
+
+            <div id="faret-login-message" class="auth-message" aria-live="polite"></div>
+        </form>
+
+        <div class="auth-back-wrap">
+            <button id="faret-volver-btn" class="auth-back-btn">
+                ← Volver a selección de empresa
+            </button>
+        </div>
+
+    </div>
+</div>

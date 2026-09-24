@@ -1,0 +1,182 @@
+<div class="module faret-producto-terminado-module">
+
+  <div class="module-header">
+    <div>
+      <div class="module-title">Producto Terminado</div>
+      <div class="subtitle">Inspecciones finales de Termoformado y Pegado (muestreo NCh44:2007) capturadas desde la app móvil</div>
+    </div>
+
+    <div class="module-actions">
+      <button class="btn-secondary" id="btnExportarFaretProductoTerminado">Exportar Excel</button>
+      <button class="btn-primary" id="btnActualizarFaretProductoTerminado">Actualizar</button>
+    </div>
+  </div>
+
+  <div id="fptEstadoConexion" class="card" style="margin-bottom: 16px; display: none;"></div>
+
+  <div class="kpi-row">
+
+    <div class="kpi-card">
+      <div class="kpi-label">Total inspecciones</div>
+      <div class="kpi-value" id="fptTotalInspecciones">0</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">% Lotes conformes</div>
+      <div class="kpi-value" id="fptPorcentajeConformes">0%</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">% Lotes no conformes</div>
+      <div class="kpi-value" id="fptPorcentajeNoConformes">0%</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">Unidades no conformes</div>
+      <div class="kpi-value" id="fptUnidadesNc">0</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">Defectos registrados</div>
+      <div class="kpi-value" id="fptDefectosTotales">0</div>
+    </div>
+
+  </div>
+
+  <div class="card faret-producto-terminado-filters-card">
+    <div class="filters faret-producto-terminado-filters">
+
+      <div class="filter-field">
+        <label for="fptFechaDesde">Fecha desde</label>
+        <input type="text" id="fptFechaDesde" placeholder="Seleccionar fecha" />
+      </div>
+
+      <div class="filter-field">
+        <label for="fptFechaHasta">Fecha hasta</label>
+        <input type="text" id="fptFechaHasta" placeholder="Seleccionar fecha" />
+      </div>
+
+      <div class="filter-field">
+        <label for="fptNp">NP</label>
+        <input type="text" id="fptNp" placeholder="Buscar NP" />
+      </div>
+
+      <div class="filter-field">
+        <label for="fptCodigoProducto">Ítem</label>
+        <input type="text" id="fptCodigoProducto" placeholder="Código producto" />
+      </div>
+
+      <div class="filter-field">
+        <label for="fptProceso">Proceso</label>
+        <select id="fptProceso">
+          <option value="">Todos</option>
+          <option value="Termoformado">Termoformado</option>
+          <option value="Pegado">Pegado</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="fptMaquina">Máquina</label>
+        <select id="fptMaquina">
+          <option value="">Todas</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="fptTurno">Turno</label>
+        <select id="fptTurno">
+          <option value="">Todos</option>
+          <option value="A">Turno A</option>
+          <option value="B">Turno B</option>
+          <option value="C">Turno C</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="fptInspector">Inspector</label>
+        <select id="fptInspector">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="fptResultado">Resultado</label>
+        <select id="fptResultado">
+          <option value="">Todos</option>
+          <option value="CONFORME">Conforme</option>
+          <option value="NO CONFORME">No Conforme</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="fptOrigen">Origen del problema</label>
+        <select id="fptOrigen">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="faret-producto-terminado-filter-actions">
+        <button class="btn-primary" id="btnFiltrarFaretProductoTerminado">Filtrar</button>
+        <button class="btn-secondary" id="btnLimpiarFaretProductoTerminado">Limpiar</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="faret-producto-terminado-charts-grid">
+
+    <div class="card faret-producto-terminado-chart-card">
+      <div class="module-title">Pareto de defectos</div>
+      <canvas id="chartFaretProductoTerminadoPareto"></canvas>
+    </div>
+
+    <div class="card faret-producto-terminado-chart-card">
+      <div class="module-title">Unidades NC por origen</div>
+      <canvas id="chartFaretProductoTerminadoOrigen"></canvas>
+    </div>
+
+    <div class="card faret-producto-terminado-chart-card">
+      <div class="module-title">Tendencia producto no conforme</div>
+      <canvas id="chartFaretProductoTerminadoTendencia"></canvas>
+    </div>
+
+    <div class="card faret-producto-terminado-chart-card">
+      <div class="module-title">Termoformado vs Pegado</div>
+      <canvas id="chartFaretProductoTerminadoComparacion"></canvas>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <div class="module-title">Inspecciones</div>
+
+    <div class="table-container">
+      <table class="table" id="tablaFaretProductoTerminado">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha / Hora</th>
+            <th>Inspector</th>
+            <th>NP</th>
+            <th>Cliente</th>
+            <th>Ítem</th>
+            <th>Proceso</th>
+            <th>Cant. Lote</th>
+            <th>Máquina</th>
+            <th>Turno</th>
+            <th>Resultado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyFaretProductoTerminado">
+          <tr>
+            <td colspan="12">Cargando...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="paginacionFaretProductoTerminado"></div>
+  </div>
+
+</div>

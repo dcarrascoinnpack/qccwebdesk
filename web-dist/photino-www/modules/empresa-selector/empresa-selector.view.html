@@ -1,0 +1,127 @@
+<div class="empresa-page">
+
+    <style>
+        .empresa-page {
+            min-height: calc(100vh - 92px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 32px;
+            box-sizing: border-box;
+            background:
+                radial-gradient(circle at top left, rgba(162, 199, 27, 0.10), transparent 280px),
+                radial-gradient(circle at bottom right, rgba(162, 199, 27, 0.08), transparent 280px),
+                linear-gradient(135deg, #eef2f5 0%, #e5eaef 100%);
+        }
+
+        .empresa-wrapper {
+            width: 100%;
+            max-width: 720px;
+            text-align: center;
+        }
+
+        .empresa-header {
+            margin-bottom: 28px;
+        }
+
+        .empresa-header h2 {
+            margin: 0 0 10px;
+            font-size: 30px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: #111827;
+        }
+
+        .empresa-header p {
+            margin: 0;
+            font-size: 15px;
+            color: #6b7280;
+        }
+
+        .empresa-grid {
+            display: flex;
+            gap: 24px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .empresa-card {
+            flex: 1 1 260px;
+            max-width: 320px;
+            background: rgba(255, 255, 255, 0.98);
+            border: 1px solid rgba(15, 23, 42, 0.08);
+            border-radius: 20px;
+            padding: 34px 28px;
+            box-shadow:
+                0 24px 55px rgba(15, 23, 42, 0.10),
+                0 8px 18px rgba(15, 23, 42, 0.05);
+            cursor: pointer;
+            transition: transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 18px;
+        }
+
+        .empresa-card:hover {
+            transform: translateY(-3px);
+            border-color: #a2c71b;
+            box-shadow: 0 28px 60px rgba(15, 23, 42, 0.14);
+        }
+
+        .empresa-card-logo {
+            height: 70px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .empresa-card-logo img {
+            max-width: 190px;
+            max-height: 70px;
+            object-fit: contain;
+        }
+
+        .empresa-card-name {
+            font-size: 18px;
+            font-weight: 700;
+            color: #111827;
+            letter-spacing: 0.01em;
+        }
+
+        @media (max-width: 640px) {
+            .empresa-grid {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+
+    <div class="empresa-wrapper">
+
+        <div class="empresa-header">
+            <h2>Selecciona la empresa</h2>
+            <p>Elige el panel al que deseas ingresar</p>
+        </div>
+
+        <div class="empresa-grid">
+
+            <div class="empresa-card" data-empresa="INNPACK">
+                <div class="empresa-card-logo">
+                    <img src="logo.png" alt="INNPACK" />
+                </div>
+                <div class="empresa-card-name">INNPACK</div>
+            </div>
+
+            <div class="empresa-card" data-empresa="FARET">
+                <div class="empresa-card-logo">
+                    <img src="LOGO-FARET-spa-256.png" alt="FARET" />
+                </div>
+                <div class="empresa-card-name">FARET</div>
+            </div>
+
+        </div>
+
+    </div>
+
+</div>

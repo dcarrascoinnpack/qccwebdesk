@@ -1,0 +1,1050 @@
+<div class="module faret-module faret-nc-module">
+
+    <div class="module-header">
+        <div>
+            <div class="module-title">No Conformidades</div>
+            <div class="subtitle">Gestión y seguimiento de NC</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <div class="fnc-combo-wrap">
+                <button id="fnc-columnas-btn" class="btn-secondary">Columnas ▾</button>
+                <div id="fnc-columnas-dropdown" class="fnc-combo-dropdown fnc-columnas-dropdown" style="display:none;"></div>
+            </div>
+            <button id="fnc-exportar-btn" class="btn-secondary">Exportar Excel</button>
+            <button id="fnc-imprimir-btn" class="btn-secondary">Imprimir</button>
+            <button id="fnc-imprimir-reporte-btn" class="btn-secondary">Imprimir Reporte Estadístico</button>
+            <button id="fnc-nuevo-btn" class="btn-primary">+ Nueva NC</button>
+        </div>
+    </div>
+
+    <!-- Resumen -->
+    <div class="home-modules-grid">
+        <div class="home-module-card fnc-kpi-blue">
+            <div class="home-module-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M7 3h7l5 5v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1Z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6M9 9h2"/></svg>
+            </div>
+            <div class="home-module-card-body">
+                <div class="home-module-card-title">Total NC</div>
+                <div class="home-module-card-value" id="fnc-total">0</div>
+            </div>
+        </div>
+        <div class="home-module-card fnc-kpi-amber">
+            <div class="home-module-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg>
+            </div>
+            <div class="home-module-card-body">
+                <div class="home-module-card-title">Abiertas</div>
+                <div class="home-module-card-value" id="fnc-abiertas">0</div>
+            </div>
+        </div>
+        <div class="home-module-card fnc-kpi-green">
+            <div class="home-module-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="m8.5 12.5 2.3 2.3L16 9.6"/></svg>
+            </div>
+            <div class="home-module-card-body">
+                <div class="home-module-card-title">Cerradas</div>
+                <div class="home-module-card-value" id="fnc-cerradas">0</div>
+            </div>
+        </div>
+        <div class="home-module-card fnc-kpi-red">
+            <div class="home-module-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z"/><path d="M12 9v5M12 17h.01"/></svg>
+            </div>
+            <div class="home-module-card-body">
+                <div class="home-module-card-title">Críticas</div>
+                <div class="home-module-card-value" id="fnc-criticas">0</div>
+            </div>
+        </div>
+        <div class="home-module-card fnc-kpi-purple">
+            <div class="home-module-card-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+            </div>
+            <div class="home-module-card-body">
+                <div class="home-module-card-title">Sin gestión</div>
+                <div class="home-module-card-value" id="fnc-sin-gestion">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Formulario nueva / editar NC -->
+    <div id="fnc-form-card" class="card fnc-form-card" style="display:none;">
+        <div class="module-header">
+            <div>
+                <div class="module-title" id="fnc-form-titulo" style="font-size:1rem;">Nueva No Conformidad</div>
+                <div class="subtitle">Campos obligatorios: tipo, origen, título, descripción, severidad, proceso y fecha de detección</div>
+            </div>
+        </div>
+
+        <div class="fnc-form-row">
+            <div class="fnc-form-campo">
+                <label for="fnc-form-tipo">Tipo *</label>
+                <select id="fnc-form-tipo">
+                    <option value="INTERNA">INTERNA</option>
+                    <option value="EXTERNA">EXTERNA</option>
+                </select>
+            </div>
+            <div class="fnc-form-campo">
+                <label for="fnc-form-origen">Origen *</label>
+                <select id="fnc-form-origen">
+                    <option value="AUDITORIA_INTERNA">AUDITORIA_INTERNA</option>
+                    <option value="AUDITORIA_EXTERNA">AUDITORIA_EXTERNA</option>
+                </select>
+            </div>
+            <div class="fnc-form-campo" style="min-width:240px;">
+                <label for="fnc-form-titulo-input">Título *</label>
+                <input type="text" id="fnc-form-titulo-input" placeholder="Título breve">
+            </div>
+            <div class="fnc-form-campo">
+                <label for="fnc-form-severidad">Severidad *</label>
+                <select id="fnc-form-severidad">
+                    <option value="ALTA">ALTA</option>
+                    <option value="MEDIA">MEDIA</option>
+                    <option value="BAJA">BAJA</option>
+                </select>
+            </div>
+            <div class="fnc-form-campo">
+                <label for="fnc-form-proceso">Proceso / Área *</label>
+                <input type="text" id="fnc-form-proceso" placeholder="Ej: Producción">
+            </div>
+            <div class="fnc-form-campo">
+                <label for="fnc-form-norma">Norma</label>
+                <input type="text" id="fnc-form-norma" placeholder="Ej: ISO 9001">
+            </div>
+            <div class="fnc-form-campo">
+                <label for="fnc-form-fecha">Fecha detección *</label>
+                <input type="date" id="fnc-form-fecha">
+            </div>
+            <div class="fnc-form-campo">
+                <label for="fnc-form-reportado">Reportado por</label>
+                <input type="text" id="fnc-form-reportado" placeholder="Nombre">
+            </div>
+            <div class="fnc-form-campo">
+                <label for="fnc-form-responsable">Responsable</label>
+                <input type="text" id="fnc-form-responsable" placeholder="Nombre">
+            </div>
+            <div class="fnc-form-campo" id="fnc-form-estado-campo" style="display:none;">
+                <label>Estado</label>
+                <input type="text" id="fnc-form-estado" disabled>
+            </div>
+        </div>
+
+        <div class="fnc-form-campo fnc-form-campo-full">
+            <label for="fnc-form-descripcion">Descripción *</label>
+            <textarea id="fnc-form-descripcion" rows="3" placeholder="Descripción detallada"></textarea>
+        </div>
+
+        <div id="fnc-form-nota-estado" class="fnc-nota" style="display:none;">
+            El estado no se puede modificar desde este panel: la API de Mejora Continua todavía no lo permite en la actualización.
+        </div>
+
+        <div class="fnc-form-acciones">
+            <button id="fnc-guardar-btn" class="btn-primary">Guardar</button>
+            <button id="fnc-cancelar-btn" class="btn-secondary">Cancelar</button>
+        </div>
+
+        <div id="fnc-form-error" class="faret-error" style="display:none;"></div>
+    </div>
+
+    <div id="fnc-mensaje" class="fi-success" style="display:none;"></div>
+
+    <!-- Filtros -->
+    <div class="card fnc-filtros-card">
+        <div class="fnc-toolbar-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h18l-7 8v6l-4-2v-4L3 5Z"/></svg>
+            <span>Filtros</span>
+        </div>
+        <div class="fnc-filtros-row">
+            <div class="fnc-filtro-campo">
+                <label for="fnc-filtro-cliente">Cliente</label>
+                <select id="fnc-filtro-cliente">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="fnc-filtro-campo">
+                <label for="fnc-filtro-tipo-pnc">Tipo PNC</label>
+                <select id="fnc-filtro-tipo-pnc">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="fnc-filtro-campo">
+                <label for="fnc-filtro-nivel">Nivel</label>
+                <select id="fnc-filtro-nivel">
+                    <option value="">Todos</option>
+                    <option value="Crítico">Crítico</option>
+                    <option value="Mayor">Mayor</option>
+                    <option value="Menor">Menor</option>
+                </select>
+            </div>
+            <div class="fnc-filtro-campo">
+                <label for="fnc-filtro-estado-gestion">Estado de gestión</label>
+                <select id="fnc-filtro-estado-gestion">
+                    <option value="">Todos</option>
+                    <option value="SIN_GESTION">Sin gestión</option>
+                    <option value="PENDIENTE">Pendiente</option>
+                    <option value="ASIGNADA">Asignada</option>
+                    <option value="EN_GESTION">En gestión</option>
+                    <option value="CERRADA">Cerrada</option>
+                </select>
+            </div>
+            <div class="fnc-filtro-campo">
+                <label for="fnc-filtro-area">Área</label>
+                <select id="fnc-filtro-area">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="fnc-filtro-campo">
+                <label for="fnc-filtro-fuente">Fuente</label>
+                <select id="fnc-filtro-fuente">
+                    <option value="">Todas</option>
+                    <option value="DATA">Data</option>
+                    <option value="MANUAL">Manual</option>
+                </select>
+            </div>
+            <div class="fnc-filtro-campo">
+                <label for="fnc-filtro-fecha-desde">Fecha ingreso desde</label>
+                <input type="date" id="fnc-filtro-fecha-desde">
+            </div>
+            <div class="fnc-filtro-campo">
+                <label for="fnc-filtro-fecha-hasta">Fecha ingreso hasta</label>
+                <input type="date" id="fnc-filtro-fecha-hasta">
+            </div>
+            <div class="fnc-filtro-divisor"></div>
+            <div class="fnc-filtro-acciones">
+                <button id="fnc-filtrar-btn" class="btn-primary">Filtrar</button>
+                <button id="fnc-limpiar-btn" class="btn-secondary">Limpiar</button>
+                <button id="fnc-refresh-btn" class="btn-ghost" title="Actualizar">↻ Actualizar</button>
+            </div>
+        </div>
+        <div class="fnc-nota">La tabla combina todos los registros de Data con su gestión de No Conformidad (si ya existe). Los filtros se aplican sobre los datos ya cargados.</div>
+    </div>
+
+    <!-- Indicadores estadísticos (calculados sobre el mismo dataset filtrado que la tabla) -->
+    <div class="card fnc-stats-card">
+        <div class="fnc-toolbar-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-6"/></svg>
+            <span>Indicadores Estadísticos</span>
+        </div>
+
+        <div class="fnc-stats-grid">
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Cuarentenas</div>
+                <div class="fnc-stats-resumen">
+                    <div><span class="home-module-card-value" id="fnc-stat-cuarentenas-total">0</span><div class="fnc-nota">Total período</div></div>
+                    <div><span class="home-module-card-value" id="fnc-stat-cuarentenas-cant-unidades">0</span><div class="fnc-nota">Cantidad total unidades cuarentenas</div></div>
+                </div>
+                <canvas id="fnc-chart-cuarentenas"></canvas>
+                <div id="fnc-nota-cuarentenas" class="fnc-nota" style="display:none;"></div>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Rechazos de Cliente</div>
+                <div class="fnc-stats-resumen">
+                    <div><span class="home-module-card-value" id="fnc-stat-rechazos-total">0</span><div class="fnc-nota">Total período</div></div>
+                    <div><span class="home-module-card-value" id="fnc-stat-rechazos-totales-general">0</span><div class="fnc-nota">Rechazados totales</div></div>
+                </div>
+                <canvas id="fnc-chart-rechazos"></canvas>
+                <div id="fnc-nota-rechazos" class="fnc-nota" style="display:none;"></div>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Total de Reclamos</div>
+                <span class="home-module-card-value" id="fnc-stat-reclamos-total">0</span>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Reposición y Destrucción</div>
+                <div class="fnc-stats-resumen">
+                    <div><span class="home-module-card-value" id="fnc-stat-repdes-reposicion">0</span><div class="fnc-nota">NC con reposición</div></div>
+                    <div><span class="home-module-card-value" id="fnc-stat-repdes-destruccion">0</span><div class="fnc-nota">NC con destrucción</div></div>
+                    <div><span class="home-module-card-value" id="fnc-stat-repdes-ambas">0</span><div class="fnc-nota">NC con ambas</div></div>
+                </div>
+                <div class="fnc-stats-resumen">
+                    <div><span class="home-module-card-value" id="fnc-stat-repdes-cant-repuesta">0</span><div class="fnc-nota">Cantidad total unidades reposiciones</div></div>
+                    <div><span class="home-module-card-value" id="fnc-stat-repdes-cant-destruida">0</span><div class="fnc-nota">Cantidad destruida total</div></div>
+                </div>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">PNC por Familia de Producto</div>
+                <canvas id="fnc-chart-familia"></canvas>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Incidentes por Área</div>
+                <canvas id="fnc-chart-area"></canvas>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Máquinas Involucradas</div>
+                <span class="home-module-card-value" id="fnc-stat-maquinas-total">0</span>
+                <div class="fnc-chart-scroll"><canvas id="fnc-chart-maquina"></canvas></div>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Operadores Involucrados</div>
+                <span class="home-module-card-value" id="fnc-stat-operadores-total">0</span>
+                <div class="fnc-chart-scroll"><canvas id="fnc-chart-operador"></canvas></div>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Clientes Involucrados</div>
+                <span class="home-module-card-value" id="fnc-stat-clientes-total">0</span>
+                <div class="fnc-chart-scroll"><canvas id="fnc-chart-cliente"></canvas></div>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Distribución por Tipo de PNC</div>
+                <canvas id="fnc-chart-tipo-pnc"></canvas>
+            </div>
+
+            <div class="fnc-analisis-seccion">
+                <div class="fnc-analisis-seccion-titulo">Pareto de Defectos</div>
+                <canvas id="fnc-chart-pareto"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="card faret-registros-card">
+        <div id="fnc-loading" class="faret-loading" style="display:none;">Cargando...</div>
+        <div id="fnc-error" class="faret-error" style="display:none;"></div>
+
+        <div id="fnc-filas-fijadas"></div>
+
+        <div class="table-container">
+            <table class="table faret-table" id="fnc-tabla">
+                <thead>
+                    <tr>
+                        <th>Código NC / ID Data</th>
+                        <th>Fecha ingreso</th>
+                        <th>Fecha salida</th>
+                        <th>NP/NV</th>
+                        <th>Cliente</th>
+                        <th>Código producto</th>
+                        <th>Producto</th>
+                        <th>Tipo PNC</th>
+                        <th>Categoría defecto</th>
+                        <th>Nivel / Severidad</th>
+                        <th>Estado gestión</th>
+                        <th>Responsable</th>
+                        <th style="display:none;">Fecha compromiso</th>
+                        <th id="fnc-th-fuente">Fuente</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="fnc-tbody">
+                    <tr><td colspan="16" class="faret-empty">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="fnc-paginacion">
+            <button id="fnc-anterior-btn" class="btn-secondary" disabled>‹ Anterior</button>
+            <span id="fnc-pagina-info">Página 1</span>
+            <button id="fnc-siguiente-btn" class="btn-secondary" disabled>Siguiente ›</button>
+        </div>
+    </div>
+
+    <!-- Modal detalle -->
+    <div id="fnc-detalle-modal" class="fnc-modal-overlay" style="display:none;">
+        <div class="fnc-modal card">
+            <div class="module-header">
+                <div class="module-title" style="font-size:1rem;">Detalle de No Conformidad</div>
+                <button id="fnc-detalle-cerrar-btn" class="btn-secondary">Cerrar</button>
+            </div>
+            <div id="fnc-detalle-body" class="fnc-detalle-body"></div>
+
+            <!-- Registro completo (Data/importacion_pnc). Solo visible si esta NC está vinculada a
+                 una fila de Data. Estático por defecto; "Editar" habilita todos los campos. -->
+            <div id="fnc-detalle-registro" style="display:none; margin-top:16px; border-top:1px solid #E2E8F0; padding-top:16px;">
+                <div class="module-header">
+                    <div>
+                        <div class="module-title" style="font-size:1rem;">Registro completo (Data)</div>
+                        <div class="subtitle">Campos del registro original. Presione "Editar" para modificarlos.</div>
+                    </div>
+                    <div style="display:flex; gap:10px;">
+                        <button id="fnc-reg-editar-btn" class="btn-secondary">Editar</button>
+                        <button id="fnc-reg-guardar-cambio-btn" class="btn-secondary" style="display:none;">Guardar cambio</button>
+                        <button id="fnc-reg-guardar-todo-btn" class="btn-primary" style="display:none;">Guardar todo</button>
+                        <button id="fnc-reg-cancelar-btn" class="btn-ghost" style="display:none;">Cancelar edición</button>
+                    </div>
+                </div>
+
+                <div id="fnc-reg-error" class="faret-error" style="display:none;"></div>
+
+                <div class="fnc-form-row">
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-fecha-ingreso">Fecha ingreso</label>
+                        <input type="date" id="fnc-reg-fecha-ingreso" disabled>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-np-nv">NP/NV</label>
+                        <input type="text" id="fnc-reg-np-nv" disabled>
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-cliente">Cliente</label>
+                        <input type="text" id="fnc-reg-cliente" disabled autocomplete="off">
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-codigo">Código</label>
+                        <input type="text" id="fnc-reg-codigo" disabled>
+                    </div>
+                    <div class="fnc-form-campo" style="min-width:220px;">
+                        <label for="fnc-reg-producto">Producto</label>
+                        <input type="text" id="fnc-reg-producto" disabled>
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-familia-producto">Familia de producto</label>
+                        <input type="text" id="fnc-reg-familia-producto" disabled autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="fnc-form-row">
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-tipo-pnc">Tipo PNC</label>
+                        <select id="fnc-reg-tipo-pnc" disabled>
+                            <option value="">-</option>
+                            <option value="Cuarentena">Cuarentena</option>
+                            <option value="Rechazo">Rechazo</option>
+                            <option value="Rechazo Cliente">Rechazo Cliente</option>
+                            <option value="Reclamo">Reclamo</option>
+                            <option value="Interna">Interna</option>
+                        </select>
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-nivel">Nivel</label>
+                        <input type="text" id="fnc-reg-nivel" disabled autocomplete="off">
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap" style="min-width:220px;">
+                        <label for="fnc-reg-categoria-defecto">Categoría defecto</label>
+                        <input type="text" id="fnc-reg-categoria-defecto" disabled autocomplete="off">
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-tipo-falla">Tipo de falla</label>
+                        <input type="text" id="fnc-reg-tipo-falla" disabled autocomplete="off">
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-impacto">Impacto</label>
+                        <input type="text" id="fnc-reg-impacto" disabled autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="fnc-form-row">
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-cant-requerida">Cant. requerida</label>
+                        <input type="number" id="fnc-reg-cant-requerida" min="0" step="any" disabled>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-cant-rechazada">Cant. rechazada</label>
+                        <input type="number" id="fnc-reg-cant-rechazada" min="0" step="any" disabled>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-cant-recuperada">Cant. recuperada</label>
+                        <input type="number" id="fnc-reg-cant-recuperada" min="0" step="any" disabled>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-pnc-real">PNC real</label>
+                        <input type="number" id="fnc-reg-pnc-real" min="0" step="any" disabled>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-pct-recup">% Recup.</label>
+                        <input type="text" id="fnc-reg-pct-recup" disabled placeholder="-">
+                    </div>
+                </div>
+
+                <div class="fnc-form-row" id="fnc-reg-disposicion-row" style="display:none;">
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-disposicion">Disposición</label>
+                        <select id="fnc-reg-disposicion" disabled>
+                            <option value="No aplica">No aplica</option>
+                            <option value="Reposición">Reposición</option>
+                            <option value="Destrucción">Destrucción</option>
+                            <option value="Reposición y destrucción">Reposición y destrucción</option>
+                        </select>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-cant-destruida">Cant. destruida</label>
+                        <input type="number" id="fnc-reg-cant-destruida" min="0" step="any" disabled>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-cant-repuesta">Cant. repuesta</label>
+                        <input type="number" id="fnc-reg-cant-repuesta" min="0" step="any" disabled>
+                    </div>
+                </div>
+
+                <div class="fnc-form-row">
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-area">Área</label>
+                        <input type="text" id="fnc-reg-area" disabled autocomplete="off">
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-maquina">Máquina</label>
+                        <input type="text" id="fnc-reg-maquina" disabled autocomplete="off">
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-operador">Operador</label>
+                        <input type="text" id="fnc-reg-operador" disabled autocomplete="off">
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-supervisor">Supervisor</label>
+                        <input type="text" id="fnc-reg-supervisor" disabled autocomplete="off">
+                    </div>
+                    <div class="fnc-form-campo fnc-combo-wrap">
+                        <label for="fnc-reg-revisado-por">Revisado por</label>
+                        <input type="text" id="fnc-reg-revisado-por" disabled autocomplete="off">
+                    </div>
+                </div>
+
+                <div class="fnc-form-row">
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-fecha-salida">Fecha salida</label>
+                        <input type="date" id="fnc-reg-fecha-salida" disabled>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-reg-fecha-fabricacion">Fecha fabricación</label>
+                        <input type="date" id="fnc-reg-fecha-fabricacion" disabled>
+                    </div>
+                </div>
+
+                <div class="fnc-form-campo fnc-form-campo-full">
+                    <label for="fnc-reg-descripcion-defecto">Descripción defecto</label>
+                    <textarea id="fnc-reg-descripcion-defecto" rows="2" disabled></textarea>
+                </div>
+                <div class="fnc-form-campo fnc-form-campo-full">
+                    <label for="fnc-reg-observacion">Observación</label>
+                    <textarea id="fnc-reg-observacion" rows="2" disabled></textarea>
+                </div>
+                <div class="fnc-form-campo fnc-form-campo-full">
+                    <label for="fnc-reg-causa-raiz">Causa raíz</label>
+                    <textarea id="fnc-reg-causa-raiz" rows="2" disabled></textarea>
+                </div>
+                <div class="fnc-form-campo fnc-form-campo-full">
+                    <label for="fnc-reg-acciones-correctivas">Acciones correctivas</label>
+                    <textarea id="fnc-reg-acciones-correctivas" rows="2" disabled></textarea>
+                </div>
+                <div class="fnc-form-campo fnc-form-campo-full">
+                    <label for="fnc-reg-verificacion-seguimiento">Verificación/seguimiento</label>
+                    <textarea id="fnc-reg-verificacion-seguimiento" rows="2" disabled></textarea>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Nueva No Conformidad (crea el registro completo en Data/importacion_pnc y su gestión vinculada) -->
+    <div id="fnc-nuevo-pnc-modal" class="fnc-modal-overlay" style="display:none;">
+        <div class="fnc-modal card">
+            <div class="module-header">
+                <div>
+                    <div class="module-title" style="font-size:1rem;">Nueva No Conformidad</div>
+                    <div class="subtitle">Se guarda como un registro completo de Data y queda disponible para gestionar de inmediato</div>
+                </div>
+                <button id="fnc-npnc-cerrar-btn" class="btn-secondary">Cerrar</button>
+            </div>
+
+            <div id="fnc-npnc-error" class="faret-error" style="display:none;"></div>
+
+            <div class="fnc-form-row">
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-fecha-ingreso">Fecha ingreso</label>
+                    <input type="date" id="fnc-npnc-fecha-ingreso">
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-np-nv">NP/NV *</label>
+                    <input type="text" id="fnc-npnc-np-nv">
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-cliente">Cliente *</label>
+                    <input type="text" id="fnc-npnc-cliente" autocomplete="off">
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-codigo">Código *</label>
+                    <input type="text" id="fnc-npnc-codigo">
+                </div>
+                <div class="fnc-form-campo" style="min-width:220px;">
+                    <label for="fnc-npnc-producto">Producto *</label>
+                    <input type="text" id="fnc-npnc-producto">
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-familia-producto">Familia de producto</label>
+                    <input type="text" id="fnc-npnc-familia-producto" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="fnc-form-row">
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-tipo-pnc">Tipo PNC</label>
+                    <select id="fnc-npnc-tipo-pnc">
+                        <option value="">-</option>
+                        <option value="Cuarentena">Cuarentena</option>
+                        <option value="Rechazo">Rechazo</option>
+                        <option value="Rechazo Cliente">Rechazo Cliente</option>
+                        <option value="Reclamo">Reclamo</option>
+                        <option value="Interna">Interna</option>
+                    </select>
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-nivel">Nivel *</label>
+                    <input type="text" id="fnc-npnc-nivel" autocomplete="off">
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap" style="min-width:220px;">
+                    <label for="fnc-npnc-categoria-defecto">Categoría defecto *</label>
+                    <input type="text" id="fnc-npnc-categoria-defecto" autocomplete="off">
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-tipo-falla">Tipo de falla</label>
+                    <input type="text" id="fnc-npnc-tipo-falla" autocomplete="off">
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-impacto">Impacto</label>
+                    <input type="text" id="fnc-npnc-impacto" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="fnc-form-row">
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-cant-requerida">Cant. requerida *</label>
+                    <input type="number" id="fnc-npnc-cant-requerida" min="0" step="any">
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-cant-rechazada">Cant. rechazada *</label>
+                    <input type="number" id="fnc-npnc-cant-rechazada" min="0" step="any">
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-cant-recuperada">Cant. recuperada</label>
+                    <input type="number" id="fnc-npnc-cant-recuperada" min="0" step="any">
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-pnc-real">PNC real</label>
+                    <input type="number" id="fnc-npnc-pnc-real" min="0" step="any">
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-pct-recup">% Recup.</label>
+                    <input type="text" id="fnc-npnc-pct-recup" disabled placeholder="-">
+                </div>
+            </div>
+
+            <div class="fnc-form-row" id="fnc-npnc-disposicion-row" style="display:none;">
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-disposicion">Disposición</label>
+                    <select id="fnc-npnc-disposicion">
+                        <option value="No aplica">No aplica</option>
+                        <option value="Reposición">Reposición</option>
+                        <option value="Destrucción">Destrucción</option>
+                        <option value="Reposición y destrucción">Reposición y destrucción</option>
+                    </select>
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-cant-destruida">Cant. destruida</label>
+                    <input type="number" id="fnc-npnc-cant-destruida" min="0" step="any">
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-cant-repuesta">Cant. repuesta</label>
+                    <input type="number" id="fnc-npnc-cant-repuesta" min="0" step="any">
+                </div>
+            </div>
+
+            <div class="fnc-form-row">
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-area">Área</label>
+                    <input type="text" id="fnc-npnc-area" autocomplete="off">
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-maquina">Máquina</label>
+                    <input type="text" id="fnc-npnc-maquina" autocomplete="off">
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-operador">Operador</label>
+                    <input type="text" id="fnc-npnc-operador" autocomplete="off">
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-supervisor">Supervisor</label>
+                    <input type="text" id="fnc-npnc-supervisor" autocomplete="off">
+                </div>
+                <div class="fnc-form-campo fnc-combo-wrap">
+                    <label for="fnc-npnc-revisado-por">Revisado por</label>
+                    <input type="text" id="fnc-npnc-revisado-por" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="fnc-form-row">
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-fecha-salida">Fecha salida</label>
+                    <input type="date" id="fnc-npnc-fecha-salida">
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-fecha-fabricacion">Fecha fabricación</label>
+                    <input type="date" id="fnc-npnc-fecha-fabricacion">
+                </div>
+            </div>
+
+            <div class="fnc-form-campo fnc-form-campo-full">
+                <label for="fnc-npnc-descripcion-defecto">Descripción defecto *</label>
+                <textarea id="fnc-npnc-descripcion-defecto" rows="2"></textarea>
+            </div>
+            <div class="fnc-form-campo fnc-form-campo-full">
+                <label for="fnc-npnc-observacion">Observación</label>
+                <textarea id="fnc-npnc-observacion" rows="2"></textarea>
+            </div>
+            <div class="fnc-form-campo fnc-form-campo-full">
+                <label for="fnc-npnc-causa-raiz">Causa raíz</label>
+                <textarea id="fnc-npnc-causa-raiz" rows="2"></textarea>
+            </div>
+            <div class="fnc-form-campo fnc-form-campo-full">
+                <label for="fnc-npnc-acciones-correctivas">Acciones correctivas</label>
+                <textarea id="fnc-npnc-acciones-correctivas" rows="2"></textarea>
+            </div>
+            <div class="fnc-form-campo fnc-form-campo-full">
+                <label for="fnc-npnc-verificacion-seguimiento">Verificación/seguimiento</label>
+                <textarea id="fnc-npnc-verificacion-seguimiento" rows="2"></textarea>
+            </div>
+
+            <!-- Adjuntos opcionales: se suben recién después de crear la NC (necesitan su id) -->
+            <div class="fnc-nota" style="margin-top:6px;">Adjuntos (opcional)</div>
+            <div class="fnc-form-row">
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-pdf-input">PDF</label>
+                    <input type="file" id="fnc-npnc-pdf-input" accept="application/pdf">
+                </div>
+                <div class="fnc-form-campo">
+                    <label for="fnc-npnc-fotos-input">Fotografías</label>
+                    <input type="file" id="fnc-npnc-fotos-input" accept="image/jpeg,image/png" multiple>
+                </div>
+            </div>
+            <div id="fnc-npnc-adjuntos-error" class="fnc-nota" style="display:none; color:#EF4444;"></div>
+
+            <div class="fnc-form-acciones">
+                <button id="fnc-npnc-guardar-btn" class="btn-primary">Guardar</button>
+                <button id="fnc-npnc-cancelar-btn" class="btn-secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Gestionar (crea el vínculo Data → NC si no existe, o gestiona/cierra/da seguimiento si ya existe) -->
+    <div id="fnc-gestion-modal" class="fnc-modal-overlay" style="display:none;">
+        <div class="fnc-modal card">
+            <div class="module-header">
+                <div>
+                    <div class="module-title" id="fnc-gestion-titulo" style="font-size:1rem;">Gestionar</div>
+                    <div class="subtitle" id="fnc-gestion-subtitulo"></div>
+                </div>
+                <button id="fnc-gestion-cerrar-btn" class="btn-secondary">Cerrar</button>
+            </div>
+
+            <div id="fnc-gestion-error" class="faret-error" style="display:none;"></div>
+            <div id="fnc-gestion-mensaje" class="fi-success" style="display:none;"></div>
+
+            <!-- Sub-vista: crear el vínculo (fila de Data sin NC todavía) -->
+            <div id="fnc-gestion-crear" style="display:none;">
+                <div class="fnc-nota">Esta fila de Data aún no tiene una No Conformidad asociada. Revise/ajuste los datos y confirme para crearla.</div>
+                <div class="fnc-form-row">
+                    <div class="fnc-form-campo">
+                        <label for="fnc-gcrear-tipo">Tipo *</label>
+                        <select id="fnc-gcrear-tipo">
+                            <option value="INTERNA">INTERNA</option>
+                            <option value="EXTERNA">EXTERNA</option>
+                        </select>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-gcrear-origen">Origen *</label>
+                        <select id="fnc-gcrear-origen">
+                            <option value="AUDITORIA_INTERNA">AUDITORIA_INTERNA</option>
+                            <option value="AUDITORIA_EXTERNA">AUDITORIA_EXTERNA</option>
+                        </select>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-gcrear-severidad">Severidad *</label>
+                        <select id="fnc-gcrear-severidad">
+                            <option value="ALTA">ALTA</option>
+                            <option value="MEDIA">MEDIA</option>
+                            <option value="BAJA">BAJA</option>
+                        </select>
+                    </div>
+                    <div class="fnc-form-campo">
+                        <label for="fnc-gcrear-fecha">Fecha detección *</label>
+                        <input type="date" id="fnc-gcrear-fecha">
+                    </div>
+                    <div class="fnc-form-campo" style="min-width:220px;">
+                        <label for="fnc-gcrear-proceso">Proceso / Área *</label>
+                        <input type="text" id="fnc-gcrear-proceso">
+                    </div>
+                </div>
+                <div class="fnc-form-campo fnc-form-campo-full">
+                    <label for="fnc-gcrear-titulo">Título *</label>
+                    <input type="text" id="fnc-gcrear-titulo">
+                </div>
+                <div class="fnc-form-campo fnc-form-campo-full">
+                    <label for="fnc-gcrear-descripcion">Descripción *</label>
+                    <textarea id="fnc-gcrear-descripcion" rows="3"></textarea>
+                </div>
+                <div class="fnc-form-acciones">
+                    <button id="fnc-gcrear-confirmar-btn" class="btn-primary">Crear y gestionar</button>
+                </div>
+            </div>
+
+            <!-- Sub-vista: gestión de una NC ya existente -->
+            <div id="fnc-gestion-existente" style="display:none;">
+                <div class="fnc-analisis-seccion">
+                    <div class="module-header">
+                        <div class="fnc-analisis-seccion-titulo"><span class="fnc-seccion-badge">1</span>Detalle de la NC</div>
+                        <div style="display:flex; gap:10px;">
+                            <button id="fnc-gdetalle-editar-btn" class="btn-secondary">Editar</button>
+                            <button id="fnc-gdetalle-guardar-btn" class="btn-primary" style="display:none;">Guardar cambios</button>
+                            <button id="fnc-gdetalle-cancelar-btn" class="btn-ghost" style="display:none;">Cancelar edición</button>
+                        </div>
+                    </div>
+                    <div id="fnc-gdetalle-error" class="faret-error" style="display:none;"></div>
+                    <div class="fnc-form-row">
+                        <div class="fnc-form-campo">
+                            <label for="fnc-gdetalle-tipo">Tipo *</label>
+                            <select id="fnc-gdetalle-tipo" disabled>
+                                <option value="INTERNA">INTERNA</option>
+                                <option value="EXTERNA">EXTERNA</option>
+                            </select>
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label for="fnc-gdetalle-origen">Origen *</label>
+                            <select id="fnc-gdetalle-origen" disabled>
+                                <option value="AUDITORIA_INTERNA">AUDITORIA_INTERNA</option>
+                                <option value="AUDITORIA_EXTERNA">AUDITORIA_EXTERNA</option>
+                            </select>
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label for="fnc-gdetalle-severidad">Severidad *</label>
+                            <select id="fnc-gdetalle-severidad" disabled>
+                                <option value="ALTA">ALTA</option>
+                                <option value="MEDIA">MEDIA</option>
+                                <option value="BAJA">BAJA</option>
+                            </select>
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label for="fnc-gdetalle-fecha">Fecha detección *</label>
+                            <input type="date" id="fnc-gdetalle-fecha" disabled>
+                        </div>
+                        <div class="fnc-form-campo" style="min-width:220px;">
+                            <label for="fnc-gdetalle-proceso">Proceso / Área *</label>
+                            <input type="text" id="fnc-gdetalle-proceso" disabled>
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label for="fnc-gdetalle-norma">Norma</label>
+                            <input type="text" id="fnc-gdetalle-norma" disabled>
+                        </div>
+                    </div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-gdetalle-titulo">Título *</label>
+                        <input type="text" id="fnc-gdetalle-titulo" disabled>
+                    </div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-gdetalle-descripcion">Descripción *</label>
+                        <textarea id="fnc-gdetalle-descripcion" rows="3" disabled></textarea>
+                    </div>
+                </div>
+
+                <div class="fnc-analisis-seccion">
+                    <div class="fnc-analisis-seccion-titulo"><span class="fnc-seccion-badge">2</span>Gestión</div>
+                    <div class="fnc-form-row">
+                        <div class="fnc-form-campo fnc-combo-wrap">
+                            <label for="fnc-gestion-responsable">Responsable</label>
+                            <input type="text" id="fnc-gestion-responsable" placeholder="Nombre" autocomplete="off">
+                            <div id="fnc-gestion-responsable-dropdown" class="fnc-combo-dropdown" style="display:none;"></div>
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label for="fnc-gestion-estado">Estado de gestión</label>
+                            <select id="fnc-gestion-estado">
+                                <option value="PENDIENTE">Pendiente</option>
+                                <option value="ASIGNADA">Asignada</option>
+                                <option value="EN_GESTION">En gestión</option>
+                                <option value="CERRADA">Cerrada</option>
+                            </select>
+                        </div>
+                        <div class="fnc-form-campo" style="display:none;">
+                            <label for="fnc-gestion-fecha-compromiso">Fecha compromiso</label>
+                            <input type="date" id="fnc-gestion-fecha-compromiso">
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label>&nbsp;</label>
+                            <button id="fnc-gestion-guardar-btn" class="btn-primary">Guardar gestión</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="fnc-analisis-seccion">
+                    <div class="fnc-analisis-seccion-titulo"><span class="fnc-seccion-badge">3</span>Seguimiento</div>
+                    <div id="fnc-seguimiento-lista"></div>
+                    <div class="fnc-form-row">
+                        <div class="fnc-form-campo fnc-form-campo-full" style="margin-top:0;">
+                            <label for="fnc-seguimiento-comentario">Agregar comentario</label>
+                            <textarea id="fnc-seguimiento-comentario" rows="2"></textarea>
+                        </div>
+                    </div>
+                    <div class="fnc-form-acciones">
+                        <button id="fnc-seguimiento-agregar-btn" class="btn-secondary">Agregar comentario</button>
+                    </div>
+                </div>
+
+                <div class="fnc-analisis-seccion">
+                    <div class="fnc-analisis-seccion-titulo"><span class="fnc-seccion-badge">4</span>Cierre</div>
+                    <div class="fnc-form-campo fnc-form-campo-full" style="margin-top:0;">
+                        <label for="fnc-cierre-comentario">Comentario de cierre</label>
+                        <textarea id="fnc-cierre-comentario" rows="2" placeholder="Opcional"></textarea>
+                    </div>
+                    <div class="fnc-form-acciones">
+                        <button id="fnc-cerrar-nc-btn" class="btn-danger">Cerrar No Conformidad</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal Análisis + Plan de Acción -->
+    <div id="fnc-analisis-modal" class="fnc-modal-overlay" style="display:none;">
+        <div class="fnc-modal fnc-analisis-modal card">
+            <div class="module-header">
+                <div>
+                    <div class="module-title" id="fnc-analisis-titulo" style="font-size:1rem;">Análisis y Plan de Acción</div>
+                    <div class="subtitle">Causa raíz, 5 Porqués / Ishikawa y acciones correctivas</div>
+                </div>
+                <button id="fnc-analisis-cerrar-btn" class="btn-secondary">← Volver al listado</button>
+            </div>
+
+            <div id="fnc-analisis-loading" class="faret-loading" style="display:none;">Cargando...</div>
+            <div id="fnc-analisis-error" class="faret-error" style="display:none;"></div>
+            <div id="fnc-analisis-mensaje" class="fi-success" style="display:none;"></div>
+
+            <div id="fnc-analisis-contenido" style="display:none;">
+
+                <!-- Sección 1: Datos de la NC -->
+                <div class="fnc-analisis-seccion">
+                    <div class="fnc-analisis-seccion-titulo"><span class="fnc-seccion-badge">1</span>Datos de la No Conformidad</div>
+                    <div id="fnc-analisis-nc-datos" class="fnc-detalle-grid"></div>
+                </div>
+
+                <!-- Sección 2: Análisis causa raíz -->
+                <div class="fnc-analisis-seccion">
+                    <div class="fnc-analisis-seccion-titulo"><span class="fnc-seccion-badge">2</span>Análisis de causa raíz</div>
+                    <div class="fnc-form-row">
+                        <div class="fnc-form-campo">
+                            <label for="fnc-analisis-metodologia">Metodología *</label>
+                            <select id="fnc-analisis-metodologia">
+                                <option value="CINCO_PORQUES">5 Porqués</option>
+                                <option value="ISHIKAWA">Ishikawa</option>
+                                <option value="MIXTA">Mixta</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-analisis-problema">Problema detectado *</label>
+                        <textarea id="fnc-analisis-problema" rows="2" placeholder="Describa el problema a analizar"></textarea>
+                    </div>
+                </div>
+
+                <!-- Sección 3: 5 Porqués / Ishikawa -->
+                <div class="fnc-analisis-seccion">
+                    <div class="fnc-analisis-seccion-titulo"><span class="fnc-seccion-badge">3</span>5 Porqués / Ishikawa</div>
+                    <div class="fnc-nota">Use los 5 campos para encadenar los "¿por qué?" (5 Porqués) o para registrar las causas por categoría (Ishikawa simple).</div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-analisis-porque1">¿Por qué 1?</label>
+                        <input type="text" id="fnc-analisis-porque1">
+                    </div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-analisis-porque2">¿Por qué 2?</label>
+                        <input type="text" id="fnc-analisis-porque2">
+                    </div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-analisis-porque3">¿Por qué 3?</label>
+                        <input type="text" id="fnc-analisis-porque3">
+                    </div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-analisis-porque4">¿Por qué 4?</label>
+                        <input type="text" id="fnc-analisis-porque4">
+                    </div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-analisis-porque5">¿Por qué 5?</label>
+                        <input type="text" id="fnc-analisis-porque5">
+                    </div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-analisis-causa-raiz">Causa raíz</label>
+                        <textarea id="fnc-analisis-causa-raiz" rows="2" placeholder="Obligatoria para guardar el análisis como final"></textarea>
+                    </div>
+                    <div class="fnc-form-campo fnc-form-campo-full">
+                        <label for="fnc-analisis-conclusion">Conclusión</label>
+                        <textarea id="fnc-analisis-conclusion" rows="2"></textarea>
+                    </div>
+                    <div class="fnc-form-acciones">
+                        <button id="fnc-analisis-guardar-btn" class="btn-primary">Guardar análisis</button>
+                    </div>
+
+                    <!-- PDF del análisis de causa raíz: 1 activo por NC, reemplazable. Solo lectura si la NC está cerrada. -->
+                    <div class="fnc-nota" style="margin-top:14px;">Análisis de causa raíz — PDF adjunto</div>
+                    <div id="fnc-adjunto-pdf-error" class="faret-error" style="display:none;"></div>
+                    <div id="fnc-adjunto-pdf-bloque">Cargando...</div>
+                    <input type="file" id="fnc-adjunto-pdf-input" accept="application/pdf" style="display:none;">
+                </div>
+
+                <!-- Evidencia fotográfica: varias fotos activas por NC (máx. 10). Solo lectura si la NC está cerrada. -->
+                <div class="fnc-analisis-seccion">
+                    <div class="fnc-analisis-seccion-titulo">Evidencia fotográfica</div>
+                    <div id="fnc-adjunto-fotos-error" class="faret-error" style="display:none;"></div>
+                    <button id="fnc-adjunto-fotos-btn" class="btn-secondary">Adjuntar fotografías</button>
+                    <input type="file" id="fnc-adjunto-fotos-input" accept="image/jpeg,image/png" multiple style="display:none;">
+                    <div id="fnc-adjunto-fotos-grid" class="fnc-fotos-grid"></div>
+                </div>
+
+                <!-- Sección 4: Planes de acción -->
+                <div class="fnc-analisis-seccion">
+                    <div class="fnc-analisis-seccion-titulo"><span class="fnc-seccion-badge">4</span>Planes de acción</div>
+
+                    <div class="fnc-form-row">
+                        <div class="fnc-form-campo" style="min-width:220px;">
+                            <label for="fnc-accion-descripcion">Descripción *</label>
+                            <input type="text" id="fnc-accion-descripcion" placeholder="Acción correctiva">
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label for="fnc-accion-responsable">Responsable *</label>
+                            <input type="text" id="fnc-accion-responsable" placeholder="Nombre">
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label for="fnc-accion-fecha-limite">Fecha límite *</label>
+                            <input type="date" id="fnc-accion-fecha-limite">
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label for="fnc-accion-prioridad">Prioridad</label>
+                            <select id="fnc-accion-prioridad">
+                                <option value="">-</option>
+                                <option value="ALTA">ALTA</option>
+                                <option value="MEDIA">MEDIA</option>
+                                <option value="BAJA">BAJA</option>
+                            </select>
+                        </div>
+                        <div class="fnc-form-campo">
+                            <label>&nbsp;</label>
+                            <button id="fnc-accion-agregar-btn" class="btn-primary">+ Agregar acción</button>
+                        </div>
+                    </div>
+                    <div id="fnc-accion-form-error" class="faret-error" style="display:none;"></div>
+
+                    <div id="fnc-acciones-loading" class="faret-loading" style="display:none;">Cargando...</div>
+                    <div class="table-container">
+                        <table class="table faret-table">
+                            <thead>
+                                <tr>
+                                    <th>Descripción</th>
+                                    <th>Responsable</th>
+                                    <th>Fecha límite</th>
+                                    <th>Prioridad</th>
+                                    <th>Estado</th>
+                                    <th>Integración tareas</th>
+                                    <th>Acciones</th>
+                                </tr>
+                            </thead>
+                            <tbody id="fnc-acciones-tbody">
+                                <tr><td colspan="7" class="faret-empty">Sin acciones correctivas</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+
+</div>

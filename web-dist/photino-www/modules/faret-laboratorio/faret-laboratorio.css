@@ -1,0 +1,93 @@
+/* Réplica de las reglas de modal/formulario de muestra-laboratorio.css (prefijo mlb-),
+   con prefijo flb- y scoped a .faret-laboratorio-module. Este módulo no tenía ningún
+   archivo CSS propio ni <link> en index.html: sus modales (.flb-modal-overlay/.flb-modal/
+   .flb-form-*) no tenían ninguna regla en todo el proyecto. */
+
+.faret-laboratorio-module .flb-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.faret-laboratorio-module .flb-modal {
+    width: 100%;
+    max-width: 620px;
+    padding: 22px;
+}
+
+.faret-laboratorio-module .flb-modal-ancho {
+    max-width: 900px;
+}
+
+.faret-laboratorio-module .flb-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.faret-laboratorio-module .flb-form-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 150px;
+    flex: 1;
+    margin-bottom: 12px;
+}
+
+.faret-laboratorio-module .flb-form-campo-full {
+    width: 100%;
+}
+
+.faret-laboratorio-module .flb-form-campo label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.faret-laboratorio-module .flb-form-campo input,
+.faret-laboratorio-module .flb-form-campo select,
+.faret-laboratorio-module .flb-form-campo textarea {
+    height: 36px;
+    border: 1px solid #D8DEE9;
+    border-radius: 9px;
+    padding: 0 11px;
+    font-size: 12.5px;
+    color: #0F172A;
+    background: white;
+    font-family: inherit;
+}
+
+.faret-laboratorio-module .flb-form-campo textarea {
+    height: auto;
+    padding: 8px 11px;
+    resize: vertical;
+}
+
+.faret-laboratorio-module .flb-form-acciones {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 10px;
+}
+
+.faret-laboratorio-module .flb-detalle-resumen {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+    gap: 10px;
+    font-size: 12.5px;
+    color: #334155;
+    margin-bottom: 6px;
+}
+
+.faret-laboratorio-module .flb-detalle-resumen b {
+    display: block;
+    color: #0F172A;
+}

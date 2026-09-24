@@ -1,0 +1,188 @@
+<div class="module dashboard-produccion-module">
+
+    <div class="module-header">
+        <div>
+            <div class="module-title">Dashboard Producción</div>
+            <div class="subtitle">Registros de producción, cumplimiento, no conformidades y desempeño por inspector
+            </div>
+        </div>
+
+        <div class="module-actions">
+            <button class="btn-secondary" id="btnExportarRegistrosProduccion">Exportar Excel</button>
+            <button class="btn-primary" id="btnActualizarRegistrosProduccion">Actualizar</button>
+        </div>
+    </div>
+
+    <div id="produccionHistoricoBanner" style="display:none;"></div>
+
+    <div class="kpi-row">
+
+        <div class="kpi-card">
+            <div class="kpi-label">Controles hoy</div>
+            <div class="kpi-value" id="prodControlesHoy">0</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-label">Controles período</div>
+            <div class="kpi-value" id="prodControlesPeriodo">0</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-label">Cumplimiento general</div>
+            <div class="kpi-value" id="prodCumplimientoGeneral">0%</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-label">No conformidades</div>
+            <div class="kpi-value" id="prodNoConformidades">0</div>
+        </div>
+
+    </div>
+
+    <div class="card dashboard-filters-card">
+        <div class="filters dashboard-filters">
+
+            <div class="filter-field">
+                <label for="produccionFechaDesde">Fecha desde</label>
+                <input type="text" id="produccionFechaDesde" placeholder="Seleccionar fecha" />
+            </div>
+
+            <div class="filter-field">
+                <label for="produccionFechaHasta">Fecha hasta</label>
+                <input type="text" id="produccionFechaHasta" placeholder="Seleccionar fecha" />
+            </div>
+
+            <div class="filter-field">
+                <label for="produccionInspector">Inspector</label>
+                <select id="produccionInspector">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+
+            <div class="filter-field">
+                <label for="produccionTurno">Turno</label>
+                <select id="produccionTurno">
+                    <option value="">Todos</option>
+                    <option value="A">Turno A</option>
+                    <option value="B">Turno B</option>
+                    <option value="C">Turno C</option>
+                </select>
+            </div>
+
+            <div class="filter-field">
+                <label for="produccionProceso">Proceso</label>
+                <select id="produccionProceso">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+
+            <div class="dashboard-filter-actions">
+                <button class="btn-primary" id="btnFiltrarRegistrosProduccion">Filtrar</button>
+                <button class="btn-secondary" id="btnLimpiarRegistrosProduccion">Limpiar</button>
+            </div>
+
+        </div>
+    </div>
+
+    <div class="dashboard-charts-grid">
+
+        <div class="card dashboard-chart-card">
+            <div class="module-title">Cumplimiento por inspector</div>
+            <canvas id="chartProduccionCumplimientoInspector"></canvas>
+        </div>
+
+        <div class="card dashboard-chart-card">
+            <div class="module-title">No conformidades detectadas por inspector</div>
+            <canvas id="chartProduccionNoConformidadesInspector"></canvas>
+        </div>
+
+    </div>
+
+    <div class="dashboard-charts-grid-2">
+
+        <div class="card dashboard-chart-card">
+            <div class="module-title">Controles por proceso e inspector</div>
+            <canvas id="chartProduccionControlesProceso"></canvas>
+        </div>
+
+        <div class="card dashboard-chart-card">
+            <div class="module-title">Tendencia de cumplimiento</div>
+            <canvas id="chartProduccionTendenciaCumplimiento"></canvas>
+        </div>
+
+    </div>
+
+    <div class="card dashboard-chart-card">
+        <div class="module-title">Desempeño individual por inspector</div>
+
+        <div class="table-container">
+            <table class="table" id="tablaProduccionDesempeno">
+                <thead>
+                    <tr>
+                        <th>Inspector</th>
+                        <th>Cumplimiento</th>
+                        <th>Programados</th>
+                        <th>Realizados</th>
+                        <th>No conformidades</th>
+                        <th>Estado</th>
+                    </tr>
+                </thead>
+
+                <tbody id="tbodyProduccionDesempeno">
+                    <tr>
+                        <td colspan="6">Cargando...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <div class="card dashboard-table-card dashboard-ultimos-card">
+        <div class="dashboard-table-header">
+            <div class="module-title">Últimos registros</div>
+
+            <div class="dashboard-validation-actions">
+                <button class="btn-primary" id="btnValidarTodoProduccion">Validar Todo</button>
+                <button class="btn-secondary" id="btnRechazarTodoProduccion">Rechazar Todo</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="table" id="tablaRegistrosProduccion">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th>Usuario</th>
+                        <th>Proceso</th>
+                        <th>Máquina</th>
+                        <th>NP</th>
+                        <th>Código Producto</th>
+                        <th>Producto</th>
+                        <th>Turno</th>
+                        <th>Estado</th>
+                        <th>Observación</th>
+                        <th>Cantidad Merma</th>
+                        <th>Detalle Merma</th>
+                        <th>Tipo Defecto</th>
+                        <th>Lote Bobina utilizada</th>
+                        <th>Código Bobina utilizada</th>
+                        <th>Descripción Bobina utilizada</th>
+                        <th>Observación Bobina utilizada</th>
+                        <th>Estado Validación</th>
+                        <th>Acciones</th>
+                        <th>Imagen</th>
+                    </tr>
+                </thead>
+
+                <tbody id="tbodyRegistrosProduccion">
+                    <tr>
+                        <td colspan="22">Cargando...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>

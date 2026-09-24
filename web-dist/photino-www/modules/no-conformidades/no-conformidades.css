@@ -1,0 +1,435 @@
+/* =====================================================
+   NO CONFORMIDADES (INNPACK) — módulo standalone.
+   Todas las reglas están scoped a .no-conformidades-module o usan
+   el prefijo ncq- para no afectar ningún otro módulo (incl. faret-nc).
+===================================================== */
+
+.no-conformidades-module .btn-danger,
+.no-conformidades-module .btn-ghost {
+    border-radius: 10px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+
+.no-conformidades-module .btn-danger {
+    background: #FEF2F2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+}
+
+.no-conformidades-module .btn-danger:hover {
+    background: #FEE2E2;
+    border-color: #FCA5A5;
+}
+
+.no-conformidades-module .btn-ghost {
+    background: transparent;
+    color: #475569;
+    border: 1px solid #D8DEE9;
+}
+
+.no-conformidades-module .btn-ghost:hover {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+}
+
+.ncq-mensaje {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border-left: 4px solid #10B981;
+    background: #ECFDF5;
+    color: #065F46;
+    font-size: 13px;
+    margin-bottom: 16px;
+}
+
+.ncq-error {
+    padding: 10px 14px;
+    border-radius: 10px;
+    border-left: 4px solid #EF4444;
+    background: #FEF2F2;
+    color: #991B1B;
+    font-size: 13px;
+    margin-bottom: 14px;
+}
+
+/* ---------- Filtros ---------- */
+
+.no-conformidades-module .ncq-filtros-card {
+    padding: 18px 22px;
+    margin-bottom: 20px;
+}
+
+.ncq-filtros-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+}
+
+.ncq-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 160px;
+}
+
+.ncq-campo-full {
+    min-width: 100%;
+    margin-top: 14px;
+}
+
+.ncq-campo label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.ncq-campo input,
+.ncq-campo select,
+.ncq-campo textarea {
+    border: 1px solid #D8DEE9;
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 13px;
+    color: #0F172A;
+    font-family: inherit;
+    background: white;
+}
+
+.ncq-campo input,
+.ncq-campo select {
+    height: 38px;
+}
+
+.ncq-campo textarea {
+    padding: 10px 12px;
+    resize: vertical;
+}
+
+.ncq-campo input:focus,
+.ncq-campo select:focus,
+.ncq-campo textarea:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.ncq-campo input:disabled,
+.ncq-campo select:disabled,
+.ncq-campo textarea:disabled {
+    background: #F1F5F9;
+    color: #94A3B8;
+    cursor: not-allowed;
+}
+
+.ncq-filtro-acciones {
+    display: flex;
+    flex-direction: row;
+    gap: 10px;
+    margin-left: auto;
+}
+
+/* ---------- Selector de columnas opcionales (botón "Columnas" del listado) ---------- */
+
+.ncq-combo-wrap {
+    position: relative;
+}
+
+.ncq-combo-dropdown {
+    position: absolute;
+    top: 100%;
+    right: 0;
+    margin-top: 4px;
+    min-width: 240px;
+    background: white;
+    border: 1px solid #D8DEE9;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    max-height: 260px;
+    overflow-y: auto;
+    z-index: 20;
+    padding: 6px 0;
+}
+
+/* Ítems generados por window.CatalogCombo (shared/utils.js) — clases neutras sin prefijo de
+   módulo, ver el comentario en ese archivo. Mismo look que ya usaba Faret para su combo. */
+.catalog-combo-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #1E293B;
+    cursor: pointer;
+}
+
+.catalog-combo-item:hover {
+    background: #F1F5F9;
+}
+
+.catalog-combo-item-nombre {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.catalog-combo-empty {
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #94A3B8;
+}
+
+.catalog-combo-item-crear {
+    color: #2563EB;
+    font-weight: 600;
+    border-top: 1px solid #E2E8F0;
+}
+
+.catalog-combo-item-crear:hover {
+    background: #EFF6FF;
+}
+
+.ncq-columnas-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #1E293B;
+    cursor: pointer;
+}
+
+.ncq-columnas-item:hover {
+    background: #F1F5F9;
+}
+
+/* ---------- Formulario (Nueva NC / Ver / Editar) ---------- */
+
+.ncq-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.ncq-form-acciones {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+/* ---------- Badges ---------- */
+
+.ncq-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+/* ---------- Modales ---------- */
+
+.ncq-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.ncq-modal {
+    width: 100%;
+    max-width: 640px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 24px;
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+}
+
+.ncq-analisis-modal {
+    max-width: 940px;
+}
+
+.ncq-seccion {
+    background: #F8FAFC;
+    border: 1px solid #E5E9F0;
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-top: 16px;
+}
+
+.ncq-seccion-titulo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1E293B;
+    margin-bottom: 14px;
+}
+
+.ncq-seccion-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    border-radius: 999px;
+    background: #2563EB;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.ncq-seguimiento-item {
+    border-bottom: 1px solid #F1F5F9;
+    padding: 8px 0;
+    font-size: 13px;
+}
+
+.ncq-seguimiento-item:last-child {
+    border-bottom: none;
+}
+
+.ncq-seguimiento-meta {
+    font-size: 11px;
+    color: #94A3B8;
+    margin-top: 2px;
+}
+
+.ncq-accion-estado-select {
+    height: 34px;
+    border: 1px solid #D8DEE9;
+    border-radius: 8px;
+    font-size: 12px;
+    padding: 0 8px;
+    background: white;
+}
+
+/* ---------- Indicadores estadísticos ----------
+   Reutiliza .ncq-seccion/.ncq-seccion-titulo/.kpi-value ya existentes (Gestionar/Analizar y KPI
+   superiores); solo se agrega el grid, el resumen en fila y el alto del canvas, que no tienen
+   ninguna clase existente equivalente en este módulo. */
+
+.no-conformidades-module .ncq-stats-card {
+    padding: 18px 22px;
+    margin-bottom: 20px;
+}
+
+.no-conformidades-module .ncq-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.no-conformidades-module .ncq-stats-resumen {
+    display: flex;
+    gap: 22px;
+    margin: 2px 0 6px;
+}
+
+.ncq-stats-nota {
+    font-size: 12px;
+    color: #64748B;
+    margin-top: 4px;
+}
+
+.no-conformidades-module .ncq-stats-card canvas {
+    width: 100% !important;
+    height: 200px !important;
+    margin-top: 8px;
+}
+
+/* El Pareto rota sus etiquetas 40° (hasta 11 categorías: Top 10 + "Otros") — necesita más alto
+   que el resto de los gráficos de esta sección para que las etiquetas no se corten. */
+.no-conformidades-module #ncq-chart-pareto {
+    height: 260px !important;
+}
+
+/* Máquinas/Operadores/Clientes muestran TODAS las categorías reales (sin agrupar en "Otros",
+   para no ocultar datos), ordenadas de mayor a menor. El alto del canvas se calcula en JS según
+   la cantidad real de filas (_chartBarHorizontalStats, opts.scroll) para que cada barra quede
+   legible; este contenedor limita el alto visible y agrega scroll interno para que el bloque no
+   crezca sin límite cuando hay muchas categorías. */
+.no-conformidades-module .ncq-chart-scroll {
+    max-height: 220px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.no-conformidades-module .ncq-ver-btn,
+.no-conformidades-module .ncq-analizar-btn,
+.no-conformidades-module .ncq-gestionar-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+    margin-right: 6px;
+}
+
+@media (max-width: 1100px) {
+    .ncq-filtro-acciones {
+        margin-left: 0;
+        width: 100%;
+    }
+}
+
+/* ---------- Adjuntos: PDF causa raíz + evidencia fotográfica ---------- */
+
+.no-conformidades-module .ncq-adjunto-pdf-fila {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.no-conformidades-module .ncq-fotos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.no-conformidades-module .ncq-foto-item {
+    position: relative;
+    border: 1px solid #E5E9F0;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #F8FAFC;
+}
+
+.no-conformidades-module .ncq-foto-item img {
+    display: block;
+    width: 100%;
+    height: 90px;
+    object-fit: cover;
+}
+
+.no-conformidades-module .ncq-foto-item .ncq-foto-eliminar {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(15, 23, 42, 0.75);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+}

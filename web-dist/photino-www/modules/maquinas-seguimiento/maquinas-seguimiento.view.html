@@ -1,0 +1,84 @@
+<div class="module">
+
+    <div class="module-header">
+        <div>
+            <div class="module-title">Seguimiento por Máquina</div>
+            <div class="subtitle">Consulta rápida de registros de calidad asociados a una máquina</div>
+        </div>
+
+        <div class="module-actions">
+            <button class="btn-secondary" id="btnExportarMaquinasSeguimiento">Exportar Excel</button>
+            <button class="btn-primary" id="btnActualizarMaquinasSeguimiento">Actualizar</button>
+        </div>
+    </div>
+
+    <div class="kpi-row">
+        <div class="kpi-card">
+            <div class="kpi-label">Total máquinas activas</div>
+            <div class="kpi-value" id="maqTotalMaquinas">0</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-label">Máquinas con registros</div>
+            <div class="kpi-value" id="maqConRegistros">0</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-label">Registros máquina</div>
+            <div class="kpi-value" id="maqRegistrosSeleccionada">0</div>
+        </div>
+
+        <div class="kpi-card">
+            <div class="kpi-label">Rechazos máquina</div>
+            <div class="kpi-value" id="maqRechazosSeleccionada">0</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="filters machine-filter-bar">
+            <div class="machine-select-wrap">
+                <label for="filtroMaquinaSeguimiento">Máquina / Proceso</label>
+                <select id="filtroMaquinaSeguimiento" class="machine-select">
+                    <option value="">Selecciona una máquina</option>
+                </select>
+            </div>
+
+            <div class="machine-filter-actions">
+                <button class="btn-primary" id="btnBuscarMaquinaSeguimiento">Buscar</button>
+                <button class="btn-secondary" id="btnLimpiarMaquinaSeguimiento">Limpiar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="module-title">Registros de la máquina seleccionada</div>
+
+        <div class="table-container">
+            <table class="table" id="tablaMaquinasSeguimiento">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Fecha</th>
+                        <th>Hora</th>
+                        <th>Usuario</th>
+                        <th>Proceso</th>
+                        <th>Máquina</th>
+                        <th>Formulario</th>
+                        <th>NP</th>
+                        <th>Producto</th>
+                        <th>Turno</th>
+                        <th>Estado</th>
+                        <th>Observación</th>
+                    </tr>
+                </thead>
+
+                <tbody id="tbodyMaquinasSeguimiento">
+                    <tr>
+                        <td colspan="12">Selecciona una máquina para ver sus registros</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>

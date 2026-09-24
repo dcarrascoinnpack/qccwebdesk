@@ -1,0 +1,91 @@
+<div class="module">
+
+    <div class="module-header">
+        <div>
+            <div class="module-title">Certificados de Liberación</div>
+            <div class="subtitle">Búsqueda y descarga de certificados ya emitidos (FARET SPA / INNPACK SPA)</div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="filters">
+            <div>
+                <label for="clFiltroFolio">Folio</label><br>
+                <input type="text" id="clFiltroFolio" placeholder="Ej. 75014">
+            </div>
+            <div>
+                <label for="clFiltroNp">NP</label><br>
+                <input type="text" id="clFiltroNp" placeholder="Ej. 22780">
+            </div>
+            <div>
+                <label for="clFiltroCliente">Cliente</label><br>
+                <input type="text" id="clFiltroCliente" placeholder="Nombre del cliente">
+            </div>
+            <div>
+                <label for="clFiltroOperador">Operador</label><br>
+                <select id="clFiltroOperador">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div>
+                <label for="clFiltroInspector">Inspector</label><br>
+                <select id="clFiltroInspector">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div>
+                <label for="clFiltroEmpresa">Empresa</label><br>
+                <select id="clFiltroEmpresa">
+                    <option value="">Todas</option>
+                    <option value="FARET SPA">FARET SPA</option>
+                    <option value="INNPACK SPA">INNPACK SPA</option>
+                </select>
+            </div>
+            <div>
+                <label for="clFiltroFechaDesde">Fecha desde</label><br>
+                <input type="date" id="clFiltroFechaDesde">
+            </div>
+            <div>
+                <label for="clFiltroFechaHasta">Fecha hasta</label><br>
+                <input type="date" id="clFiltroFechaHasta">
+            </div>
+            <div style="align-self:flex-end;">
+                <button class="btn-primary" id="clBtnBuscar">Buscar</button>
+                <button class="btn-secondary" id="clBtnLimpiar">Limpiar</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <div class="module-title" id="clResultadosTitulo">Certificados (últimos 200 sin filtros)</div>
+        <div class="table-container">
+            <table class="table" id="clTabla">
+                <thead>
+                    <tr>
+                        <th>Folio</th>
+                        <th>Empresa</th>
+                        <th>NP</th>
+                        <th>Cliente</th>
+                        <th>Ítem</th>
+                        <th>Código</th>
+                        <th>Descripción</th>
+                        <th>Cant. Base</th>
+                        <th>Cant. Liberación</th>
+                        <th>Operador</th>
+                        <th>Inspector</th>
+                        <th>Fecha Liberación</th>
+                        <th>Bodega Destino</th>
+                        <th>Certificado</th>
+                    </tr>
+                </thead>
+
+                <tbody id="clTbody">
+                    <tr>
+                        <td colspan="14">Cargando...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>

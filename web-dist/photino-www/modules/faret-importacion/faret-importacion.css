@@ -1,0 +1,28 @@
+.faret-importacion-module .fi-card {
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.fi-file-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-top: 10px;
+    flex-wrap: wrap;
+}
+
+.fi-file-name {
+    flex: 1;
+    min-width: 200px;
+    color: #64748B;
+    font-size: 0.9rem;
+}
+
+.fi-success {
+    background: #ECFDF5;
+    color: #065F46;
+    border-left: 4px solid #10B981;
+    padding: 12px;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+}
