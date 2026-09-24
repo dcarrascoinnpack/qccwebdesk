@@ -37,6 +37,20 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-23T19:43:50Z"
+    },
+    "dashboard.obtenerFiltros": {
+      "huella": "78001372389dd696e242b9a280e0ca5b4d41e81fa1e31fd5cff4968369541a11",
+      "handler": "DashboardHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-23T20:07:45Z"
+    },
+    "dashboard.obtenerResumen": {
+      "huella": "f4830f92b9c939bc0389cf3fb4124de8e472138925dd609c5f20567c7cf19e23",
+      "handler": "DashboardHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-23T20:07:45Z"
     }
   }
 }

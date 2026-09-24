@@ -139,6 +139,22 @@ test("las demás acciones siguen yendo al gateway con CSRF", async () => {
     assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
 });
 
+test("un 403 del bridge muestra el aviso 'no disponible' sin bloquear", async () => {
+    const shim = cargarShim();
+    const elementos = [];
+    shim.ctx.document.getElementById = () => null;
+    shim.ctx.document.createElement = (tag) => { const el = { tag, style: {}, setAttribute() {}, remove() {}, click() {} }; elementos.push(el); return el; };
+    shim.ctx.fetch = () => Promise.resolve({ status: 403, ok: false, json: () => Promise.resolve({ ok: false, success: false, data: null, error: "Acción no disponible en la versión web." }) });
+
+    const res = await shim.ctx.PhotinoBridge.send({ action: "dashboard.validarTodo" });
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "Acción no disponible en la versión web.");
+    const aviso = elementos.find((e) => e.id === "qccWebAvisoNoDisponible");
+    assert.ok(aviso, "debe crear el aviso");
+    assert.equal(aviso.textContent, "Acción no disponible en la versión web.");
+    assert.equal(aviso.style.opacity, "1");
+});
+
 test("localStorage sigue sin aceptar contraseñas, rol ni autoingreso", () => {
     const shim = cargarShim();
     for (const clave of ["lcc_password", "lcc_faret_password", "lcc_remember_login", "lcc_rolUsuario", "lcc_nombreUsuario"]) {

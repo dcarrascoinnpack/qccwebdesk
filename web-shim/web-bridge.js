@@ -262,6 +262,28 @@
         return Promise.resolve(respuestaOk({ fileName: nombre }));
     }
 
+    var avisoTimer = null;
+
+    /** Aviso no bloqueante (sin alert) cuando una acción aún no existe en la versión web. */
+    function avisoNoDisponible(mensaje) {
+        try {
+            var aviso = document.getElementById("qccWebAvisoNoDisponible");
+            if (!aviso) {
+                aviso = document.createElement("div");
+                aviso.id = "qccWebAvisoNoDisponible";
+                aviso.setAttribute("role", "status");
+                aviso.style.cssText = "position:fixed;bottom:20px;right:20px;background:#7c2d12;color:#fff;"
+                    + "padding:12px 18px;border-radius:8px;font-size:14px;box-shadow:0 4px 12px rgba(0,0,0,.25);"
+                    + "z-index:999999;opacity:0;transition:opacity .25s ease;";
+                document.body.appendChild(aviso);
+            }
+            aviso.textContent = mensaje || "Acción no disponible en la versión web.";
+            aviso.style.opacity = "1";
+            clearTimeout(avisoTimer);
+            avisoTimer = setTimeout(function () { aviso.style.opacity = "0"; }, 3500);
+        } catch (e) { /* sin DOM */ }
+    }
+
     /** La sesión del servidor terminó (expirada/cerrada): volver al inicio sin datos de sesión. */
     function sesionPerdida() {
         limpiarSesionUi();
@@ -307,6 +329,11 @@
                 return peticion("POST", BRIDGE_URL, payload).then(function (r) {
                     if (r.status === 401) {
                         sesionPerdida();
+                    }
+                    if (r.status === 403) {
+                        // Algunos controllers de Photino no muestran el error (p. ej. botones de
+                        // validar/rechazar que solo recargan): el aviso lo pone el shim.
+                        avisoNoDisponible(r.body && r.body.error);
                     }
                     return r.body;
                 });

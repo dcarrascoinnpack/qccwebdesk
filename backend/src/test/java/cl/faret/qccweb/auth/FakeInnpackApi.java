@@ -44,6 +44,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/auth/login", this::login);
         server.createContext("/api/home/dashboard", this::dashboard);
         server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
+        server.createContext("/api/dashboard/filtros", ex -> dashboardLectura(ex, true));
+        server.createContext("/api/dashboard/resumen", ex -> dashboardLectura(ex, false));
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -77,6 +79,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         revocados.clear();
         authorizationRecibidos.clear();
         queriesMaquinas.clear();
+        peticionesDashboard.clear();
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -135,6 +138,71 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataMaquinas(sub) + ",\"errors\":null}");
+    }
+
+    private final java.util.List<String> peticionesDashboard = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "filtros" o "resumen?<query cruda>" recibidos en api/dashboard/* (para verificar el mapeo). */
+    public java.util.List<String> peticionesDashboard() {
+        return java.util.List.copyOf(peticionesDashboard);
+    }
+
+    public static String dataDashboardFiltros() {
+        return "{\"usuarios\":[{\"id\":10,\"nombre\":\"Operador Uno\"},{\"id\":20,\"nombre\":\"María José Peña\"}],"
+                + "\"procesos\":[{\"id\":4,\"nombre\":\"Pegado\"},{\"id\":5,\"nombre\":\"Termoformado\"}]}";
+    }
+
+    /**
+     * Forma real de DashboardResumenDto (camelCase). Con inspector=0 devuelve listas vacías y KPIs en
+     * cero; con proceso=999 un dataset grande (400 registros, 40 inspectores).
+     */
+    public static String dataDashboardResumen(int sub, String query) {
+        boolean vacio = query != null && query.contains("inspector=0");
+        int registros = vacio ? 0 : (query != null && query.contains("proceso=999") ? 400 : 2);
+        int inspectores = vacio ? 0 : (registros == 400 ? 40 : 2);
+        StringBuilder desempeno = new StringBuilder();
+        for (int i = 0; i < inspectores; i++) {
+            desempeno.append(i > 0 ? "," : "").append("{\"inspector\":\"Inspector ").append(i)
+                    .append("\",\"cumplimiento\":").append(90 + i % 10).append(",\"controlesProgramados\":50,\"controlesRealizados\":")
+                    .append(45 + i % 5).append(",\"noConformidades\":").append(i % 3).append(",\"estado\":\"OK\"}");
+        }
+        StringBuilder ultimos = new StringBuilder();
+        for (int i = 0; i < registros; i++) {
+            ultimos.append(i > 0 ? "," : "").append("{\"id\":").append(500 + i)
+                    .append(",\"fechaRegistro\":\"23-09-2026\",\"horaRegistro\":\"09:").append(String.format("%02d", i % 60))
+                    .append("\",\"usuario\":\"María José Peña\",\"proceso\":\"Pegado\",\"maquina\":\"Pegadora 3\",\"formulario\":\"Control visual\","
+                            + "\"np\":\"41").append(String.format("%02d", i % 100)).append("\",\"codigoProducto\":\"CP-").append(i)
+                    .append("\",\"producto\":\"Estuche cartón ñandú «E2E»\",\"turno\":\"A\",\"estado\":\"Conforme\",\"observacion\":\"Sin novedad\","
+                            + "\"tipoMerma\":\"Pegado\",\"cantidadMerma\":\"1.50\",\"tipoDefecto\":\"\",\"bobinaLote\":\"L-1\",\"bobinaCodigo\":\"B-1\","
+                            + "\"bobinaDescripcion\":\"Bobina 120g\",\"bobinaObservacion\":\"\",\"estadoValidacion\":\"Pendiente\","
+                            + "\"fechaValidacion\":\"\",\"usuarioValidacion\":\"\",\"imagenUrl\":\"\"}");
+        }
+        return "{\"controlesHoy\":" + (vacio ? 0 : 12) + ",\"controlesPeriodo\":" + registros + ",\"cumplimientoGeneral\":" + (vacio ? 0 : 93.5)
+                + ",\"noConformidadesDetectadas\":" + (vacio ? 0 : 3) + ",\"mermaHoy\":" + (vacio ? 0 : 4.25) + ",\"registrosConObservacionHoy\":1,"
+                + "\"cumplimientoPorInspector\":[" + (vacio ? "" : "{\"inspector\":\"María José Peña\",\"total\":10,\"porcentaje\":95.5}") + "],"
+                + "\"noConformidadesPorInspector\":[" + (vacio ? "" : "{\"inspector\":\"Operador Uno\",\"total\":2,\"porcentaje\":20}") + "],"
+                + "\"controlesPorProceso\":[" + (vacio ? "" : "{\"proceso\":\"Pegado\",\"inspector\":\"Operador Uno\",\"total\":7}") + "],"
+                + "\"tendenciaCumplimiento\":[" + (vacio ? "" : "{\"fecha\":\"2026-09-22\",\"cumplimiento\":91.2},{\"fecha\":\"2026-09-23\",\"cumplimiento\":93.5}") + "],"
+                + "\"desempenoIndividual\":[" + desempeno + "],\"ultimosRegistros\":[" + ultimos + "],\"usuarioDelToken\":" + sub + "}";
+    }
+
+    private void dashboardLectura(HttpExchange ex, boolean filtros) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesDashboard.add(filtros ? "filtros" + (query == null ? "" : "?" + query) : "resumen?" + query);
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Rango de fechas inválido"));
+            return;
+        }
+        String data = filtros ? dataDashboardFiltros() : dataDashboardResumen(sub, query);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 
     private Integer subDeBearer(String authorization) {

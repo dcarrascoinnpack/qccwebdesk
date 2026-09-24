@@ -1,6 +1,7 @@
 package cl.faret.qccweb.bridge;
 
 import cl.faret.qccweb.auth.AuthProperties;
+import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
 import cl.faret.qccweb.upstream.InnpackApiClient;
@@ -38,7 +39,13 @@ public class BridgeConfig {
     }
 
     @Bean
-    public ActionPolicy actionPolicy(InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas) {
+    public DashboardBridgeHandler dashboardBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new DashboardBridgeHandler(api, mapper);
+    }
+
+    @Bean
+    public ActionPolicy actionPolicy(
+            InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard) {
         return new ActionPolicy(List.of(
                 // Fase 1c — Inicio. Solo lectura; no reenvía nada del payload.
                 new ActionPolicy.Regla(
@@ -47,6 +54,13 @@ public class BridgeConfig {
                 // Photino y la API no restringen por rol (cualquier usuario INNPACK autenticado).
                 new ActionPolicy.Regla(
                         "maquinasSeguimiento.obtenerResumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
-                        maquinas::obtenerResumen)));
+                        maquinas::obtenerResumen),
+                // Fase 2c — Inspecciones Calidad, SOLO LECTURA (filtros + resumen). Las escrituras
+                // dashboard.validarRegistro/rechazarRegistro/eliminarRegistro/validarTodo/rechazarTodo
+                // quedan deliberadamente fuera (deny-by-default).
+                new ActionPolicy.Regla(
+                        "dashboard.obtenerFiltros", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), dashboard::obtenerFiltros),
+                new ActionPolicy.Regla(
+                        "dashboard.obtenerResumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), dashboard::obtenerResumen)));
     }
 }

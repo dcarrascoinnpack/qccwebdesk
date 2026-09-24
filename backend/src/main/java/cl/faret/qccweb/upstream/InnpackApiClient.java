@@ -2,6 +2,7 @@ package cl.faret.qccweb.upstream;
 
 import cl.faret.qccweb.auth.AuthProperties;
 import cl.faret.qccweb.auth.SessionUser;
+import java.net.URI;
 import java.net.http.HttpClient;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
@@ -24,6 +25,7 @@ public class InnpackApiClient {
     public record Respuesta(int status, String body) {}
 
     private final RestClient restClient;
+    private final String baseUrl;
 
     public InnpackApiClient(AuthProperties properties) {
         HttpClient httpClient = HttpClient.newBuilder()
@@ -32,22 +34,22 @@ public class InnpackApiClient {
                 .build();
         JdkClientHttpRequestFactory factory = new JdkClientHttpRequestFactory(httpClient);
         factory.setReadTimeout(properties.readTimeout());
-        this.restClient = RestClient.builder()
-                .baseUrl(properties.innpackApiBaseUrl().replaceAll("/+$", ""))
-                .requestFactory(factory)
-                .build();
+        this.baseUrl = properties.innpackApiBaseUrl().replaceAll("/+$", "");
+        this.restClient = RestClient.builder().requestFactory(factory).build();
     }
 
     /**
      * GET autenticado con el JWT del usuario de la sesión.
      *
+     * @param path ruta + query YA escapadas (como las arma Photino con Uri.EscapeDataString). Se
+     *             envía como URI literal: sin expansión de plantillas ni re-codificación de "%".
      * @throws UpstreamNoAutorizadoException si la API responde 401 (token vencido/revocado)
      */
     public Respuesta get(SessionUser usuario, String path) {
         ResponseEntity<String> r;
         try {
             r = restClient.get()
-                    .uri(path)
+                    .uri(URI.create(baseUrl + path))
                     .accept(MediaType.APPLICATION_JSON)
                     .headers(h -> h.setBearerAuth(usuario.upstreamToken()))
                     .retrieve()
