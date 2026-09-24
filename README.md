@@ -4,7 +4,7 @@ Migración web **en paralelo** del Quality Control Center de TI Faret (hoy Photi
 `C:\Users\dcarrasco\Desktop\Proyectos\qualitycontrol_desktop_faret`). Photino sigue siendo el
 sistema principal y productivo — esta versión web no lo reemplaza ni lo modifica.
 
-> **Estado (23-09-2026):** en desarrollo activo, sin deploy todavía. Arquitectura base + 3 módulos
+> **Estado (24-09-2026):** en desarrollo activo, sin deploy todavía. Arquitectura base + 4 módulos
 > de solo lectura funcionando de punta a punta contra una API INNPACK simulada. Ver
 > [`contex.md`](contex.md) (no versionado) para el detalle completo sesión a sesión.
 
@@ -141,17 +141,19 @@ dentro de los tests) — nunca credenciales ni endpoints reales.
 | 1d | Contract check automático (`tools/contract/`) + límite de tamaño | ✅ commit `55414df` |
 | 2a | Módulo **Máquinas y Procesos** (`maquinasSeguimiento.obtenerResumen`) | ✅ commit `01b2dd3` |
 | 2b | `excel.guardar` resuelto en el navegador (sin tocar el servidor) | ✅ commit `accc142` |
-| 2c | Módulo **Inspecciones Calidad**, solo lectura (`dashboard.obtenerFiltros`/`obtenerResumen`) | 🟡 implementado y probado, **pendiente de aprobación/commit** |
+| 2c | Módulo **Inspecciones Calidad**, solo lectura (`dashboard.obtenerFiltros`/`obtenerResumen`) | ✅ commit `d84cc0a` |
+| 2d | Módulo **Inspecciones Producción**, solo lectura (`registrosProduccion.obtenerFiltros`/`obtenerResumen`) | 🟡 implementado y probado, **pendiente de aprobación/commit** |
 
 **Compatibilidad actual con Photino** (`GET /version` → `compatibilidad.texto`): con lo ya
-commiteado, **Photino 1.8.12 · Web compatible 5/236**; con el trabajo de la Fase 2c aplicado (sin
-commitear todavía), **7/236**.
+commiteado, **Photino 1.8.12 · Web compatible 7/236**; con el trabajo de la Fase 2d aplicado (sin
+commitear todavía), **9/236**.
 
 ## Próximo paso sugerido
 
-Fase 2d: **Inspecciones Producción**, solo lectura (mismo patrón que 2c, sobre
-`api/registros-produccion`). Después, una fase dedicada a las primeras escrituras (validar/
-rechazar/eliminar), que requiere definir la matriz de roles permitidos.
+Revisar si conviene sumar `registros-control` (filtros + exportación "traer todo sin límite",
+patrón ya conocido) en solo lectura. Después, una fase dedicada a las primeras escrituras
+(validar/rechazar/eliminar en Dashboard, Producción y Máquinas), que requiere definir la matriz de
+roles permitidos — hoy la API INNPACK no restringe por rol en esos módulos.
 
 ## Reglas de trabajo
 

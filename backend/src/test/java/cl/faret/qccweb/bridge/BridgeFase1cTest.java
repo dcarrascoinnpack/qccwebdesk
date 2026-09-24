@@ -176,10 +176,11 @@ class BridgeFase1cTest {
     }
 
     @Test
-    void soloAccionesHabilitadasHastaFase2c() {
+    void soloAccionesHabilitadasHastaFase2d() {
         assertThat(policy.accionesRegistradas()).containsExactlyInAnyOrder(
                 "inicio.getDashboard", "maquinasSeguimiento.obtenerResumen",
-                "dashboard.obtenerFiltros", "dashboard.obtenerResumen");
+                "dashboard.obtenerFiltros", "dashboard.obtenerResumen",
+                "registrosProduccion.obtenerFiltros", "registrosProduccion.obtenerResumen");
     }
 
     // ------------------------------------------------------ manipulación desde DevTools

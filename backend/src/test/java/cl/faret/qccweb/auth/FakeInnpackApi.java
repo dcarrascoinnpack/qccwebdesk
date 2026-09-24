@@ -46,6 +46,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
         server.createContext("/api/dashboard/filtros", ex -> dashboardLectura(ex, true));
         server.createContext("/api/dashboard/resumen", ex -> dashboardLectura(ex, false));
+        server.createContext("/api/registros-produccion/filtros", ex -> registrosProduccionLectura(ex, true));
+        server.createContext("/api/registros-produccion/resumen", ex -> registrosProduccionLectura(ex, false));
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -80,6 +82,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         authorizationRecibidos.clear();
         queriesMaquinas.clear();
         peticionesDashboard.clear();
+        peticionesProduccion.clear();
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -202,6 +205,41 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         String data = filtros ? dataDashboardFiltros() : dataDashboardResumen(sub, query);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
+    }
+
+    private final java.util.List<String> peticionesProduccion = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "filtros" o "resumen?<query cruda>" recibidos en api/registros-produccion/* (para verificar el mapeo). */
+    public java.util.List<String> peticionesProduccion() {
+        return java.util.List.copyOf(peticionesProduccion);
+    }
+
+    /**
+     * Misma forma que Dashboard (en la API real ambos módulos comparten ResumenOperacionalService,
+     * solo cambia el área) con un marcador "area" para que los tests distingan la ruta atendida.
+     */
+    public static String dataProduccionResumen(int sub, String query) {
+        String base = dataDashboardResumen(sub, query);
+        return base.substring(0, base.length() - 1) + ",\"area\":\"PRODUCCION\"}";
+    }
+
+    private void registrosProduccionLectura(HttpExchange ex, boolean filtros) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesProduccion.add(filtros ? "filtros" + (query == null ? "" : "?" + query) : "resumen?" + query);
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Rango de fechas inválido"));
+            return;
+        }
+        String data = filtros ? dataDashboardFiltros() : dataProduccionResumen(sub, query);
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 
