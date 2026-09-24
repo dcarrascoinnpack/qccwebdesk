@@ -107,6 +107,20 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-24T14:34:33Z"
+    },
+    "certificadosLiberacion.buscar": {
+      "huella": "8a0153228cac2406761da5591fd9f777b444c6acdafa42e63fb155ffccfd02f5",
+      "handler": "CertificadosLiberacionHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T14:59:47Z"
+    },
+    "certificadosLiberacion.calidadPdf.descargar": {
+      "huella": "ef0a190330005624ae2f16f5e4df2392e8e7f1d5eeabca4c2de778b4a45fcb2a",
+      "handler": "CertificadosLiberacionHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-24T14:59:47Z"
     }
   }
 }

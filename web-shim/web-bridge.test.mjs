@@ -165,3 +165,91 @@ test("localStorage sigue sin aceptar contraseñas, rol ni autoingreso", () => {
     assert.equal(shim.localStorage.getItem("lcc_codigoUsuario"), "operador1");
     assert.deepEqual(plano(shim.registro.xhr), ["GET api/v1/auth/session"]);
 });
+
+// ------------------------------------------------------------------ Fase 2g: PDF vía gateway → navegador
+const PDF_MINIMO = Buffer.from("%PDF-1.4\n1 0 obj<</Type/Catalog>>endobj\ntrailer<</Root 1 0 R>>\n%%EOF\n", "latin1").toString("base64");
+const ACCION_PDF = "certificadosLiberacion.calidadPdf.descargar";
+
+/** Gateway simulado que responde ok con {fileName, base64} (ya validado en el servidor). */
+function shimConPdf(data, cuerpo) {
+    const shim = cargarShim();
+    shim.ctx.fetch = (url, opciones) => {
+        shim.registro.fetch.push({ url, opciones });
+        return Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve(cuerpo || { ok: true, success: true, data, error: null }) });
+    };
+    return shim;
+}
+
+test("calidadPdf.descargar pasa por el gateway (con CSRF) y descarga el PDF en el navegador", async () => {
+    const shim = shimConPdf({ fileName: "CertificadoCalidad_123456.pdf", base64: PDF_MINIMO });
+    const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_PDF, data: { folio: 123456 } });
+
+    assert.deepEqual(plano(res), { ok: true, success: true, data: { fileName: "CertificadoCalidad_123456.pdf" }, error: null });
+    assert.equal(shim.registro.fetch.length, 1, "una sola llamada, al gateway");
+    assert.equal(shim.registro.fetch[0].url, "api/v1/bridge");
+    assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
+    assert.equal(JSON.parse(shim.registro.fetch[0].opciones.body).data.folio, 123456);
+    assert.equal(shim.registro.descargas.length, 1);
+    assert.equal(shim.registro.descargas[0].nombre, "CertificadoCalidad_123456.pdf");
+    assert.match(shim.registro.descargas[0].href, /^blob:/);
+    assert.equal(shim.blobs[0].type, "application/pdf");
+    assert.equal(shim.blobs[0].size, Buffer.from(PDF_MINIMO, "base64").length);
+    // No es una acción "de navegador": el contract check la ve en la ActionPolicy del gateway.
+    assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesNavegador), ["excel.guardar"]);
+    assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesDescarga), [ACCION_PDF]);
+});
+
+test("un error del gateway en calidadPdf.descargar se devuelve tal cual, sin descarga", async () => {
+    const shim = shimConPdf(null, { ok: false, success: false, data: null, error: "No se encontraron datos para el certificado N° 404" });
+    const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_PDF, data: { folio: 404 } });
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "No se encontraron datos para el certificado N° 404");
+    assert.equal(shim.registro.descargas.length, 0);
+});
+
+test("PDF vacío, corrupto, no-PDF o excesivo se rechaza limpiamente sin descarga", async () => {
+    const casos = [
+        [{ fileName: "x.pdf", base64: "" }, "El certificado no trae contenido"],
+        [{ fileName: "x.pdf" }, "El certificado no trae contenido"],
+        [null, "El certificado no trae contenido"],
+        [{ fileName: "x.pdf", base64: "%%%no-base64%%%" }, "El certificado no es un PDF válido."],
+        [{ fileName: "x.pdf", base64: Buffer.from("<html>no soy un pdf</html>").toString("base64") }, "El certificado no es un PDF válido."],
+        [{ fileName: "x.pdf", base64: XLSX_MINIMO }, "El certificado no es un PDF válido."],
+        [{ fileName: "x.pdf", base64: "A".repeat(Math.ceil(15 * 1024 * 1024 / 3) * 4 + 4) }, "El certificado excede el tamaño máximo permitido."],
+    ];
+    for (const [data, error] of casos) {
+        const shim = shimConPdf(data);
+        const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_PDF, data: { folio: 1 } });
+        assert.deepEqual(plano(res), { ok: false, success: false, data: null, error }, JSON.stringify(data)?.slice(0, 60));
+        assert.equal(shim.registro.descargas.length, 0);
+    }
+});
+
+test("nombres de PDF maliciosos se sanean y siempre terminan en .pdf", async () => {
+    const casos = [
+        ["..\\..\\Windows\\evil<>:\"|?*.exe", "evil_______.exe.pdf"],
+        ["../../etc/passwd", "passwd.pdf"],
+        ["CON.pdf", "_CON.pdf"],
+        ["  .pdf ", /^certificado_\d{8}_\d{6}\.pdf$/],
+        ["", /^certificado_\d{8}_\d{6}\.pdf$/],
+        ["informe\u202e.fdp.pdf", "informe.fdp.pdf"],
+        ["x".repeat(300) + ".pdf", (n) => n.length === 150 && n.endsWith(".pdf")],
+    ];
+    for (const [nombre, esperado] of casos) {
+        const shim = shimConPdf({ fileName: nombre, base64: PDF_MINIMO });
+        const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_PDF, data: { folio: 1 } });
+        assert.equal(res.ok, true);
+        const obtenido = shim.registro.descargas[0].nombre;
+        if (typeof esperado === "function") assert.ok(esperado(obtenido), obtenido);
+        else if (esperado instanceof RegExp) assert.match(obtenido, esperado);
+        else assert.equal(obtenido, esperado);
+    }
+});
+
+test("el shim nunca guarda token ni rutas locales al descargar el PDF", async () => {
+    const shim = shimConPdf({ fileName: "c.pdf", base64: PDF_MINIMO, path: "C:/Users/x/Downloads/c.pdf", token: "jwt-que-no-debe-salir" });
+    const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_PDF, data: { folio: 1 } });
+    assert.deepEqual(Object.keys(plano(res.data)), ["fileName"]);
+    assert.equal(shim.localStorage.datos.size, 0);
+    assert.equal([...shim.ctx.sessionStorage.datos.values()].some((v) => /jwt-que-no-debe-salir|Downloads/.test(v)), false);
+});

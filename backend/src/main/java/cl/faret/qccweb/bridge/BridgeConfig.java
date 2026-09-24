@@ -1,6 +1,7 @@
 package cl.faret.qccweb.bridge;
 
 import cl.faret.qccweb.auth.AuthProperties;
+import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
@@ -62,10 +63,15 @@ public class BridgeConfig {
     }
 
     @Bean
+    public CertificadosLiberacionBridgeHandler certificadosLiberacionBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new CertificadosLiberacionBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ActionPolicy actionPolicy(
             InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard,
             RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl,
-            ProductoTerminadoBridgeHandler productoTerminado) {
+            ProductoTerminadoBridgeHandler productoTerminado, CertificadosLiberacionBridgeHandler certificados) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -112,6 +118,15 @@ public class BridgeConfig {
                         "productoTerminado.detalle", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, productoTerminado::detalle),
                 new ActionPolicy.Regla(
                         "productoTerminado.exportarDetalle", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion,
-                        productoTerminado::exportarDetalle)));
+                        productoTerminado::exportarDetalle),
+                // Fase 2g — Certificados de Liberación, SOLO LECTURA. "empresa" es un filtro de negocio
+                // (select de la vista, valores del sistema legado), validado en el handler, no identidad.
+                // El PDF lo valida el gateway y lo descarga el navegador (web-bridge.js), sin archivos
+                // temporales. pdf.descargar (terminaciones) no lo usa ningún controller: fuera.
+                new ActionPolicy.Regla(
+                        "certificadosLiberacion.buscar", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), certificados::buscar),
+                new ActionPolicy.Regla(
+                        "certificadosLiberacion.calidadPdf.descargar", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        certificados::calidadPdfDescargar)));
     }
 }

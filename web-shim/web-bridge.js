@@ -174,11 +174,19 @@
     // Acciones de Photino que en web se resuelven 100% en el navegador (nunca llegan al gateway).
     // tools/contract/photino_contract.py lee las claves de este objeto para el contract check.
     var MAX_EXCEL_BYTES = 50 * 1024 * 1024;
+    var MAX_PDF_BYTES = 15 * 1024 * 1024;
 
     var ACCIONES_NAVEGADOR = {
         // Photino: MessageRouter.GuardarExcel escribe el .xlsx en Descargas y lo abre (Process.Start).
         // Web: el mismo archivo (lo genera core/excel-exporter.js con SheetJS) se descarga con un Blob.
         "excel.guardar": guardarExcelEnNavegador
+    };
+
+    // Acciones que SÍ pasan por el gateway (la API exige el JWT, que vive solo en el servidor) y
+    // cuya respuesta {fileName, base64} se convierte en una descarga del navegador. Photino escribía
+    // el archivo en Descargas y lo abría con Process.Start; aquí no hay archivos temporales ni rutas.
+    var ACCIONES_DESCARGA = {
+        "certificadosLiberacion.calidadPdf.descargar": descargarPdfEnNavegador
     };
 
     function respuestaOk(data) {
@@ -196,25 +204,74 @@
      * caracteres inválidos en Windows ni de control, sin marcas Unicode que disfrazan la extensión
      * (RTLO), sin nombres reservados (CON, NUL...), largo acotado y siempre terminado en .xlsx.
      */
-    function nombreArchivoSeguro(nombre) {
+    function nombreArchivoSeguro(nombre, extension, porDefecto) {
+        var ext = extension || ".xlsx";
+        var extRe = new RegExp("\\" + ext + "$", "i");
         var n = String(nombre == null ? "" : nombre);
         n = n.split(/[\\/]/).pop();
         n = n.replace(/[\u200e\u200f\u202a-\u202e\u2066-\u2069\ufeff]/g, "");
         n = n.replace(/[\u0000-\u001f\u007f<>:"|?*]/g, "_");
         n = n.replace(/^[\s.]+|[\s.]+$/g, "");
-        if (!n || /^\.?xlsx$/i.test(n)) {
-            n = "qcc_export_" + fechaCompacta() + ".xlsx";
+        if (!n || new RegExp("^\\.?" + ext.slice(1) + "$", "i").test(n)) {
+            n = porDefecto || ("qcc_export_" + fechaCompacta() + ext);
         }
-        if (!/\.xlsx$/i.test(n)) {
-            n += ".xlsx";
+        if (!extRe.test(n)) {
+            n += ext;
         }
         if (n.length > 150) {
-            n = n.slice(0, 145) + ".xlsx";
+            n = n.slice(0, 150 - ext.length) + ext;
         }
         if (/^(con|prn|aux|nul|com[0-9]|lpt[0-9])(\.|$)/i.test(n)) {
             n = "_" + n;
         }
         return n;
+    }
+
+    function descargarBlob(bytes, tipoMime, nombre) {
+        var blob = new Blob([bytes], { type: tipoMime });
+        var url = URL.createObjectURL(blob);
+        var enlace = document.createElement("a");
+        enlace.href = url;
+        enlace.download = nombre;
+        enlace.rel = "noopener";
+        enlace.style.display = "none";
+        document.body.appendChild(enlace);
+        enlace.click();
+        enlace.remove();
+        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+    }
+
+    /**
+     * Respuesta ok del gateway para certificadosLiberacion.calidadPdf.descargar: {fileName, base64}
+     * ya validados en el servidor; aqu\u00ed se revalida (base64, tama\u00f1o, firma %PDF-, nombre) y se
+     * descarga como application/pdf. Mismos mensajes de error que Photino/el gateway.
+     */
+    function descargarPdfEnNavegador(respuesta) {
+        var data = respuesta && respuesta.data;
+        var base64 = data && typeof data.base64 === "string" ? data.base64.trim() : "";
+        if (!base64) {
+            return respuestaError("El certificado no trae contenido");
+        }
+        if (base64.length > Math.ceil(MAX_PDF_BYTES / 3) * 4) {
+            return respuestaError("El certificado excede el tama\u00f1o m\u00e1ximo permitido.");
+        }
+        var bytes;
+        try {
+            var binario = window.atob(base64);
+            bytes = new Uint8Array(binario.length);
+            for (var i = 0; i < binario.length; i++) {
+                bytes[i] = binario.charCodeAt(i);
+            }
+        } catch (e) {
+            return respuestaError("El certificado no es un PDF v\u00e1lido.");
+        }
+        // Firma "%PDF-": evita descargar otro contenido (HTML, ejecutables...) disfrazado de PDF.
+        if (bytes.length < 5 || bytes[0] !== 0x25 || bytes[1] !== 0x50 || bytes[2] !== 0x44 || bytes[3] !== 0x46 || bytes[4] !== 0x2d) {
+            return respuestaError("El certificado no es un PDF v\u00e1lido.");
+        }
+        var nombre = nombreArchivoSeguro(data.fileName, ".pdf", "certificado_" + fechaCompacta() + ".pdf");
+        descargarBlob(bytes, "application/pdf", nombre);
+        return respuestaOk({ fileName: nombre });
     }
 
     function guardarExcelEnNavegador(payload) {
@@ -246,19 +303,7 @@
         }
 
         var nombre = nombreArchivoSeguro(data.fileName);
-        var blob = new Blob([bytes], {
-            type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        });
-        var url = URL.createObjectURL(blob);
-        var enlace = document.createElement("a");
-        enlace.href = url;
-        enlace.download = nombre;
-        enlace.rel = "noopener";
-        enlace.style.display = "none";
-        document.body.appendChild(enlace);
-        enlace.click();
-        enlace.remove();
-        setTimeout(function () { URL.revokeObjectURL(url); }, 60000);
+        descargarBlob(bytes, "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", nombre);
         return Promise.resolve(respuestaOk({ fileName: nombre }));
     }
 
@@ -335,6 +380,13 @@
                         // validar/rechazar que solo recargan): el aviso lo pone el shim.
                         avisoNoDisponible(r.body && r.body.error);
                     }
+                    if (r.body && r.body.ok === true && Object.prototype.hasOwnProperty.call(ACCIONES_DESCARGA, payload.action)) {
+                        try {
+                            return ACCIONES_DESCARGA[payload.action](r.body);
+                        } catch (e) {
+                            return respuestaError("No se pudo completar la descarga en el navegador.");
+                        }
+                    }
                     return r.body;
                 });
         }
@@ -380,5 +432,10 @@
         window.PhotinoBridge = { _callbacks: {}, _id: 0, receive: function () {} };
     }
     window.PhotinoBridge.send = send;
-    window.QCC_WEB = { bridge: "web", bridgeUrl: BRIDGE_URL, accionesNavegador: Object.keys(ACCIONES_NAVEGADOR) };
+    window.QCC_WEB = {
+        bridge: "web",
+        bridgeUrl: BRIDGE_URL,
+        accionesNavegador: Object.keys(ACCIONES_NAVEGADOR),
+        accionesDescarga: Object.keys(ACCIONES_DESCARGA)
+    };
 })();

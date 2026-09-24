@@ -55,3 +55,6 @@ desktop.ini
 .claude/
 
 !.env.example
+
+# Salida de Playwright MCP (E2E locales)
+.playwright-mcp/

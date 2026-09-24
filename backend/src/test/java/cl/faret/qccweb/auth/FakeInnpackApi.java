@@ -50,6 +50,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/registros-produccion/resumen", ex -> registrosProduccionLectura(ex, false));
         server.createContext("/api/registros-control", this::registrosControl);
         server.createContext("/api/producto-terminado", this::productoTerminado);
+        server.createContext("/api/certificados-liberacion", this::certificadosLiberacion);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -87,6 +88,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesProduccion.clear();
         peticionesControl.clear();
         peticionesProductoTerminado.clear();
+        peticionesCertificados.clear();
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -418,6 +420,91 @@ public final class FakeInnpackApi implements AutoCloseable {
             data = dataProductoTerminadoDetalle(id, empresa, sub);
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
+    }
+
+    private final java.util.List<String> peticionesCertificados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "GET <ruta>[?<query cruda>]" recibidos en api/certificados-liberacion* (para verificar el mapeo). */
+    public java.util.List<String> peticionesCertificados() {
+        return java.util.List.copyOf(peticionesCertificados);
+    }
+
+    /** Búsqueda: lista de CertificadoLiberacionDto (np=VACIO → []). */
+    public static String dataCertificados(String query) {
+        if (query != null && query.contains("np=VACIO")) {
+            return "[]";
+        }
+        return "[{\"folio\":123456,\"empresa\":\"INNPACK SPA\",\"np\":\"4101\",\"cliente\":\"Cliente Ñandú «E2E»\",\"item\":\"IT-1\","
+                + "\"codigoArticulo\":\"CP-1\",\"descripcionArticulo\":\"Estuche cartón =SUMA(1;2)\",\"cantidadBase\":1500,\"cantidadLiberacion\":1480,"
+                + "\"operador\":\"Operador Uno\",\"inspector\":\"María José Peña\",\"fechaLiberacion\":\"2026-09-24T10:15:00\",\"bodegaDestino\":\"PT-01\"},"
+                + "{\"folio\":123457,\"empresa\":\"FARET SPA\",\"np\":\"4102\",\"cliente\":\"Otro Cliente\",\"item\":\"IT-2\",\"codigoArticulo\":\"CP-2\","
+                + "\"descripcionArticulo\":\"Caja\",\"cantidadBase\":100,\"cantidadLiberacion\":100,\"operador\":\"Operador Dos\",\"inspector\":\"Inspector X\","
+                + "\"fechaLiberacion\":\"2026-09-23T08:00:00\",\"bodegaDestino\":\"PT-02\"}]";
+    }
+
+    /** PDF mínimo válido (xref con offsets correctos) para que abra en cualquier visor. */
+    public static byte[] pdfMinimo(long folio) {
+        String header = "%PDF-1.4\n";
+        String o1 = "1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n";
+        String o2 = "2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n";
+        String o3 = "3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]/Contents 4 0 R>>endobj\n";
+        String texto = "BT /F1 12 Tf 20 100 Td (Certificado " + folio + ") Tj ET";
+        String o4 = "4 0 obj<</Length " + texto.length() + ">>stream\n" + texto + "\nendstream\nendobj\n";
+        int off1 = header.length();
+        int off2 = off1 + o1.length();
+        int off3 = off2 + o2.length();
+        int off4 = off3 + o3.length();
+        int xref = off4 + o4.length();
+        String tabla = "xref\n0 5\n0000000000 65535 f \n" + String.format("%010d 00000 n \n%010d 00000 n \n%010d 00000 n \n%010d 00000 n \n", off1, off2, off3, off4)
+                + "trailer<</Size 5/Root 1 0 R>>\nstartxref\n" + xref + "\n%%EOF\n";
+        return (header + o1 + o2 + o3 + o4 + tabla).getBytes(StandardCharsets.ISO_8859_1);
+    }
+
+    private void certificadosLiberacion(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesCertificados.add(ex.getRequestMethod() + " " + path + (query == null ? "" : "?" + query));
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 502, fallo("No fue posible consultar los certificados de liberación"));
+            return;
+        }
+        if (path.equals("/api/certificados-liberacion")) {
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataCertificados(query) + ",\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^/api/certificados-liberacion/(\\d+)/(calidad-pdf|pdf)$").matcher(path);
+        if (!m.matches()) {
+            responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+            return;
+        }
+        long folio = Long.parseLong(m.group(1));
+        String base64;
+        if (folio == 404) {
+            responder(ex, 404, fallo("No se encontraron datos para el certificado N° 404"));
+            return;
+        } else if (folio == 500) {
+            base64 = Base64.getEncoder().encodeToString("<html>no soy un pdf</html>".getBytes(StandardCharsets.UTF_8));
+        } else if (folio == 600) {
+            base64 = "";
+        } else if (folio == 700) {
+            // Excede el máximo del gateway (15 MB): solo el largo importa, no se decodifica.
+            base64 = "A".repeat(((15 * 1024 * 1024 + 2) / 3) * 4 + 4);
+        } else if (folio == 800) {
+            base64 = "%%%no-base64%%%";
+        } else {
+            base64 = Base64.getEncoder().encodeToString(pdfMinimo(folio));
+        }
+        String fileName = folio == 900 ? "..\\..\\evil<>:\"|?*.exe" : "CertificadoCalidad_" + folio + ".pdf";
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"folio\":" + folio + ",\"fileName\":\"" + fileName.replace("\\", "\\\\").replace("\"", "\\\"")
+                + "\",\"base64\":\"" + base64 + "\",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
     }
 
     private Integer subDeBearer(String authorization) {
