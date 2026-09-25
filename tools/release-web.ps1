@@ -92,13 +92,17 @@ Paso "tests Java del gateway (cl.faret.qccweb)" {
 }
 
 Paso "tests Python (contract check)" {
-    $salida = & $Python -m unittest discover -s (Join-Path $webRepo "tools\contract") 2>&1
+    # PowerShell 5.1: con "Stop", el stderr de un ejecutable nativo (2>&1) se vuelve excepcion aunque salga 0.
+    $ErrorActionPreference = "Continue"
+    $salida = & $Python -m unittest discover -s (Join-Path $webRepo "tools\contract") 2>&1 | ForEach-Object { "$_" }
     if ($LASTEXITCODE -ne 0) { throw "unittest fallo:`n$($salida -join "`n")" }
     ($salida | Select-String "^Ran \d+ tests").Line
 }
 
 Paso "tests Node (shim)" {
-    $salida = & $Node --test (Join-Path $webRepo "web-shim\web-bridge.test.mjs") 2>&1
+    # PowerShell 5.1: con "Stop", el stderr de un ejecutable nativo (2>&1) se vuelve excepcion aunque salga 0.
+    $ErrorActionPreference = "Continue"
+    $salida = & $Node --test (Join-Path $webRepo "web-shim\web-bridge.test.mjs") 2>&1 | ForEach-Object { "$_" }
     if ($LASTEXITCODE -ne 0) { throw "node --test fallo:`n$($salida -join "`n")" }
     (($salida | Select-String "(pass|fail) \d+\s*$").Line | ForEach-Object { $_.Trim() }) -join " "
 }
