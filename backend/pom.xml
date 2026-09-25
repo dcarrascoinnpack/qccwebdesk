@@ -10,7 +10,9 @@
 	</parent>
 	<groupId>cl.faret</groupId>
 	<artifactId>qcc-api</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<!-- Versión del GATEWAY QCC Web: 0.x mientras dura la migración; MINOR por fase funcional,
+	     PATCH por corrección. Siempre se publica asociada a Photino: "QCC Web <version> · Photino X.Y.Z (commit)". -->
+	<version>0.4.0</version>
 	<name/>
 	<description/>
 	<url/>

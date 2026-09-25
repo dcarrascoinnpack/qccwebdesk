@@ -98,6 +98,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesCertificados.clear();
         peticionesControlDocumental.clear();
         peticionesNoConformidades.clear();
+        seguimientosRecibidos.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
@@ -634,6 +635,15 @@ public final class FakeInnpackApi implements AutoCloseable {
 
     private final java.util.List<String> peticionesNoConformidades = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
+    /** Cuerpo EXACTO recibido en POST api/no-conformidades/{id}/seguimiento y el "sub" del JWT usado. */
+    public record SeguimientoRecibido(int ncId, int sub, String cuerpo, String contentType) {}
+
+    private final java.util.List<SeguimientoRecibido> seguimientosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    public java.util.List<SeguimientoRecibido> seguimientosRecibidos() {
+        return java.util.List.copyOf(seguimientosRecibidos);
+    }
+
     /** "<método> <ruta>[?<query cruda>]" recibidos en api/no-conformidades* y api/nc-catalogos*. */
     public java.util.List<String> peticionesNoConformidades() {
         return java.util.List.copyOf(peticionesNoConformidades);
@@ -690,6 +700,21 @@ public final class FakeInnpackApi implements AutoCloseable {
         if (sub == null || revocados.contains(sub)) {
             ex.sendResponseHeaders(401, -1);
             ex.close();
+            return;
+        }
+        java.util.regex.Matcher seg = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/seguimiento$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && seg.matches()) {
+            String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            seguimientosRecibidos.add(new SeguimientoRecibido(Integer.parseInt(seg.group(1)), sub, cuerpo,
+                    ex.getRequestHeaders().getFirst("Content-Type")));
+            JsonNode b = mapper.readTree(cuerpo);
+            if ("ERROR_API".equals(b.path("comentario").asString(""))) {
+                responder(ex, 400, fallo("No se pudo registrar el seguimiento"));
+            } else if (seg.group(1).equals("777")) {
+                responder(ex, 500, "{\"title\":\"error interno\"}");
+            } else {
+                responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + seg.group(1) + "},\"errors\":null}");
+            }
             return;
         }
         if (!ex.getRequestMethod().equals("GET")) {
@@ -758,7 +783,10 @@ public final class FakeInnpackApi implements AutoCloseable {
             switch (rama) {
                 case "" -> responder(ex, 200, ok + "{\"id\":" + id + ",\"codigo\":\"NC-0001\",\"descripcion\":\"=HYPERLINK(1)\","
                         + "\"estadoGestion\":\"ASIGNADA\",\"usuarioDelToken\":" + sub + "}" + fin);
-                case "/seguimiento" -> responder(ex, 200, ok + "[{\"id\":1,\"comentario\":\"Revisión ñ\",\"autor\":\"María\",\"usuarioDelToken\":" + sub + "}]" + fin);
+                case "/seguimiento" -> responder(ex, 200, ok + (id == 901
+                        // Comentario malicioso guardado desde Photino (que no valida): la web debe mostrarlo sin ejecutarlo.
+                        ? "[{\"id\":9,\"comentario\":\"<img src=x onerror=alert(1)> & 'x' \\\"y\\\" ñ\",\"autor\":\"<b>Mallory</b>\",\"creadoEn\":\"2026-09-20T10:00:00\"}]"
+                        : "[{\"id\":1,\"comentario\":\"Revisión ñ\",\"autor\":\"María\",\"usuarioDelToken\":" + sub + "}]") + fin);
                 case "/analisis" -> responder(ex, 200, ok + "{\"id\":7,\"metodologia\":\"5 Por qué\",\"causaRaiz\":\"Tinta\",\"usuarioDelToken\":" + sub + "}" + fin);
                 case "/acciones" -> responder(ex, 200, ok + "[{\"id\":3,\"descripcion\":\"Cambiar rodillo\",\"estado\":\"PENDIENTE\",\"usuarioDelToken\":" + sub + "}]" + fin);
                 case "/adjuntos" -> {

@@ -25,6 +25,9 @@ import tools.jackson.databind.node.ObjectNode;
  * el contrato normalizado { ok, success, data, error }.
  *
  * Requiere sesión (401 si no) y token CSRF (403 si no). Toda acción pasa por ActionPolicy.
+ *
+ * ESCRITURAS (reglas con recurso): antes del handler, límite por usuario (429 sin tocar la API);
+ * después, auditoría evento=ESCRITURA con el usuario real de la sesión y el recurso afectado.
  */
 @RestController
 public class BridgeController {
@@ -32,15 +35,18 @@ public class BridgeController {
     static final String MENSAJE_NO_DISPONIBLE = "Acción no disponible en la versión web.";
     static final String MENSAJE_SESION_EXPIRADA = "Sesión expirada. Inicia sesión nuevamente.";
     static final String MENSAJE_ERROR_INTERNO = "Error interno al procesar la acción.";
+    static final String MENSAJE_LIMITE_ESCRITURAS = "Demasiadas operaciones seguidas. Espera un momento e inténtalo de nuevo.";
     private static final Pattern FORMATO_ACCION = Pattern.compile("[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z0-9]+){1,4}");
     private static final Logger LOGGER = LoggerFactory.getLogger(BridgeController.class);
 
     private final ActionPolicy policy;
     private final AuditLogger audit;
+    private final EscrituraRateLimiter limiteEscrituras;
 
-    public BridgeController(ActionPolicy policy, AuditLogger audit) {
+    public BridgeController(ActionPolicy policy, AuditLogger audit, EscrituraRateLimiter limiteEscrituras) {
         this.policy = policy;
         this.audit = audit;
+        this.limiteEscrituras = limiteEscrituras;
     }
 
     @PostMapping("/api/v1/bridge")
@@ -65,16 +71,23 @@ public class BridgeController {
             return respuesta(HttpStatus.FORBIDDEN, BridgeResult.error(MENSAJE_NO_DISPONIBLE));
         }
         ActionPolicy.Regla regla = ((ActionPolicy.Decision.Permitida) decision).regla();
+        if (regla.escritura() && !limiteEscrituras.permitir(usuario.userId())) {
+            audit.accionDenegada(usuario.codigoUsuario(), usuario.empresa(), accion, "LIMITE_ESCRITURAS");
+            return respuesta(HttpStatus.TOO_MANY_REQUESTS, BridgeResult.error(MENSAJE_LIMITE_ESCRITURAS));
+        }
 
         long inicio = System.nanoTime();
+        ObjectNode saneado = IdentityOverride.aplicar(payload.deepCopy(), regla.identidad(), usuario);
         try {
-            ObjectNode saneado = IdentityOverride.aplicar(payload.deepCopy(), regla.identidad(), usuario);
             BridgeResult resultado = regla.handler().ejecutar(saneado, usuario);
-            audit.accion(usuario.codigoUsuario(), usuario.empresa(), accion, resultado.ok(), duracionMs(inicio));
+            auditar(usuario, accion, regla, saneado, resultado.ok(), inicio);
             return respuesta(HttpStatus.OK, resultado);
         } catch (UpstreamNoAutorizadoException e) {
             // La API rechazó el JWT de ESTE usuario: se invalida solo su sesión.
             HttpSession sesion = request.getSession(false);
+            if (regla.escritura()) {
+                auditar(usuario, accion, regla, saneado, false, inicio);
+            }
             audit.sesionInvalidadaPorUpstream(usuario.codigoUsuario(), accion, sesion != null ? sesion.getId() : null);
             if (sesion != null) {
                 sesion.invalidate();
@@ -84,9 +97,24 @@ public class BridgeController {
         } catch (RuntimeException e) {
             // Sin payload ni mensaje de la excepción en el log (podrían contener datos del usuario).
             LOGGER.error("Error ejecutando acción {} para usuario {}: {}", accion, usuario.userId(), e.getClass().getName());
-            audit.accion(usuario.codigoUsuario(), usuario.empresa(), accion, false, duracionMs(inicio));
+            auditar(usuario, accion, regla, saneado, false, inicio);
             return respuesta(HttpStatus.INTERNAL_SERVER_ERROR, BridgeResult.error(MENSAJE_ERROR_INTERNO));
         }
+    }
+
+    /** Lectura → evento=ACCION; escritura → evento=ESCRITURA con el recurso afectado (nunca el payload). */
+    private void auditar(SessionUser usuario, String accion, ActionPolicy.Regla regla, ObjectNode saneado, boolean ok, long inicio) {
+        if (!regla.escritura()) {
+            audit.accion(usuario.codigoUsuario(), usuario.empresa(), accion, ok, duracionMs(inicio));
+            return;
+        }
+        String recurso;
+        try {
+            recurso = regla.recurso().apply(saneado);
+        } catch (RuntimeException e) {
+            recurso = "?";
+        }
+        audit.escritura(usuario.codigoUsuario(), usuario.empresa(), accion, recurso, ok, duracionMs(inicio));
     }
 
     private static SessionUser usuarioActual() {

@@ -7,6 +7,8 @@ import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.InnpackRespuestas;
 import cl.faret.qccweb.upstream.UriEscape;
 import java.util.Set;
+import java.util.regex.Pattern;
+import org.springframework.web.util.HtmlUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -39,6 +41,20 @@ public class NoConformidadesBridgeHandler {
     static final String MENSAJE_SIN_CONTENIDO = "El adjunto no trae contenido";
     static final String MENSAJE_TAMANO = "El adjunto excede el tamaño máximo permitido.";
     static final String MENSAJE_ADJUNTO_INVALIDO = "El adjunto no es válido.";
+    static final String MENSAJE_PARAMETRO_INVALIDO = "Parámetro inválido.";
+    static final String MENSAJE_FALTA_COMENTARIO = "Falta el comentario de seguimiento";
+    static final String MENSAJE_COMENTARIO_LARGO = "El comentario supera el máximo de 2000 caracteres.";
+    static final String MENSAJE_COMENTARIO_CARACTERES = "El comentario contiene caracteres no permitidos.";
+    static final String MENSAJE_COMENTARIO_HTML = "El comentario no puede contener etiquetas HTML (por ejemplo \"<b>\" o \"<script>\").";
+    static final int MAX_COMENTARIO = 2000;
+    /**
+     * Apertura de etiqueta/comentario/declaración según el parser HTML: "<" seguido INMEDIATAMENTE de
+     * letra ASCII, "/", "!" o "?". "a < b", "5<6", "->" o "<3" no abren etiqueta y se aceptan.
+     */
+    private static final Pattern MARCADO_HTML = Pattern.compile("<[A-Za-z/!?]");
+    /** Caracteres de control salvo tab, salto de línea y retorno de carro. */
+    private static final Pattern CONTROL = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
+
     /** Máximo de la API al subir (PDF 10 MB; fotos 5 MB). */
     static final int MAX_ADJUNTO_BYTES = 10 * 1024 * 1024;
     static final int MAX_BASE64_CHARS = ((MAX_ADJUNTO_BYTES + 2) / 3) * 4;
@@ -98,9 +114,27 @@ public class NoConformidadesBridgeHandler {
         return porId(payload, usuario, "");
     }
 
-    /** noConformidades.seguimiento.list → GET api/no-conformidades/{id}/seguimiento */
+    /**
+     * noConformidades.seguimiento.list → GET api/no-conformidades/{id}/seguimiento, con `comentario` y
+     * `autor` ESCAPADOS como HTML (diferencia defensiva, SEC-27): la vista de Photino los pinta con
+     * innerHTML sin escapar, así que un comentario con marcado guardado desde Photino se ejecutaría en el
+     * navegador web. innerHTML decodifica las entidades → el texto se ve idéntico y nunca se ejecuta.
+     */
     public BridgeResult seguimientoList(ObjectNode payload, SessionUser usuario) {
-        return porId(payload, usuario, "/seguimiento");
+        BridgeResult upstream = porId(payload, usuario, "/seguimiento");
+        if (upstream.ok() && upstream.data() instanceof ArrayNode items) {
+            for (JsonNode item : items) {
+                if (item instanceof ObjectNode c) {
+                    for (String campo : new String[] {"comentario", "autor"}) {
+                        JsonNode v = c.get(campo);
+                        if (v != null && v.isString()) {
+                            c.put(campo, HtmlUtils.htmlEscape(v.asString(), "UTF-8"));
+                        }
+                    }
+                }
+            }
+        }
+        return upstream;
     }
 
     /** noConformidades.analisis.get → GET api/no-conformidades/{id}/analisis */
@@ -160,6 +194,64 @@ public class NoConformidadesBridgeHandler {
         salida.put("tipoMime", tipoMime);
         salida.put("contenidoBase64", base64);
         return BridgeResult.ok(salida);
+    }
+
+    /**
+     * noConformidades.seguimiento.crear → POST api/no-conformidades/{id}/seguimiento {comentario, autor}.
+     * PRIMERA ESCRITURA de la web (vertical slice). Diferencias con Photino, todas defensivas:
+     *  - autor = SIEMPRE el nombre del usuario de la sesión (Photino lo toma de sessionStorage del
+     *    navegador y la API lo acepta del body, SEC-12). Nada más del payload viaja a la API: solo el
+     *    comentario validado; autor/usuario/usuarioId/creadoPor/rol/empresa del navegador se ignoran.
+     *  - comentario: string, sin espacios en los extremos, no vacío, ≤ 2000 caracteres (la columna es
+     *    TEXT; 2000 deja margen en bytes UTF-8), sin caracteres de control y SIN marcado HTML
+     *    ("<" seguido de letra ASCII, "/", "!" o "?"): la vista de Photino pinta el comentario con innerHTML
+     *    sin escapar (SEC-27). Texto normal con acentos, emojis, "a < b", "5<6" o "->" pasa intacto.
+     *    Se RECHAZA (no se neutraliza con entidades) para no guardar texto alterado que Photino u otros
+     *    consumidores mostrarían distinto.
+     *  - la NC debe existir (GET previo): evita el 500 de la API por la FK y comentar una NC eliminada.
+     */
+    public BridgeResult seguimientoCrear(ObjectNode payload, SessionUser usuario) {
+        Integer id = entero(payload.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_ID_NC);
+        }
+        JsonNode nodo = payload.get("comentario");
+        if (nodo != null && !nodo.isNull() && !nodo.isString()) {
+            return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+        }
+        String comentario = nodo == null || nodo.isNull() ? "" : nodo.asString().strip();
+        if (comentario.isEmpty()) {
+            return BridgeResult.error(MENSAJE_FALTA_COMENTARIO);
+        }
+        if (comentario.codePointCount(0, comentario.length()) > MAX_COMENTARIO) {
+            return BridgeResult.error(MENSAJE_COMENTARIO_LARGO);
+        }
+        if (CONTROL.matcher(comentario).find()) {
+            return BridgeResult.error(MENSAJE_COMENTARIO_CARACTERES);
+        }
+        if (MARCADO_HTML.matcher(comentario).find()) {
+            return BridgeResult.error(MENSAJE_COMENTARIO_HTML);
+        }
+        BridgeResult nc = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+        if (!nc.ok()) {
+            return nc;
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("comentario", comentario);
+        cuerpo.put("autor", autorDeSesion(usuario));
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + id + "/seguimiento", cuerpo), mapper);
+    }
+
+    /** Recurso auditado de seguimiento.crear: "nc:<id>" (solo dígitos; cualquier otra cosa → "nc:?"). */
+    public static String recursoNc(ObjectNode payload) {
+        Integer id = entero(payload.get("id"));
+        return "nc:" + (id != null && id > 0 ? id : "?");
+    }
+
+    /** Mismo criterio que _usuarioActual() de Photino (nombre, si no el código), pero desde la SESIÓN. */
+    static String autorDeSesion(SessionUser usuario) {
+        String nombre = usuario.nombreCompleto();
+        return nombre != null && !nombre.isBlank() ? nombre : usuario.codigoUsuario();
     }
 
     /** noConformidades.catalogos.{catalogo}.list → GET api/nc-catalogos/{catalogo} (no lee el payload). */

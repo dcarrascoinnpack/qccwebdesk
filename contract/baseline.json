@@ -434,6 +434,14 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-25T13:18:57Z"
+    },
+    "noConformidades.seguimiento.crear": {
+      "huella": "0923961bf2eb984e1898ff3c871fae11b7cf8f25943324e78c3ab02cb86fe48c",
+      "huellaFrontend": "0469d4b0264a140a600ee0a167b3f845cde1a615ad129c534b2820a0c5f38572",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T15:18:12Z"
     }
   }
 }

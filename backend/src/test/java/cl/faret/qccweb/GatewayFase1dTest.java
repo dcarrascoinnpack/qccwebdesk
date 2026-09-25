@@ -73,6 +73,10 @@ class GatewayFase1dTest {
     @Test
     void versionDeclaraElPhotinoValidadoYLasAccionesPorEstado() throws Exception {
         var v = mapper.readTree(http.send(HttpRequest.newBuilder(url("/version")).build(), HttpResponse.BodyHandlers.ofString()).body());
+        // La versión del gateway sale del build-info (si el test corre sin él, "?"); Photino siempre explícito.
+        assertThat(v.get("producto").asString()).matches("QCC Web \\S+ · Photino 1\\.8\\.12 \\(\\?\\)");
+        assertThat(cl.faret.qccweb.version.VersionControllerTestAccess.producto("0.4.0", "1.8.12", "6c42e05d11c0aef9"))
+                .isEqualTo("QCC Web 0.4.0 · Photino 1.8.12 (6c42e05)");
         assertThat(v.at("/photino/validado/version").asString()).isEqualTo("1.8.12");
         assertThat(v.at("/photino/validado/commit").asString()).isEqualTo("6c42e05d11c0");
         assertThat(v.at("/frontend/webDistSha256").asString()).isEqualTo("41b37a00");

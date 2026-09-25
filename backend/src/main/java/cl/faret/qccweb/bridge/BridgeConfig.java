@@ -15,10 +15,13 @@ import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.TalleresExternosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.UsuariosBridgeHandler;
 import cl.faret.qccweb.upstream.InnpackApiClient;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tools.jackson.databind.ObjectMapper;
@@ -34,6 +37,11 @@ public class BridgeConfig {
 
     static final Set<String> ROLES_INNPACK = Set.of("admin", "admin_ti", "operador");
     static final Set<String> ROLES_ADMIN_INNPACK = Set.of("admin", "admin_ti");
+    /**
+     * ESCRITURAS operativas aditivas (docs/matriz-escrituras-propuesta.md). Política técnica inicial:
+     * estado PENDIENTE_VALIDACION_NEGOCIO hasta que el negocio confirme los permisos funcionales.
+     */
+    static final Set<String> ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO = Set.of("operador", "admin", "admin_ti");
 
     @Bean
     public InnpackApiClient innpackApiClient(AuthProperties properties) {
@@ -103,6 +111,13 @@ public class BridgeConfig {
     @Bean
     public TalleresExternosBridgeHandler talleresExternosBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
         return new TalleresExternosBridgeHandler(api, mapper);
+    }
+
+    /** Límite de escrituras por usuario de sesión (lecturas sin límite propio). */
+    @Bean
+    public EscrituraRateLimiter escrituraRateLimiter(
+            @Value("${qcc.web.bridge.escrituras-por-minuto:30}") int escriturasPorMinuto, Clock clock) {
+        return new EscrituraRateLimiter(escriturasPorMinuto, Duration.ofMinutes(1), clock);
     }
 
     @Bean
@@ -247,7 +262,17 @@ public class BridgeConfig {
                         "talleresExternos.catalogos", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::catalogos),
                 new ActionPolicy.Regla(
                         "talleresExternos.historialLiberaciones", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
-                        talleres::historialLiberaciones)));
+                        talleres::historialLiberaciones),
+                // Fase 3a — PRIMERA ESCRITURA (vertical slice, patrón oficial de escrituras):
+                // - roles: ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO (matriz; falta validar negocio);
+                // - identidad: "autor" = SIEMPRE el usuario de la sesión (el handler además arma el cuerpo
+                //   solo con comentario + autor de sesión; nada más del navegador llega a la API);
+                // - recurso auditado "nc:<id>" + límite de escrituras por usuario (BridgeController).
+                new ActionPolicy.Regla(
+                        "noConformidades.seguimiento.crear", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("autor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::seguimientoCrear, NoConformidadesBridgeHandler::recursoNc)));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),

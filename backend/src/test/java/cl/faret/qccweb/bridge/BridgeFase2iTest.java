@@ -317,7 +317,7 @@ class BridgeFase2iTest {
     @Test
     void escriturasDelModuloSiguenBloqueadas() throws Exception {
         MockHttpSession admin = login("admin1");
-        assertThat(ESCRITURAS).hasSize(29);
+        assertThat(ESCRITURAS).hasSize(28); // seguimiento.crear se habilitó en la Fase 3a
         for (String escritura : ESCRITURAS) {
             accion(admin, "{\"action\":\"" + escritura + "\",\"id\":501,\"adjuntoId\":1,\"accionId\":3,\"nombre\":\"x\"}")
                     .andExpect(status().isForbidden())
@@ -340,7 +340,8 @@ class BridgeFase2iTest {
 
     @Test
     void empresaDeSesionCorrectaEIncorrecta() {
-        List<String> lecturas = policy.accionesRegistradas().stream().filter(a -> a.startsWith("noConformidades.")).toList();
+        List<String> lecturas = policy.accionesRegistradas().stream()
+                .filter(a -> a.startsWith("noConformidades.") && !a.equals("noConformidades.seguimiento.crear")).toList();
         assertThat(lecturas).hasSize(18);
         for (String a : lecturas) {
             assertThat(policy.evaluar(a, usuario("INNPACK", "operador"))).isInstanceOf(ActionPolicy.Decision.Permitida.class);
@@ -405,7 +406,7 @@ class BridgeFase2iTest {
 
     private static List<String> escrituras() {
         List<String> e = new ArrayList<>(List.of("noConformidades.create", "noConformidades.update", "noConformidades.eliminar",
-                "noConformidades.gestion.actualizar", "noConformidades.cerrar", "noConformidades.seguimiento.crear",
+                "noConformidades.gestion.actualizar", "noConformidades.cerrar",
                 "noConformidades.analisis.guardar", "noConformidades.acciones.crear", "noConformidades.acciones.actualizar",
                 "noConformidades.adjuntos.subir", "noConformidades.adjuntos.eliminar"));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {

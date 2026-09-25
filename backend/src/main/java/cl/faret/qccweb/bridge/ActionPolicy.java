@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.stream.Collectors;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Política explícita de acciones del bridge — deny-by-default.
@@ -24,18 +26,32 @@ public final class ActionPolicy {
      * @param roles     roles de sesión permitidos (lista explícita; un rol nuevo no entra solo)
      * @param identidad campos del payload que son identidad del actor y se sobrescriben con la sesión
      * @param handler   implementación
+     * @param recurso   solo ESCRITURAS: extrae del payload saneado el recurso afectado para la auditoría
+     *                  (p. ej. "nc:501"); null = lectura. Una escritura además pasa por el límite de
+     *                  escrituras por sesión (EscrituraRateLimiter).
      */
     public record Regla(
             String accion,
             Set<String> empresas,
             Set<String> roles,
             Map<String, IdentityOverride.Fuente> identidad,
-            BridgeAction handler) {
+            BridgeAction handler,
+            Function<ObjectNode, String> recurso) {
 
         public Regla {
             empresas = Set.copyOf(empresas);
             roles = roles.stream().map(r -> r.toLowerCase(Locale.ROOT)).collect(Collectors.toUnmodifiableSet());
             identidad = Map.copyOf(identidad);
+        }
+
+        /** Regla de LECTURA (sin recurso auditado). */
+        public Regla(String accion, Set<String> empresas, Set<String> roles, Map<String, IdentityOverride.Fuente> identidad,
+                BridgeAction handler) {
+            this(accion, empresas, roles, identidad, handler, null);
+        }
+
+        public boolean escritura() {
+            return recurso != null;
         }
     }
 
@@ -93,6 +109,7 @@ public final class ActionPolicy {
                     d.put("empresas", r.empresas().stream().sorted().toList());
                     d.put("roles", r.roles().stream().sorted().toList());
                     d.put("identidad", new java.util.TreeMap<>(r.identidad()));
+                    d.put("escritura", r.escritura());
                     return d;
                 })
                 .toList();

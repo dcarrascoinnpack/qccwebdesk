@@ -176,7 +176,7 @@ class BridgeFase1cTest {
     }
 
     @Test
-    void soloAccionesHabilitadasHastaFase2m() {
+    void soloAccionesHabilitadasHastaFase3a() {
         assertThat(policy.accionesRegistradas()).containsExactlyInAnyOrder(
                 "inicio.getDashboard", "maquinasSeguimiento.obtenerResumen",
                 "dashboard.obtenerFiltros", "dashboard.obtenerResumen",
@@ -199,7 +199,8 @@ class BridgeFase1cTest {
                 "muestraLab.list", "muestraLab.detalle", "muestraLab.catalogos", "muestraLab.indicadores",
                 "muestraLab.metodo.list", "muestraLab.especificacion.list", "muestraLab.bobinaHistorial",
                 "muestraLab.registroProduccion.list", "muestraLab.adjunto.abrir",
-                "talleresExternos.list", "talleresExternos.catalogos", "talleresExternos.historialLiberaciones");
+                "talleresExternos.list", "talleresExternos.catalogos", "talleresExternos.historialLiberaciones",
+                "noConformidades.seguimiento.crear");
     }
 
     // ------------------------------------------------------ manipulación desde DevTools

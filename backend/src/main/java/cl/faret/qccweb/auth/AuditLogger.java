@@ -47,6 +47,15 @@ public final class AuditLogger {
                 sanear(usuario), empresa, sanear(accion), ok ? "OK" : "ERROR", duracionMs);
     }
 
+    /**
+     * Escritura ejecutada vía bridge: usuario REAL de la sesión, recurso afectado (p. ej. nc:501),
+     * resultado y duración. Nunca el contenido enviado (comentarios, archivos) ni el payload.
+     */
+    public void escritura(String usuario, String empresa, String accion, String recurso, boolean ok, long duracionMs) {
+        AUDIT.info("evento=ESCRITURA usuario={} empresa={} accion={} recurso={} resultado={} ms={}",
+                sanear(usuario), empresa, sanear(accion), sanear(recurso), ok ? "OK" : "ERROR", duracionMs);
+    }
+
     public void accionDenegada(String usuario, String empresa, String accion, String motivo) {
         AUDIT.warn("evento=ACCION_DENEGADA usuario={} empresa={} accion={} motivo={}",
                 sanear(usuario), empresa, sanear(accion), motivo);

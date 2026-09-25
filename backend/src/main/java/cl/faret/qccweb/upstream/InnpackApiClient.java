@@ -10,6 +10,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.web.client.RestClient;
 import org.springframework.web.client.RestClientException;
+import tools.jackson.databind.JsonNode;
 
 /**
  * Cliente HTTP hacia la API INNPACK para las acciones del bridge.
@@ -52,6 +53,34 @@ public class InnpackApiClient {
                     .uri(URI.create(baseUrl + path))
                     .accept(MediaType.APPLICATION_JSON)
                     .headers(h -> h.setBearerAuth(usuario.upstreamToken()))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {})
+                    .toEntity(String.class);
+        } catch (RestClientException e) {
+            return new Respuesta(0, null);
+        }
+        if (r.getStatusCode().value() == 401) {
+            throw new UpstreamNoAutorizadoException();
+        }
+        return new Respuesta(r.getStatusCode().value(), r.getBody());
+    }
+
+    /**
+     * POST JSON autenticado con el JWT del usuario de la sesión (escrituras). Sin reintentos: un
+     * timeout devuelve status 0 y el llamador responde error, así nunca se duplica una escritura en
+     * silencio. El cuerpo lo arma SIEMPRE el gateway (nunca el payload del navegador tal cual).
+     *
+     * @throws UpstreamNoAutorizadoException si la API responde 401 (token vencido/revocado)
+     */
+    public Respuesta postJson(SessionUser usuario, String path, JsonNode cuerpo) {
+        ResponseEntity<String> r;
+        try {
+            r = restClient.post()
+                    .uri(URI.create(baseUrl + path))
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .headers(h -> h.setBearerAuth(usuario.upstreamToken()))
+                    .body(cuerpo.toString())
                     .retrieve()
                     .onStatus(HttpStatusCode::isError, (req, res) -> {})
                     .toEntity(String.class);

@@ -49,6 +49,9 @@ public class VersionController {
         gateway.put("webRepoCommit", manifest.texto("webRepoCommit"));
 
         Map<String, Object> respuesta = new LinkedHashMap<>();
+        // La web nunca se presenta como producto independiente: siempre atada a la versión Photino.
+        respuesta.put("producto", producto(build != null ? build.getVersion() : null,
+                manifest.texto("photinoVersion"), manifest.texto("photinoCommit")));
         respuesta.put("photino", photino);
         respuesta.put("frontend", frontend);
         respuesta.put("gateway", gateway);
@@ -60,6 +63,13 @@ public class VersionController {
     @GetMapping("/version")
     public ResponseEntity<Map<String, Object>> version() {
         return ResponseEntity.ok().cacheControl(CacheControl.noStore()).body(version);
+    }
+
+    /** "QCC Web 0.4.0 · Photino 1.8.12 (6c42e05)". */
+    static String producto(String gateway, String photinoVersion, String photinoCommit) {
+        String commit = photinoCommit == null ? "?" : photinoCommit.substring(0, Math.min(7, photinoCommit.length()));
+        return "QCC Web " + (gateway != null ? gateway : "?") + " · Photino " + (photinoVersion != null ? photinoVersion : "?")
+                + " (" + commit + ")";
     }
 
     /** COMPATIBLE / PENDIENTE / REVISAR / SOLO_WEB → nombres de acciones (vacío si no hay contrato). */

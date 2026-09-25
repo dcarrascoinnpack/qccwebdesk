@@ -134,6 +134,11 @@ $webDistSha256 = Get-TreeSha256 $extracted
 
 $webCommit = $null
 try { $webCommit = (& git -C $webRepo rev-parse HEAD).Trim() } catch { }
+# Versión del gateway (pom): la web siempre se declara junto a la versión/commit Photino.
+$pomXml = [System.IO.File]::ReadAllText((Join-Path $webRepo "backend\pom.xml"))
+$gw = [regex]::Match($pomXml, '<artifactId>qcc-api</artifactId>[\s\S]*?<version>\s*([^<]+?)\s*</version>')
+$gatewayVersion = if ($gw.Success) { $gw.Groups[1].Value } else { $null }
+$producto = "QCC Web $gatewayVersion $([char]0x00B7) Photino $photinoVersion ($($sha.Substring(0,7)))"  # [char]: PS 5.1 lee este .ps1 como ANSI
 $webDirty = [bool](& git -C $webRepo status --porcelain)
 
 # --- 4. Contract check Photino <-> Web (mismo commit), escrito en el candidato ------------------
@@ -219,6 +224,8 @@ Remove-Item -LiteralPath $tmpDir -Recurse -Force
 if (Test-Path $candidato) { Remove-Item -LiteralPath $candidato -Recurse -Force }
 
 $manifest = [ordered]@{
+    producto          = $producto
+    gatewayVersion    = $gatewayVersion
     photinoVersion    = $photinoVersion
     photinoCommit     = $sha
     photinoCommitDate = $commitDate

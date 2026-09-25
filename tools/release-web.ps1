@@ -22,7 +22,7 @@
       9. Sin secretos en el snapshot, manifest ni reporte (patrones de credenciales/JWT/llaves).
      10. Photino intacto (mismo HEAD y mismo status que al inicio).
 
-    Artefacto: web-dist/release/qcc-web_<photinoVersion>_<photino7>_<web7>/ con el jar, photino-www/,
+    Artefacto: web-dist/release/qcc-web-<gw>_photino-<ver>_<photino7>_web-<web7>/ con el jar, photino-www/,
     web-manifest.json, contract/, release.json (resultado del gate) y SHA256SUMS.txt.
 
 .EXAMPLE
@@ -43,6 +43,9 @@ $PhotinoRepo = (Resolve-Path $PhotinoRepo).Path
 $backend = Join-Path $webRepo "backend"
 $outDir = Join-Path $webRepo "web-dist"
 $pasos = [System.Collections.Generic.List[object]]::new()
+$pomXml = [System.IO.File]::ReadAllText((Join-Path $backend "pom.xml"))
+$gatewayVersion = [regex]::Match($pomXml, '<artifactId>qcc-api</artifactId>[\s\S]*?<version>\s*([^<]+?)\s*</version>').Groups[1].Value
+$jarEsperado = "qcc-api-$gatewayVersion.jar"
 
 function Paso([string]$nombre, [scriptblock]$accion) {
     Write-Host "== $nombre" -ForegroundColor Cyan
@@ -120,12 +123,30 @@ Paso "empaquetar gateway" {
         & .\mvnw.cmd -q -DskipTests package | Out-Null
         if ($LASTEXITCODE -ne 0) { throw "mvnw package fallo (exit $LASTEXITCODE)" }
     } finally { Pop-Location }
-    $jar = Get-ChildItem (Join-Path $backend "target") -Filter "*.jar" | Where-Object { $_.Name -notlike "*.original" } | Select-Object -First 1
+    $jar = Get-Item (Join-Path $backend "target\$jarEsperado") -ErrorAction SilentlyContinue
     if (-not $jar) { throw "no se encontro el jar" }
     $jar.Name
 }
 
 $manifest = [System.IO.File]::ReadAllText((Join-Path $outDir "web-manifest.json"), [System.Text.Encoding]::UTF8) | ConvertFrom-Json
+
+Paso "version del gateway consistente (pom = jar = manifest)" {
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $jar = Get-Item (Join-Path $backend "target\$jarEsperado") -ErrorAction SilentlyContinue
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($jar.FullName)
+    try {
+        $entrada = $zip.Entries | Where-Object { $_.FullName -like "*META-INF/build-info.properties" } | Select-Object -First 1
+        if (-not $entrada) { throw "el jar no tiene build-info.properties" }
+        $lector = New-Object System.IO.StreamReader($entrada.Open())
+        $props = $lector.ReadToEnd(); $lector.Close()
+    } finally { $zip.Dispose() }
+    $vJar = [regex]::Match($props, '(?m)^build\.version=(.+)$').Groups[1].Value.Trim()
+    if (-not $gatewayVersion) { throw "no se pudo leer la version del pom" }
+    if ($vJar -ne $gatewayVersion) { throw "jar build.version '$vJar' != pom '$gatewayVersion'" }
+    if ($manifest.gatewayVersion -ne $gatewayVersion) { throw "manifest.gatewayVersion '$($manifest.gatewayVersion)' != pom '$gatewayVersion'" }
+    if ($manifest.producto -notlike "QCC Web $gatewayVersion * Photino $($manifest.photinoVersion) ($($shaPhotino.Substring(0,7)))") { throw "manifest.producto inconsistente: $($manifest.producto)" }
+    $manifest.producto
+}
 
 Paso "manifest consistente" {
     $shim = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $webRepo "web-shim\web-bridge.js")).Hash.ToLowerInvariant()
@@ -158,11 +179,11 @@ Paso "Photino intacto" {
 }
 
 # --- Artefacto -------------------------------------------------------------------------------
-$nombre = "qcc-web_$($manifest.photinoVersion)_$($shaPhotino.Substring(0,7))_$($webCommit.Substring(0,7))"
+$nombre = "qcc-web-$($gatewayVersion)_photino-$($manifest.photinoVersion)_$($shaPhotino.Substring(0,7))_web-$($webCommit.Substring(0,7))"
 $dest = Join-Path $outDir "release\$nombre"
 if (Test-Path $dest) { Remove-Item $dest -Recurse -Force }
 New-Item -ItemType Directory -Path $dest | Out-Null
-$jar = Get-ChildItem (Join-Path $backend "target") -Filter "*.jar" | Where-Object { $_.Name -notlike "*.original" } | Select-Object -First 1
+$jar = Get-Item (Join-Path $backend "target\$jarEsperado") -ErrorAction SilentlyContinue
 Copy-Item $jar.FullName (Join-Path $dest "qcc-web-gateway.jar")
 Copy-Item (Join-Path $outDir "photino-www") (Join-Path $dest "photino-www") -Recurse
 Copy-Item (Join-Path $outDir "contract") (Join-Path $dest "contract") -Recurse
@@ -170,6 +191,8 @@ Copy-Item (Join-Path $outDir "web-manifest.json") $dest
 
 $release = [ordered]@{
     nombre           = $nombre
+    producto         = $manifest.producto
+    gatewayVersion   = $gatewayVersion
     generado         = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
     photinoVersion   = $manifest.photinoVersion
     photinoCommit    = $shaPhotino
@@ -189,4 +212,5 @@ $sumas = Get-ChildItem $destFull -Recurse -File | Where-Object Name -ne "SHA256S
 [System.IO.File]::WriteAllText((Join-Path $destFull "SHA256SUMS.txt"), (($sumas -join "`n") + "`n"), (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host "RELEASE WEB LISTO (sin deploy): $destFull" -ForegroundColor Green
+Write-Host "  $($manifest.producto)"
 Write-Host "  $($manifest.contrato.texto) | Photino validado $($manifest.photinoValidado.version) @ $($shaPhotino.Substring(0,7)) | web $($webCommit.Substring(0,7))"
