@@ -272,7 +272,14 @@ public class BridgeConfig {
                         "noConformidades.seguimiento.crear", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("autor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
-                        noConformidades::seguimientoCrear, NoConformidadesBridgeHandler::recursoNc)));
+                        noConformidades::seguimientoCrear, (p, data) -> NoConformidadesBridgeHandler.recursoNc(p)),
+                // Fase 3b — SEGUNDA ESCRITURA, mismo patrón: identidad "creadoPor" = sesión; datos de negocio
+                // (responsable, descripción, fecha, prioridad, análisis) validados con lista blanca y conservados.
+                new ActionPolicy.Regla(
+                        "noConformidades.acciones.crear", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::accionesCrear, NoConformidadesBridgeHandler::recursoAccion)));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),

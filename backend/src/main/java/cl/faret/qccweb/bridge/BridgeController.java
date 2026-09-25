@@ -80,13 +80,13 @@ public class BridgeController {
         ObjectNode saneado = IdentityOverride.aplicar(payload.deepCopy(), regla.identidad(), usuario);
         try {
             BridgeResult resultado = regla.handler().ejecutar(saneado, usuario);
-            auditar(usuario, accion, regla, saneado, resultado.ok(), inicio);
+            auditar(usuario, accion, regla, saneado, resultado.ok(), resultado.ok() ? resultado.data() : null, inicio);
             return respuesta(HttpStatus.OK, resultado);
         } catch (UpstreamNoAutorizadoException e) {
             // La API rechazó el JWT de ESTE usuario: se invalida solo su sesión.
             HttpSession sesion = request.getSession(false);
             if (regla.escritura()) {
-                auditar(usuario, accion, regla, saneado, false, inicio);
+                auditar(usuario, accion, regla, saneado, false, null, inicio);
             }
             audit.sesionInvalidadaPorUpstream(usuario.codigoUsuario(), accion, sesion != null ? sesion.getId() : null);
             if (sesion != null) {
@@ -97,20 +97,21 @@ public class BridgeController {
         } catch (RuntimeException e) {
             // Sin payload ni mensaje de la excepción en el log (podrían contener datos del usuario).
             LOGGER.error("Error ejecutando acción {} para usuario {}: {}", accion, usuario.userId(), e.getClass().getName());
-            auditar(usuario, accion, regla, saneado, false, inicio);
+            auditar(usuario, accion, regla, saneado, false, null, inicio);
             return respuesta(HttpStatus.INTERNAL_SERVER_ERROR, BridgeResult.error(MENSAJE_ERROR_INTERNO));
         }
     }
 
     /** Lectura → evento=ACCION; escritura → evento=ESCRITURA con el recurso afectado (nunca el payload). */
-    private void auditar(SessionUser usuario, String accion, ActionPolicy.Regla regla, ObjectNode saneado, boolean ok, long inicio) {
+    private void auditar(SessionUser usuario, String accion, ActionPolicy.Regla regla, ObjectNode saneado, boolean ok,
+            Object dataRespuesta, long inicio) {
         if (!regla.escritura()) {
             audit.accion(usuario.codigoUsuario(), usuario.empresa(), accion, ok, duracionMs(inicio));
             return;
         }
         String recurso;
         try {
-            recurso = regla.recurso().apply(saneado);
+            recurso = regla.recurso().de(saneado, dataRespuesta);
         } catch (RuntimeException e) {
             recurso = "?";
         }

@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Function;
 import java.util.stream.Collectors;
 import tools.jackson.databind.node.ObjectNode;
 
@@ -26,9 +25,9 @@ public final class ActionPolicy {
      * @param roles     roles de sesión permitidos (lista explícita; un rol nuevo no entra solo)
      * @param identidad campos del payload que son identidad del actor y se sobrescriben con la sesión
      * @param handler   implementación
-     * @param recurso   solo ESCRITURAS: extrae del payload saneado el recurso afectado para la auditoría
-     *                  (p. ej. "nc:501"); null = lectura. Una escritura además pasa por el límite de
-     *                  escrituras por sesión (EscrituraRateLimiter).
+     * @param recurso   solo ESCRITURAS: arma, con el payload saneado y el `data` de la respuesta (null si
+     *                  falló), el recurso afectado para la auditoría (p. ej. "nc:501" o "nc:501:accion:12");
+     *                  null = lectura. Una escritura además pasa por el límite de escrituras por usuario.
      */
     public record Regla(
             String accion,
@@ -36,7 +35,7 @@ public final class ActionPolicy {
             Set<String> roles,
             Map<String, IdentityOverride.Fuente> identidad,
             BridgeAction handler,
-            Function<ObjectNode, String> recurso) {
+            RecursoAuditado recurso) {
 
         public Regla {
             empresas = Set.copyOf(empresas);
@@ -53,6 +52,12 @@ public final class ActionPolicy {
         public boolean escritura() {
             return recurso != null;
         }
+    }
+
+    /** Recurso afectado por una escritura, para la auditoría (nunca contenido del payload). */
+    @FunctionalInterface
+    public interface RecursoAuditado {
+        String de(ObjectNode payloadSaneado, Object dataRespuesta);
     }
 
     /** Resultado de evaluar una acción para un usuario. */

@@ -4,8 +4,8 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **1** (`noConformidades.seguimiento.crear`, estado VALIDADA). Las otras 80
-siguen denegadas por `ActionPolicy` (deny-by-default) hasta su propia fase.
+Escrituras habilitadas en la web: **2** (`noConformidades.seguimiento.crear` y `noConformidades.acciones.crear`,
+estado VALIDADA). Las otras 79 siguen denegadas por `ActionPolicy` (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
   API INNPACK `qualitycontrolinnpack_sqlserver_port` (atributos `[Authorize]`, servicios). Extraída con el
@@ -47,7 +47,7 @@ contract check C#/JS + gate de release).
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` | 39 / 38 / 4 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 80 APROBADA · 1 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 79 APROBADA · 2 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -115,7 +115,7 @@ justificación · estado.
 
 | action | método · endpoint | empresa | roles Web | Photino hoy | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `noConformidades.acciones.crear` | POST `api/no-conformidades/{id}/acciones` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | crea una acción correctiva | sí: actualizar estado | **BAJO** | aditivo; responsable = dato de negocio | APROBADA |
+| `noConformidades.acciones.crear` | POST `api/no-conformidades/{id}/acciones` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | crea una acción correctiva | sí: actualizar estado | **BAJO** | aditivo; responsable = dato de negocio | VALIDADA (Fase 3b, gateway 0.4.0) |
 | `noConformidades.adjuntos.subir` | POST `api/no-conformidades/{id}/adjuntos` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `subidoPor` | `subidoPor` ← nombreCompleto | adjunta PDF de causa raíz / fotos (API valida MIME y tamaño) | sí: eliminar adjunto (admin) | **BAJO** | evidencia aditiva | APROBADA |
 | `noConformidades.analisis.guardar` | PUT `api/no-conformidades/{id}/analisis` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `usuario` | `usuario` ← nombreCompleto | guarda el análisis de causa raíz (5 por qué) | sí: volver a guardar | **BAJO** | no cambia estado | APROBADA |
 | `noConformidades.catalogos.areas.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
@@ -209,7 +209,21 @@ escrituras de la web; lo implementado respecto del diseño original:
 - Auditoría `evento=ESCRITURA usuario=<sesión> empresa=INNPACK accion=... recurso=nc:<id> resultado=OK|ERROR ms=..`
   (sin el comentario). Tests: `BridgeFase3aTest` (17). E2E CDP 21/21.
 
-Diseño aprobado (referencia):
+### Segunda escritura — `noConformidades.acciones.crear` — VALIDADA (Fase 3b)
+
+Mismo patrón, con **separación explícita identidad / negocio**:
+- **Identidad (siempre `SessionUser`)**: `creadoPor` ← nombre de la sesión (lo que mande el navegador se descarta).
+- **Datos de negocio (validados y conservados)**: `responsable` (persona a cargo, texto libre ≤ 150, una línea — puede
+  ser OTRA persona, incluso otro usuario), `descripcion` (≤ 500, una línea), `fechaLimite` (DATE `AAAA-MM-DD` válida),
+  `prioridad` (`ALTA|MEDIA|BAJA` o vacía → null), `analisisId` (null o el análisis de ESA NC).
+- **Lista blanca estricta** de claves (`action, id, analisisId, creadoPor, descripcion, responsable, fechaLimite,
+  prioridad`): cualquier otra → `Campo no permitido: <campo>` sin tocar la API. Mensajes de obligatorios = los de la API.
+- Sin marcado HTML ni controles en los textos; la lectura `acciones.list` escapa `descripcion`/`responsable`/`prioridad`.
+- NC inexistente → sin POST. Photino no bloquea agregar acciones a una NC CERRADA: la web tampoco.
+- Auditoría `recurso=nc:<id>` (+ `:accion:<id>` si la API devolviera el id; hoy responde `{}`).
+- Tests `BridgeFase3bTest` (15), E2E CDP 23/23.
+
+Diseño aprobado de la primera escritura (referencia):
 
 ### Por qué esta
 - **Aditiva y append-only**: inserta un comentario en `nc_seguimiento`; no cambia estados, no borra, no toca

@@ -99,6 +99,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesControlDocumental.clear();
         peticionesNoConformidades.clear();
         seguimientosRecibidos.clear();
+        accionesRecibidas.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
@@ -644,6 +645,13 @@ public final class FakeInnpackApi implements AutoCloseable {
         return java.util.List.copyOf(seguimientosRecibidos);
     }
 
+    private final java.util.List<SeguimientoRecibido> accionesRecibidas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** Cuerpo EXACTO recibido en POST api/no-conformidades/{id}/acciones. */
+    public java.util.List<SeguimientoRecibido> accionesRecibidas() {
+        return java.util.List.copyOf(accionesRecibidas);
+    }
+
     /** "<método> <ruta>[?<query cruda>]" recibidos en api/no-conformidades* y api/nc-catalogos*. */
     public java.util.List<String> peticionesNoConformidades() {
         return java.util.List.copyOf(peticionesNoConformidades);
@@ -700,6 +708,24 @@ public final class FakeInnpackApi implements AutoCloseable {
         if (sub == null || revocados.contains(sub)) {
             ex.sendResponseHeaders(401, -1);
             ex.close();
+            return;
+        }
+        java.util.regex.Matcher acc = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/acciones$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && acc.matches()) {
+            String cuerpoAcc = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            accionesRecibidas.add(new SeguimientoRecibido(Integer.parseInt(acc.group(1)), sub, cuerpoAcc,
+                    ex.getRequestHeaders().getFirst("Content-Type")));
+            String desc = mapper.readTree(cuerpoAcc).path("descripcion").asString("");
+            if ("ERROR_API".equals(desc)) {
+                responder(ex, 400, fallo("No se pudo registrar la acción"));
+            } else if (acc.group(1).equals("777")) {
+                responder(ex, 500, "{\"title\":\"error interno\"}");
+            } else if ("CON_ID".equals(desc)) {
+                responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":77},\"errors\":null}");
+            } else {
+                // La API real responde Ok(new { }): no devuelve el id de la acción creada.
+                responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{},\"errors\":null}");
+            }
             return;
         }
         java.util.regex.Matcher seg = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/seguimiento$").matcher(path);
@@ -787,8 +813,11 @@ public final class FakeInnpackApi implements AutoCloseable {
                         // Comentario malicioso guardado desde Photino (que no valida): la web debe mostrarlo sin ejecutarlo.
                         ? "[{\"id\":9,\"comentario\":\"<img src=x onerror=alert(1)> & 'x' \\\"y\\\" ñ\",\"autor\":\"<b>Mallory</b>\",\"creadoEn\":\"2026-09-20T10:00:00\"}]"
                         : "[{\"id\":1,\"comentario\":\"Revisión ñ\",\"autor\":\"María\",\"usuarioDelToken\":" + sub + "}]") + fin);
-                case "/analisis" -> responder(ex, 200, ok + "{\"id\":7,\"metodologia\":\"5 Por qué\",\"causaRaiz\":\"Tinta\",\"usuarioDelToken\":" + sub + "}" + fin);
-                case "/acciones" -> responder(ex, 200, ok + "[{\"id\":3,\"descripcion\":\"Cambiar rodillo\",\"estado\":\"PENDIENTE\",\"usuarioDelToken\":" + sub + "}]" + fin);
+                case "/analisis" -> responder(ex, 200, ok + (id == 503 ? "null"
+                        : "{\"id\":7,\"metodologia\":\"5 Por qué\",\"causaRaiz\":\"Tinta\",\"usuarioDelToken\":" + sub + "}") + fin);
+                case "/acciones" -> responder(ex, 200, ok + (id == 901
+                        ? "[{\"id\":4,\"descripcion\":\"<img src=x onerror=alert(1)> & ñ\",\"responsable\":\"<b>Mallory</b>\",\"prioridad\":\"ALTA\",\"estado\":\"PENDIENTE\"}]"
+                        : "[{\"id\":3,\"descripcion\":\"Cambiar rodillo\",\"estado\":\"PENDIENTE\",\"usuarioDelToken\":" + sub + "}]") + fin);
                 case "/adjuntos" -> {
                     String n1 = id == 900 ? "..\\\\<img src=x onerror=alert(1)>.pdf" : "causa raíz ñ.pdf";
                     responder(ex, 200, ok + "[{\"id\":1,\"tipo\":\"CAUSA_RAIZ_PDF\",\"nombreArchivo\":\"" + n1 + "\",\"tipoMime\":\"application/pdf\"},"
