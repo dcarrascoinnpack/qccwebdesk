@@ -3,9 +3,11 @@ package cl.faret.qccweb.bridge.handlers;
 import cl.faret.qccweb.auth.SessionUser;
 import cl.faret.qccweb.bridge.BridgeAction;
 import cl.faret.qccweb.bridge.BridgeResult;
+import cl.faret.qccweb.bridge.LecturasDeSesion;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.InnpackRespuestas;
 import cl.faret.qccweb.upstream.UriEscape;
+import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.web.util.HtmlUtils;
@@ -62,6 +64,24 @@ public class NoConformidadesBridgeHandler {
     private static final Set<String> CAMPOS_ACCION_CREAR = Set.of(
             "action", "id", "analisisId", "creadoPor", "descripcion", "responsable", "fechaLimite", "prioridad");
     private static final Set<String> PRIORIDADES = Set.of("ALTA", "MEDIA", "BAJA");
+    /** Claves que manda Photino en _guardarAnalisis (+ "action"); cualquier otra se rechaza. */
+    private static final Set<String> CAMPOS_ANALISIS_GUARDAR = Set.of("action", "id", "usuario", "metodologia", "problemaDetectado",
+            "porque1", "porque2", "porque3", "porque4", "porque5", "causaRaiz", "conclusion");
+    private static final List<String> CAMPOS_TEXTO_ANALISIS = List.of("metodologia", "problemaDetectado",
+            "porque1", "porque2", "porque3", "porque4", "porque5", "causaRaiz", "conclusion");
+    /** textareas de la vista (TEXT / NVARCHAR(MAX)); el resto son inputs de una línea. */
+    private static final Set<String> CAMPOS_MULTILINEA = Set.of("problemaDetectado", "causaRaiz", "conclusion");
+    private static final Set<String> METODOLOGIAS = Set.of("CINCO_PORQUES", "ISHIKAWA", "MIXTA");
+    private static final List<String> CAMPOS_HUELLA_ANALISIS = List.of("id", "metodologia", "problemaDetectado",
+            "porque1", "porque2", "porque3", "porque4", "porque5", "causaRaiz", "conclusion",
+            "creadoPor", "creadoEn", "actualizadoPor", "actualizadoEn");
+    static final int MAX_TEXT_BYTES = 65_535;
+    static final int MAX_PORQUE = 500;
+    static final String SIN_ANALISIS = "SIN_ANALISIS";
+    static final String MARCA_OPERACION = "__qccAuditoriaOperacion";
+    static final String MENSAJE_ANALISIS_SIN_LEER = "Abre el análisis de la no conformidad antes de guardarlo.";
+    static final String MENSAJE_ANALISIS_CONFLICTO = "El análisis fue modificado por otra persona desde que lo abriste. "
+            + "Cierra y vuelve a abrir el análisis para ver la versión actual antes de guardar (no se guardó nada).";
     private static final Pattern FECHA_ISO = Pattern.compile("\\d{4}-\\d{2}-\\d{2}");
     /** Campos de una línea (input text): ningún carácter de control, tampoco saltos de línea. */
     private static final Pattern CONTROL_UNA_LINEA = Pattern.compile("[\\x00-\\x08\\x0A-\\x1F\\x7F]");
@@ -137,9 +157,166 @@ public class NoConformidadesBridgeHandler {
         return escaparCampos(porId(payload, usuario, "/seguimiento"), "comentario", "autor");
     }
 
-    /** noConformidades.analisis.get → GET api/no-conformidades/{id}/analisis */
+    /**
+     * noConformidades.analisis.get → GET api/no-conformidades/{id}/analisis. Además registra en la sesión la
+     * huella del análisis que el usuario queda viendo (detección de lost update en analisis.guardar). La vista
+     * pone estos textos con `.value` en inputs/textareas: no se interpreta HTML, por eso aquí NO se escapan.
+     */
     public BridgeResult analisisGet(ObjectNode payload, SessionUser usuario) {
-        return porId(payload, usuario, "/analisis");
+        BridgeResult upstream = porId(payload, usuario, "/analisis");
+        Integer id = entero(payload.get("id"));
+        if (upstream.ok() && id != null) {
+            LecturasDeSesion.registrar(recursoLecturaAnalisis(id), huellaAnalisis(upstream.data()));
+        }
+        return upstream;
+    }
+
+    /**
+     * noConformidades.analisis.guardar → PUT api/no-conformidades/{id}/analisis. TERCERA ESCRITURA; a
+     * diferencia de las anteriores NO es aditiva: la API hace upsert del ÚLTIMO análisis de la NC (UPDATE en
+     * sitio si existe, INSERT si no) y NO guarda historial ni ofrece versión/ETag/rowversion (en el port SQL
+     * Server `actualizado_en` ni se actualiza). El valor anterior no es recuperable.
+     *
+     * Identidad — `usuario` (la API lo guarda como creado_por / actualizado_por): SIEMPRE la sesión.
+     * Negocio — lista blanca exacta de Photino, límites del esquema real (el más estricto entre MySQL
+     * `calidad` y el port SQL Server): metodologia ENUM obligatoria; problemaDetectado obligatorio, TEXT
+     * (≤ 65.535 bytes UTF-8), multilínea; porque1..5 opcionales, VARCHAR/NVARCHAR(500) (≤ 500 unidades
+     * UTF-16), una línea; causaRaiz/conclusion opcionales, TEXT, multilínea. "" se conserva como "" (Photino
+     * manda los vacíos así); null/ausente → null. Sin marcado HTML ni controles (salvo \t\n\r en multilínea).
+     *
+     * Lost update (diferencia web, sin cambiar el contrato): se exige que ESTA sesión haya leído el análisis
+     * (analisis.get) y que siga igual al releerlo antes del PUT; si otra persona lo cambió → conflicto sin
+     * escribir. Límites: ventana mínima entre relectura y PUT; pestañas de la misma sesión; Photino no protege.
+     */
+    public BridgeResult analisisGuardar(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CAMPOS_ANALISIS_GUARDAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(payload.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_ID_NC);
+        }
+        for (String campo : CAMPOS_TEXTO_ANALISIS) {
+            JsonNode n = payload.get(campo);
+            if (n != null && !n.isNull() && !n.isString()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+        }
+        String metodologia = textoPlano(payload.get("metodologia"));
+        if (metodologia.isEmpty()) {
+            return BridgeResult.error("Falta la metodología");
+        }
+        if (!METODOLOGIAS.contains(metodologia)) {
+            return BridgeResult.error("Metodología inválida. Valores permitidos: CINCO_PORQUES, ISHIKAWA, MIXTA");
+        }
+        String problema = textoPlano(payload.get("problemaDetectado"));
+        if (problema.isEmpty()) {
+            return BridgeResult.error("Falta el problema detectado");
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("metodologia", metodologia);
+        for (String campo : CAMPOS_TEXTO_ANALISIS) {
+            if (campo.equals("metodologia")) {
+                continue;
+            }
+            JsonNode n = payload.get(campo);
+            if (n == null || n.isNull()) {
+                cuerpo.putNull(campo);
+                continue;
+            }
+            String valor = n.asString().strip();
+            boolean multilinea = CAMPOS_MULTILINEA.contains(campo);
+            String error = validarTextoAnalisis(campo, valor, multilinea);
+            if (error != null) {
+                return BridgeResult.error(error);
+            }
+            cuerpo.put(campo, valor);
+        }
+        BridgeResult nc = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+        if (!nc.ok()) {
+            return nc;
+        }
+        String leida = LecturasDeSesion.huella(recursoLecturaAnalisis(id));
+        if (leida == null) {
+            return BridgeResult.error(MENSAJE_ANALISIS_SIN_LEER);
+        }
+        BridgeResult vigente = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id + "/analisis"), mapper);
+        if (!vigente.ok()) {
+            return vigente;
+        }
+        String actual = huellaAnalisis(vigente.data());
+        if (!actual.equals(leida)) {
+            return BridgeResult.error(MENSAJE_ANALISIS_CONFLICTO);
+        }
+        cuerpo.put("usuario", autorDeSesion(usuario));
+        // Canal interno para la auditoría (el payload saneado no vuelve al navegador ni a la API).
+        payload.put(MARCA_OPERACION, SIN_ANALISIS.equals(actual) ? "NUEVO" : "REEMPLAZO");
+        BridgeResult resultado = InnpackRespuestas.reenviar(api.putJson(usuario, BASE + "/" + id + "/analisis", cuerpo), mapper);
+        if (resultado.ok()) {
+            // La vista relee el análisis enseguida (y vuelve a registrar la huella); sin relectura no se puede
+            // volver a guardar encima de lo que se acaba de escribir.
+            LecturasDeSesion.olvidar(recursoLecturaAnalisis(id));
+        }
+        return resultado;
+    }
+
+    /** Recurso auditado: "nc:<id>:analisis[:<analisisId>]:NUEVO|REEMPLAZO" (sin contenido del análisis). */
+    public static String recursoAnalisis(ObjectNode payload, Object dataRespuesta) {
+        StringBuilder r = new StringBuilder(recursoNc(payload)).append(":analisis");
+        if (dataRespuesta instanceof JsonNode d && d.isObject() && d.get("id") != null && d.get("id").canConvertToLong()) {
+            r.append(':').append(d.get("id").asLong());
+        }
+        JsonNode marca = payload.get(MARCA_OPERACION);
+        if (marca != null && marca.isString()) {
+            r.append(':').append(marca.asString());
+        }
+        return r.toString();
+    }
+
+    private static String validarTextoAnalisis(String campo, String valor, boolean multilinea) {
+        if (multilinea) {
+            if (valor.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
+                return "El campo " + campo + " supera el máximo permitido (65.535 bytes).";
+            }
+            if (CONTROL.matcher(valor).find()) {
+                return MENSAJE_TEXTO_CARACTERES;
+            }
+        } else {
+            if (valor.length() > MAX_PORQUE) {
+                return "El campo " + campo + " supera el máximo de 500 caracteres.";
+            }
+            if (CONTROL_UNA_LINEA.matcher(valor).find()) {
+                return MENSAJE_TEXTO_CARACTERES;
+            }
+        }
+        if (MARCADO_HTML.matcher(valor).find()) {
+            return MENSAJE_TEXTO_HTML;
+        }
+        return null;
+    }
+
+    static String recursoLecturaAnalisis(int ncId) {
+        return "nc-analisis:" + ncId;
+    }
+
+    /** SHA-256 de los campos del análisis vigente (o de "sin análisis"): detecta cualquier cambio de contenido. */
+    static String huellaAnalisis(Object data) {
+        if (!(data instanceof JsonNode d) || !d.isObject()) {
+            return SIN_ANALISIS;
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String campo : CAMPOS_HUELLA_ANALISIS) {
+            JsonNode v = d.get(campo);
+            sb.append(campo).append('=').append(v == null || v.isNull() ? "\u0000" : v.toString()).append('\n');
+        }
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(h);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /**

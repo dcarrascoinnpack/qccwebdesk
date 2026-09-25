@@ -4,8 +4,9 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **2** (`noConformidades.seguimiento.crear` y `noConformidades.acciones.crear`,
-estado VALIDADA). Las otras 79 siguen denegadas por `ActionPolicy` (deny-by-default) hasta su propia fase.
+Escrituras habilitadas en la web: **3** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear` y
+`noConformidades.analisis.guardar`, estado VALIDADA). Las otras 78 siguen denegadas por `ActionPolicy`
+(deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
   API INNPACK `qualitycontrolinnpack_sqlserver_port` (atributos `[Authorize]`, servicios). Extraída con el
@@ -47,7 +48,7 @@ contract check C#/JS + gate de release).
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` | 39 / 38 / 4 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 79 APROBADA · 2 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 78 APROBADA · 3 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -117,7 +118,7 @@ justificación · estado.
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `noConformidades.acciones.crear` | POST `api/no-conformidades/{id}/acciones` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | crea una acción correctiva | sí: actualizar estado | **BAJO** | aditivo; responsable = dato de negocio | VALIDADA (Fase 3b, gateway 0.4.0) |
 | `noConformidades.adjuntos.subir` | POST `api/no-conformidades/{id}/adjuntos` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `subidoPor` | `subidoPor` ← nombreCompleto | adjunta PDF de causa raíz / fotos (API valida MIME y tamaño) | sí: eliminar adjunto (admin) | **BAJO** | evidencia aditiva | APROBADA |
-| `noConformidades.analisis.guardar` | PUT `api/no-conformidades/{id}/analisis` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `usuario` | `usuario` ← nombreCompleto | guarda el análisis de causa raíz (5 por qué) | sí: volver a guardar | **BAJO** | no cambia estado | APROBADA |
+| `noConformidades.analisis.guardar` | PUT `api/no-conformidades/{id}/analisis` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `usuario` | `usuario` ← nombreCompleto | guarda el análisis de causa raíz (5 por qué) | NO recuperable: la API sobrescribe en sitio sin historial (SEC-28); se corrige volviendo a guardar | **BAJO** | no cambia estado | VALIDADA (Fase 3c, gateway 0.4.0) |
 | `noConformidades.catalogos.areas.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
 | `noConformidades.catalogos.categoriasDefecto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
 | `noConformidades.catalogos.clientes.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
@@ -129,10 +130,10 @@ justificación · estado.
 | `noConformidades.catalogos.tiposFalla.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
 | `noConformidades.create` | POST `api/no-conformidades` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | crea una No Conformidad | sí: editar / eliminar (admin) | **BAJO** | registro operativo; creadoPor desde sesión | APROBADA |
 | `noConformidades.seguimiento.crear` | POST `api/no-conformidades/{id}/seguimiento` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `autor` | `autor` ← nombreCompleto | agrega un comentario de seguimiento (append-only) | no se borra; se corrige con otro comentario | **BAJO** | aditivo, sin cambio de estado; autor desde sesión | VALIDADA (Fase 3a, gateway 0.4.0) |
-| `noConformidades.acciones.actualizar` | PUT `api/no-conformidades/acciones/{accionId}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | cambia estado/datos de una acción correctiva | sí: volver a editar | **MEDIO** | puede cerrar acciones; actualizadoPor desde sesión | APROBADA |
+| `noConformidades.acciones.actualizar` | PUT `api/no-conformidades/acciones/{accionId}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | cambia estado/datos de una acción correctiva | sí: volver a editar | **MEDIO** | puede cerrar acciones; actualizadoPor desde sesión | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
 | `noConformidades.cerrar` | POST `api/no-conformidades/{id}/cerrar` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `cerradoPor` | `cerradoPor` ← nombreCompleto | cierra la NC (CERRADA) | no hay 'reabrir' en la UI | **MEDIO** | cambio de estado final; cerradoPor desde sesión | APROBADA |
-| `noConformidades.gestion.actualizar` | PATCH `api/no-conformidades/{id}/gestion` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | asigna responsable, estado de gestión y fecha compromiso | sí: volver a editar | **MEDIO** | decisión de gestión | APROBADA |
-| `noConformidades.update` | PUT `api/no-conformidades/{id}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | edita campos de la NC (actualización parcial) | sí: volver a editar | **MEDIO** | payload pasa entero a la API: lista blanca de campos en gateway | APROBADA |
+| `noConformidades.gestion.actualizar` | PATCH `api/no-conformidades/{id}/gestion` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | asigna responsable, estado de gestión y fecha compromiso | sí: volver a editar | **MEDIO** | decisión de gestión | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
+| `noConformidades.update` | PUT `api/no-conformidades/{id}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | edita campos de la NC (actualización parcial) | sí: volver a editar | **MEDIO** | payload pasa entero a la API: lista blanca de campos en gateway | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
 | `noConformidades.adjuntos.eliminar` | DELETE `api/no-conformidades/{id}/adjuntos/{adjuntoId}` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un adjunto | no desde la UI | **ALTO** | destructivo; sin autor | APROBADA |
 | `noConformidades.eliminar` | DELETE `api/no-conformidades/{id}` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto | borrado lógico de la NC | no desde la UI | **ALTO** | destructivo | APROBADA |
 
@@ -223,6 +224,25 @@ Mismo patrón, con **separación explícita identidad / negocio**:
 - Auditoría `recurso=nc:<id>` (+ `:accion:<id>` si la API devolviera el id; hoy responde `{}`).
 - Tests `BridgeFase3bTest` (15), E2E CDP 23/23.
 
+### Tercera escritura — `noConformidades.analisis.guardar` — VALIDADA (Fase 3c) — SOBRESCRIBE
+
+- **Semántica real**: la API hace upsert del ÚLTIMO análisis de la NC (UPDATE en sitio o INSERT); **no hay historial**
+  ni versión/ETag/rowversion (en el port SQL Server `actualizado_en` ni se actualiza) → el valor anterior **no es
+  recuperable** (SEC-28). No se inventó rollback.
+- **Identidad**: `usuario` (la API lo guarda como `creado_por`/`actualizado_por`) ← sesión.
+- **Negocio (lista blanca exacta de Photino)**: `metodologia` ENUM obligatoria (CINCO_PORQUES/ISHIKAWA/MIXTA);
+  `problemaDetectado` obligatorio, TEXT ≤ 65.535 bytes UTF-8, multilínea; `porque1..5` opcionales, ≤ 500 unidades
+  UTF-16 (VARCHAR/NVARCHAR(500)), una línea; `causaRaiz`/`conclusion` opcionales, TEXT, multilínea. "" se conserva
+  (así lo manda Photino); null/ausente → null. Sin marcado HTML ni controles. `analisisId` y cualquier otra clave →
+  rechazo. La relectura (`analisis.get`) NO se escapa: la vista usa `.value` (no interpreta HTML).
+- **Lost update (web, sin cambiar el contrato)**: `analisis.get` registra en la sesión una huella SHA-256 del análisis
+  leído (`LecturasDeSesion`); `analisis.guardar` exige esa lectura y relee antes del PUT: si cambió → conflicto sin
+  escribir ("El análisis fue modificado por otra persona..."); tras guardar, la huella se olvida (la vista relee al
+  instante). **Límites**: ventana mínima entre relectura y PUT; pestañas de la misma sesión comparten huella;
+  Photino no tiene protección (SEC-28). Patrón a reutilizar en toda escritura que sobrescriba.
+- **Auditoría**: `recurso=nc:<id>:analisis:<analisisId>:NUEVO|REEMPLAZO` (sin textos del análisis).
+- Tests `BridgeFase3cTest` (18), E2E CDP 23/23 con escena A/B real (conflicto en UI, relectura, guardado a sabiendas).
+
 Diseño aprobado de la primera escritura (referencia):
 
 ### Por qué esta
@@ -262,6 +282,7 @@ Referenciados contra `docs/SECURITY_HARDENING_BACKLOG.md` del repo Photino (rama
 | APIs INNPACK sin autorización por rol (solo `[Authorize]`, salvo Usuarios) | **SEC-11** (ya registrado) | roles explícitos por acción en `ActionPolicy` (esta matriz) |
 | Autor/identidad tomado del payload en vez del JWT (`creadoPor`, `actualizadoPor`, `cerradoPor`, `autor`, `subidoPor`, `usuario`, `usuarioNombre`, `usuarioId`) | **SEC-12** (ya registrado) | `IdentityOverride` desde `SessionUser` en cada escritura |
 | Operaciones que **no registran quién** las ejecutó (29 escrituras: validar/rechazar/eliminar inspecciones y registros, masivos, frecuencias, eliminar/anular en Laboratorio, maestros, estado de recepción, catálogos de talleres, `usuarios.create/resetPassword`) | **SEC-26** (registrado 2026-09-25, rama `fase-1a-gateway` `70c3fb1`) | evento `ESCRITURA` obligatorio en la auditoría del gateway |
+| Escrituras que sobrescriben sin versión/ETag ni historial (lost update; p. ej. `analisis.guardar`) | **SEC-28** (registrado 2026-09-25, `fase-1a-gateway` `da868a0`) | huella de lectura por sesión + relectura antes del PUT (`LecturasDeSesion`) |
 | Texto de usuario pintado con `innerHTML` sin escapar en No Conformidades (p. ej. comentario de seguimiento, cliente/campos de la grilla, nombres de adjuntos) → XSS almacenado que afecta a Photino (WebView2) y a la web | **SEC-27** (registrado 2026-09-25, rama `fase-1a-gateway` `70c3fb1`) | nombres de adjuntos ya saneados (2i); en escrituras, rechazo de marcado HTML en textos libres; en `seguimiento.list`, escape de `comentario`/`autor` |
 
 Registrados en `docs/SECURITY_HARDENING_BACKLOG.md` del repo Photino (rama de documentación `fase-1a-gateway`,

@@ -166,9 +166,9 @@ class BridgeFase3aTest {
         assertThat(descrita.get("identidad")).isEqualTo(Map.of("autor", IdentityOverride.Fuente.NOMBRE_COMPLETO));
         // Solo las escrituras aprobadas una a una (3a seguimiento.crear, 3b acciones.crear) están habilitadas.
         assertThat(policy.describir().stream().filter(d -> Boolean.TRUE.equals(d.get("escritura"))).map(d -> d.get("accion")))
-                .containsExactlyInAnyOrder(CREAR, "noConformidades.acciones.crear");
+                .containsExactlyInAnyOrder(CREAR, "noConformidades.acciones.crear", "noConformidades.analisis.guardar");
         for (String otra : List.of("noConformidades.create", "noConformidades.cerrar", "noConformidades.eliminar", "noConformidades.update",
-                "noConformidades.acciones.actualizar", "noConformidades.analisis.guardar", "noConformidades.adjuntos.subir")) {
+                "noConformidades.acciones.actualizar", "noConformidades.gestion.actualizar", "noConformidades.adjuntos.subir")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);
         }
     }

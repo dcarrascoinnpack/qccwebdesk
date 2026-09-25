@@ -4,6 +4,7 @@ import cl.faret.qccweb.auth.AuthProperties;
 import cl.faret.qccweb.auth.SessionUser;
 import java.net.URI;
 import java.net.http.HttpClient;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -73,9 +74,18 @@ public class InnpackApiClient {
      * @throws UpstreamNoAutorizadoException si la API responde 401 (token vencido/revocado)
      */
     public Respuesta postJson(SessionUser usuario, String path, JsonNode cuerpo) {
+        return enviarJson(HttpMethod.POST, usuario, path, cuerpo);
+    }
+
+    /** PUT JSON autenticado (escrituras que sobrescriben). Mismas garantías que postJson: sin reintentos. */
+    public Respuesta putJson(SessionUser usuario, String path, JsonNode cuerpo) {
+        return enviarJson(HttpMethod.PUT, usuario, path, cuerpo);
+    }
+
+    private Respuesta enviarJson(HttpMethod metodo, SessionUser usuario, String path, JsonNode cuerpo) {
         ResponseEntity<String> r;
         try {
-            r = restClient.post()
+            r = restClient.method(metodo)
                     .uri(URI.create(baseUrl + path))
                     .contentType(MediaType.APPLICATION_JSON)
                     .accept(MediaType.APPLICATION_JSON)

@@ -100,6 +100,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesNoConformidades.clear();
         seguimientosRecibidos.clear();
         accionesRecibidas.clear();
+        analisisRecibidos.clear();
+        analisisPorNc.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
@@ -646,6 +648,24 @@ public final class FakeInnpackApi implements AutoCloseable {
     }
 
     private final java.util.List<SeguimientoRecibido> accionesRecibidas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.List<SeguimientoRecibido> analisisRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /** Análisis vigente por NC (estado de la API simulada). NC 503 empieza SIN análisis. */
+    private final Map<Integer, JsonNode> analisisPorNc = new ConcurrentHashMap<>();
+
+    /** Cuerpo EXACTO recibido en PUT api/no-conformidades/{id}/analisis. */
+    public java.util.List<SeguimientoRecibido> analisisRecibidos() {
+        return java.util.List.copyOf(analisisRecibidos);
+    }
+
+    /** Análisis vigente simulado (null = la NC no tiene análisis). */
+    public JsonNode analisisDe(int nc) {
+        if (nc == 503 && !analisisPorNc.containsKey(nc)) {
+            return null;
+        }
+        return analisisPorNc.computeIfAbsent(nc, k -> mapper.readTree("{\"id\":7,\"metodologia\":\"CINCO_PORQUES\",\"problemaDetectado\":\"Registro corrido\","
+                + "\"porque1\":\"Tinta\",\"porque2\":\"\",\"porque3\":null,\"porque4\":null,\"porque5\":null,\"causaRaiz\":\"Rodillo gastado\","
+                + "\"conclusion\":null,\"creadoPor\":\"María\",\"creadoEn\":\"2026-09-20T10:00:00\",\"actualizadoPor\":null,\"actualizadoEn\":null}"));
+    }
 
     /** Cuerpo EXACTO recibido en POST api/no-conformidades/{id}/acciones. */
     public java.util.List<SeguimientoRecibido> accionesRecibidas() {
@@ -708,6 +728,36 @@ public final class FakeInnpackApi implements AutoCloseable {
         if (sub == null || revocados.contains(sub)) {
             ex.sendResponseHeaders(401, -1);
             ex.close();
+            return;
+        }
+        java.util.regex.Matcher an = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/analisis$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && an.matches()) {
+            int nc = Integer.parseInt(an.group(1));
+            String cuerpoAn = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            analisisRecibidos.add(new SeguimientoRecibido(nc, sub, cuerpoAn, ex.getRequestHeaders().getFirst("Content-Type")));
+            JsonNode b = mapper.readTree(cuerpoAn);
+            if ("ERROR_API".equals(b.path("problemaDetectado").asString(""))) {
+                responder(ex, 400, fallo("No se pudo guardar el análisis"));
+                return;
+            }
+            if (nc == 777) {
+                responder(ex, 500, "{\"title\":\"error interno\"}");
+                return;
+            }
+            // Upsert como la API real: UPDATE en sitio del último análisis (sin historial ni versión) o INSERT.
+            tools.jackson.databind.node.ObjectNode actual = (tools.jackson.databind.node.ObjectNode) analisisDe(nc);
+            tools.jackson.databind.node.ObjectNode nuevo = actual != null ? actual.deepCopy() : mapper.createObjectNode();
+            for (String c : new String[] {"metodologia", "problemaDetectado", "porque1", "porque2", "porque3", "porque4", "porque5", "causaRaiz", "conclusion"}) {
+                nuevo.set(c, b.get(c));
+            }
+            if (actual == null) {
+                nuevo.put("id", 100 + nc);
+                nuevo.set("creadoPor", b.get("usuario"));
+            } else {
+                nuevo.set("actualizadoPor", b.get("usuario"));
+            }
+            analisisPorNc.put(nc, nuevo);
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + nuevo.get("id").asInt() + "},\"errors\":null}");
             return;
         }
         java.util.regex.Matcher acc = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/acciones$").matcher(path);
@@ -813,8 +863,10 @@ public final class FakeInnpackApi implements AutoCloseable {
                         // Comentario malicioso guardado desde Photino (que no valida): la web debe mostrarlo sin ejecutarlo.
                         ? "[{\"id\":9,\"comentario\":\"<img src=x onerror=alert(1)> & 'x' \\\"y\\\" ñ\",\"autor\":\"<b>Mallory</b>\",\"creadoEn\":\"2026-09-20T10:00:00\"}]"
                         : "[{\"id\":1,\"comentario\":\"Revisión ñ\",\"autor\":\"María\",\"usuarioDelToken\":" + sub + "}]") + fin);
-                case "/analisis" -> responder(ex, 200, ok + (id == 503 ? "null"
-                        : "{\"id\":7,\"metodologia\":\"5 Por qué\",\"causaRaiz\":\"Tinta\",\"usuarioDelToken\":" + sub + "}") + fin);
+                case "/analisis" -> {
+                    JsonNode a = analisisDe(id);
+                    responder(ex, 200, ok + (a == null ? "null" : a.toString()) + fin);
+                }
                 case "/acciones" -> responder(ex, 200, ok + (id == 901
                         ? "[{\"id\":4,\"descripcion\":\"<img src=x onerror=alert(1)> & ñ\",\"responsable\":\"<b>Mallory</b>\",\"prioridad\":\"ALTA\",\"estado\":\"PENDIENTE\"}]"
                         : "[{\"id\":3,\"descripcion\":\"Cambiar rodillo\",\"estado\":\"PENDIENTE\",\"usuarioDelToken\":" + sub + "}]") + fin);

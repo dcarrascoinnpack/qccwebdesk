@@ -279,7 +279,15 @@ public class BridgeConfig {
                         "noConformidades.acciones.crear", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
-                        noConformidades::accionesCrear, NoConformidadesBridgeHandler::recursoAccion)));
+                        noConformidades::accionesCrear, NoConformidadesBridgeHandler::recursoAccion),
+                // Fase 3c — TERCERA ESCRITURA (sobrescribe el análisis vigente, sin versión en la API): identidad
+                // "usuario" = sesión; textos de causa raíz con lista blanca y límites del esquema; detección de
+                // lost update por huella de lectura en la sesión; auditoría NUEVO/REEMPLAZO.
+                new ActionPolicy.Regla(
+                        "noConformidades.analisis.guardar", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("usuario", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::analisisGuardar, NoConformidadesBridgeHandler::recursoAnalisis)));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
