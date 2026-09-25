@@ -176,7 +176,7 @@ class BridgeFase1cTest {
     }
 
     @Test
-    void soloAccionesHabilitadasHastaFase2h() {
+    void soloAccionesHabilitadasHastaFase2i() {
         assertThat(policy.accionesRegistradas()).containsExactlyInAnyOrder(
                 "inicio.getDashboard", "maquinasSeguimiento.obtenerResumen",
                 "dashboard.obtenerFiltros", "dashboard.obtenerResumen",
@@ -185,7 +185,15 @@ class BridgeFase1cTest {
                 "productoTerminado.filtros", "productoTerminado.resumen", "productoTerminado.list",
                 "productoTerminado.detalle", "productoTerminado.exportarDetalle",
                 "certificadosLiberacion.buscar", "certificadosLiberacion.calidadPdf.descargar",
-                "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir");
+                "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
+                "noConformidades.list", "noConformidades.resumen", "noConformidades.filtrosOpciones",
+                "noConformidades.get", "noConformidades.seguimiento.list", "noConformidades.analisis.get",
+                "noConformidades.acciones.list", "noConformidades.adjuntos.list", "noConformidades.adjuntos.abrir",
+                "noConformidades.catalogos.clientes.list", "noConformidades.catalogos.categoriasDefecto.list",
+                "noConformidades.catalogos.tiposFalla.list", "noConformidades.catalogos.supervisores.list",
+                "noConformidades.catalogos.revisores.list", "noConformidades.catalogos.areas.list",
+                "noConformidades.catalogos.familiasProducto.list", "noConformidades.catalogos.niveles.list",
+                "noConformidades.catalogos.impactos.list");
     }
 
     // ------------------------------------------------------ manipulación desde DevTools

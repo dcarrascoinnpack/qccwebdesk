@@ -6,10 +6,12 @@ import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ProductoTerminadoBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosControlBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
 import cl.faret.qccweb.upstream.InnpackApiClient;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -74,15 +76,20 @@ public class BridgeConfig {
     }
 
     @Bean
+    public NoConformidadesBridgeHandler noConformidadesBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new NoConformidadesBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ActionPolicy actionPolicy(
             InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard,
             RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl,
             ProductoTerminadoBridgeHandler productoTerminado, CertificadosLiberacionBridgeHandler certificados,
-            ControlDocumentalBridgeHandler controlDocumental) {
+            ControlDocumentalBridgeHandler controlDocumental, NoConformidadesBridgeHandler noConformidades) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
-        return new ActionPolicy(List.of(
+        List<ActionPolicy.Regla> reglas = new ArrayList<>(List.of(
                 // Fase 1c — Inicio. Solo lectura; no reenvía nada del payload.
                 new ActionPolicy.Regla(
                         "inicio.getDashboard", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), inicio::getDashboard),
@@ -145,6 +152,38 @@ public class BridgeConfig {
                         "controlDocumental.get", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), controlDocumental::get),
                 new ActionPolicy.Regla(
                         "controlDocumental.adjunto.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
-                        controlDocumental::adjuntoAbrir)));
+                        controlDocumental::adjuntoAbrir),
+                // Fase 2i — No Conformidades (solo INNPACK), SOLO LECTURA (payload plano, sin "empresa").
+                // adjuntos.abrir: solo PDF/PNG/JPEG con firma real, la vista lo muestra en la página.
+                // Las 29 escrituras (create/update/eliminar/gestion/cerrar/seguimiento.crear/
+                // analisis.guardar/acciones.*/adjuntos.subir|eliminar/catalogos.*.crear|desactivar)
+                // quedan fuera (deny-by-default).
+                new ActionPolicy.Regla(
+                        "noConformidades.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), noConformidades::list),
+                new ActionPolicy.Regla(
+                        "noConformidades.resumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), noConformidades::resumen),
+                new ActionPolicy.Regla(
+                        "noConformidades.filtrosOpciones", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        noConformidades::filtrosOpciones),
+                new ActionPolicy.Regla(
+                        "noConformidades.get", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), noConformidades::get),
+                new ActionPolicy.Regla(
+                        "noConformidades.seguimiento.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        noConformidades::seguimientoList),
+                new ActionPolicy.Regla(
+                        "noConformidades.analisis.get", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), noConformidades::analisisGet),
+                new ActionPolicy.Regla(
+                        "noConformidades.acciones.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), noConformidades::accionesList),
+                new ActionPolicy.Regla(
+                        "noConformidades.adjuntos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), noConformidades::adjuntosList),
+                new ActionPolicy.Regla(
+                        "noConformidades.adjuntos.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        noConformidades::adjuntosAbrir)));
+        for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
+            reglas.add(new ActionPolicy.Regla(
+                    "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                    noConformidades.catalogoList(catalogo)));
+        }
+        return new ActionPolicy(reglas);
     }
 }

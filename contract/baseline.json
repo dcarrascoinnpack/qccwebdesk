@@ -142,6 +142,132 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-24T17:02:10Z"
+    },
+    "noConformidades.list": {
+      "huella": "02284080e7d6102b61ff5cf6b5e433cd224d9a905d9d27b212e9cf44c8dc7282",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.resumen": {
+      "huella": "1073d0bd07463b8cf5362daccea2bdbed6f514dae2e95c20b779a61a80e654a5",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.filtrosOpciones": {
+      "huella": "1a6605b3ea745d539b684d937f39cd44b37cae7908c69e8bdde1b5193f28f7ff",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.get": {
+      "huella": "2190c2a46771f89d0f48c9c78c6353592e391eadb55d6ba36c5d663415493c43",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.seguimiento.list": {
+      "huella": "4be9c9fee6f00516640e01fd1adbb9b4b12cb57c607bd2fa0e76f065d3d94a29",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.analisis.get": {
+      "huella": "c5df42bae26a3ab038d5d9ec564ae8ffea650d40eb0faace59816d96e8aa6dc3",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.acciones.list": {
+      "huella": "3c8ec0a9fcfade2d3955fe2b60175aed3c9a833ea54a5fa6b300aea1cccfc49c",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.adjuntos.list": {
+      "huella": "2070cc2e231f2a9a05e08bbc5149e5ca810d5c2eb2d93b70470cd563a729fb3c",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.adjuntos.abrir": {
+      "huella": "6fbd02a07ef7bd2817d431450f29925dcd8501839e941789e133cfcd3cafdb4c",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.catalogos.clientes.list": {
+      "huella": "d121621bc7168bf381f179ec51978c6f8d28f431c5d70dfbdf329987fae58bf4",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.catalogos.categoriasDefecto.list": {
+      "huella": "8a899be3df77eca4c688504105ee3068bdb3c838a5ea1eb6574051e401fbee72",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.catalogos.tiposFalla.list": {
+      "huella": "9b8a41b5d59b0f4e3842170a72abb4939c69ea4f5ea350a73f133953451d455a",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.catalogos.supervisores.list": {
+      "huella": "557b8b707ec9d02e60762903d221ea2b16f3aff571b6af3520eb1f348c787532",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.catalogos.revisores.list": {
+      "huella": "56c73158cd10051299aa0e7bc8feee1caf228947cd93166de9bd4055477b7e85",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.catalogos.areas.list": {
+      "huella": "899701a383d575598604601918cad6c0907605a39ecbb9e6cd5c9e60d9c1841b",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.catalogos.familiasProducto.list": {
+      "huella": "a19b0bb0ee4f3936a6e4e43d1473764461ce40964ff5b9243f6afd080b96b732",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.catalogos.niveles.list": {
+      "huella": "bed45b02139caff5ae80eabf4e1ea8c1a22d4b36a3627b06b2d1ccf0600b2fa4",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "noConformidades.catalogos.impactos.list": {
+      "huella": "2308e7eb8bd7a0a3f080b7f400da88ec22f788ce166bb73c5acdf25f8e75c845",
+      "handler": "NoConformidadesHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:26:58Z"
     }
   }
 }

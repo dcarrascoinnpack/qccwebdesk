@@ -52,6 +52,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/producto-terminado", this::productoTerminado);
         server.createContext("/api/certificados-liberacion", this::certificadosLiberacion);
         server.createContext("/api/control-documental", this::controlDocumental);
+        server.createContext("/api/no-conformidades", this::noConformidades);
+        server.createContext("/api/nc-catalogos", this::noConformidades);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -91,6 +93,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesProductoTerminado.clear();
         peticionesCertificados.clear();
         peticionesControlDocumental.clear();
+        peticionesNoConformidades.clear();
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -615,6 +618,148 @@ public final class FakeInnpackApi implements AutoCloseable {
                 return;
             }
             responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataControlDocumentalGet(id, sub) + ",\"errors\":null}");
+            return;
+        }
+        responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+    }
+
+    private final java.util.List<String> peticionesNoConformidades = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "<método> <ruta>[?<query cruda>]" recibidos en api/no-conformidades* y api/nc-catalogos*. */
+    public java.util.List<String> peticionesNoConformidades() {
+        return java.util.List.copyOf(peticionesNoConformidades);
+    }
+
+    private static String noConformidad(int i) {
+        return "{\"id\":" + (500 + i) + ",\"codigo\":\"NC-" + String.format("%04d", i) + "\",\"cliente\":\"Viña Ñandú «" + i + "»\","
+                + "\"tipoPnc\":\"" + (i % 2 == 0 ? "Cuarentena" : "Reclamo") + "\",\"nivel\":\"" + (i % 3 == 0 ? "Crítico" : "Menor")
+                + "\",\"estadoGestion\":\"" + (i % 2 == 0 ? "ASIGNADA" : "CERRADA") + "\",\"area\":\"Impresión\",\"fechaIngreso\":\"2026-09-2" + (i % 10)
+                + "\",\"familiaProducto\":\"Cajas\",\"categoriaDefecto\":\"=SUMA(1;2)\",\"cantRechazada\":" + (10 * i) + ",\"maquina\":\"Bobst 1\"}";
+    }
+
+    /** Lista paginada { items, total, page, pageSize, pages }: cliente=VACIO → 0; cliente=GRANDE → 300; si no 3 de 42. */
+    public static String dataNoConformidadesList(int sub, String query) {
+        boolean vacio = query.contains("cliente=VACIO");
+        boolean grande = query.contains("cliente=GRANDE");
+        int n = vacio ? 0 : (grande ? 300 : 3);
+        int page = 1;
+        int pageSize = 50;
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:^|&)page=(\\d+)").matcher(query);
+        if (m.find()) {
+            page = Integer.parseInt(m.group(1));
+        }
+        m = java.util.regex.Pattern.compile("(?:^|&)pageSize=(\\d+)").matcher(query);
+        if (m.find()) {
+            pageSize = Integer.parseInt(m.group(1));
+        }
+        StringBuilder items = new StringBuilder();
+        for (int i = 0; i < n; i++) {
+            items.append(i > 0 ? "," : "").append(noConformidad(i));
+        }
+        int total = vacio ? 0 : (grande ? 300 : 42);
+        return "{\"items\":[" + items + "],\"total\":" + total + ",\"page\":" + page + ",\"pageSize\":" + pageSize
+                + ",\"pages\":" + Math.max(1, (total + pageSize - 1) / pageSize) + ",\"usuarioDelToken\":" + sub + "}";
+    }
+
+    /** JPEG mínimo (solo SOI + APP0; basta para la validación de firma). */
+    public static byte[] jpegMinimo() {
+        return new byte[] {(byte) 0xff, (byte) 0xd8, (byte) 0xff, (byte) 0xe0, 0, 0x10, 0x4a, 0x46, 0x49, 0x46, 0, 1, 1, 0, 0, 1};
+    }
+
+    /**
+     * No Conformidades + catálogos. Adjunto por adjuntoId: 1 PDF, 2 PNG, 3 JPEG (MIME en mayúsculas),
+     * 4 HTML declarado PDF, 5 GIF real (fuera de la lista), 6 text/html, 900 PNG con nombre malicioso;
+     * errores 404/600/700/800. NC 404 → no encontrada; adjuntos.list de la NC 900 trae nombres maliciosos.
+     */
+    private void noConformidades(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesNoConformidades.add(ex.getRequestMethod() + " " + path + (query == null ? "" : "?" + query));
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (!ex.getRequestMethod().equals("GET")) {
+            responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Filtro de fecha inválido"));
+            return;
+        }
+        String ok = "{\"success\":true,\"message\":null,\"data\":";
+        String fin = ",\"errors\":null}";
+        java.util.regex.Matcher cat = java.util.regex.Pattern.compile("^/api/nc-catalogos/([A-Za-z]+)$").matcher(path);
+        if (cat.matches()) {
+            if (!java.util.List.of(cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler.CATALOGOS).contains(cat.group(1))) {
+                responder(ex, 404, fallo("Catálogo no reconocido"));
+                return;
+            }
+            responder(ex, 200, ok + "[{\"id\":1,\"nombre\":\"" + cat.group(1) + " ñ\",\"activo\":true,\"usuarioDelToken\":" + sub + "}]" + fin);
+            return;
+        }
+        if (path.equals("/api/no-conformidades")) {
+            responder(ex, 200, ok + dataNoConformidadesList(sub, String.valueOf(query)) + fin);
+            return;
+        }
+        if (path.equals("/api/no-conformidades/resumen")) {
+            responder(ex, 200, ok + "{\"total\":42,\"abiertas\":30,\"cerradas\":12,\"criticas\":5,\"usuarioDelToken\":" + sub + "}" + fin);
+            return;
+        }
+        if (path.equals("/api/no-conformidades/filtros-opciones")) {
+            responder(ex, 200, ok + "{\"clientes\":[\"Viña Ñandú\"],\"tiposPnc\":[\"Reclamo\"],\"areas\":[\"Impresión\"],\"usuarioDelToken\":" + sub + "}" + fin);
+            return;
+        }
+        java.util.regex.Matcher adj = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/adjuntos/(\\d+)$").matcher(path);
+        if (adj.matches()) {
+            int adjuntoId = Integer.parseInt(adj.group(2));
+            String nombre = "adjunto_" + adjuntoId;
+            String mime = "application/pdf";
+            String base64 = "";
+            switch (adjuntoId) {
+                case 404 -> { responder(ex, 404, fallo("Adjunto no encontrado")); return; }
+                case 1 -> { nombre = "causa raíz ñ.pdf"; base64 = Base64.getEncoder().encodeToString(pdfMinimo(1)); }
+                case 2 -> { nombre = "foto1.png"; mime = "image/png"; base64 = Base64.getEncoder().encodeToString(pngMinimo()); }
+                case 3 -> { nombre = "foto2.jpg"; mime = "IMAGE/JPEG"; base64 = Base64.getEncoder().encodeToString(jpegMinimo()); }
+                case 4 -> { nombre = "falso.pdf"; base64 = Base64.getEncoder().encodeToString("<html><script>alert(1)</script></html>".getBytes(StandardCharsets.UTF_8)); }
+                case 5 -> { nombre = "anim.gif"; mime = "image/gif"; base64 = Base64.getEncoder().encodeToString("GIF89a....".getBytes(StandardCharsets.UTF_8)); }
+                case 6 -> { nombre = "x.html"; mime = "text/html"; base64 = Base64.getEncoder().encodeToString("<b>x</b>".getBytes(StandardCharsets.UTF_8)); }
+                case 600 -> nombre = "vacio.pdf";
+                case 700 -> { nombre = "grande.pdf"; base64 = "A".repeat(((10 * 1024 * 1024 + 2) / 3) * 4 + 4); }
+                case 800 -> { nombre = "roto.pdf"; base64 = "%%%no-base64%%%"; }
+                case 900 -> { nombre = "..\\<img src=x onerror=alert(1)>\".png"; mime = "image/png"; base64 = Base64.getEncoder().encodeToString(pngMinimo()); }
+                default -> base64 = Base64.getEncoder().encodeToString(pdfMinimo(adjuntoId));
+            }
+            responder(ex, 200, ok + "{\"id\":" + adjuntoId + ",\"nombreArchivo\":\"" + nombre.replace("\\", "\\\\").replace("\"", "\\\"")
+                    + "\",\"tipoMime\":\"" + mime + "\",\"contenidoBase64\":\"" + base64 + "\",\"usuarioDelToken\":" + sub + "}" + fin);
+            return;
+        }
+        java.util.regex.Matcher nc = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)(/[a-z]+)?$").matcher(path);
+        if (nc.matches()) {
+            int id = Integer.parseInt(nc.group(1));
+            String rama = nc.group(2) == null ? "" : nc.group(2);
+            if (id == 404) {
+                responder(ex, 404, fallo("No conformidad no encontrada"));
+                return;
+            }
+            switch (rama) {
+                case "" -> responder(ex, 200, ok + "{\"id\":" + id + ",\"codigo\":\"NC-0001\",\"descripcion\":\"=HYPERLINK(1)\","
+                        + "\"estadoGestion\":\"ASIGNADA\",\"usuarioDelToken\":" + sub + "}" + fin);
+                case "/seguimiento" -> responder(ex, 200, ok + "[{\"id\":1,\"comentario\":\"Revisión ñ\",\"autor\":\"María\",\"usuarioDelToken\":" + sub + "}]" + fin);
+                case "/analisis" -> responder(ex, 200, ok + "{\"id\":7,\"metodologia\":\"5 Por qué\",\"causaRaiz\":\"Tinta\",\"usuarioDelToken\":" + sub + "}" + fin);
+                case "/acciones" -> responder(ex, 200, ok + "[{\"id\":3,\"descripcion\":\"Cambiar rodillo\",\"estado\":\"PENDIENTE\",\"usuarioDelToken\":" + sub + "}]" + fin);
+                case "/adjuntos" -> {
+                    String n1 = id == 900 ? "..\\\\<img src=x onerror=alert(1)>.pdf" : "causa raíz ñ.pdf";
+                    responder(ex, 200, ok + "[{\"id\":1,\"tipo\":\"CAUSA_RAIZ_PDF\",\"nombreArchivo\":\"" + n1 + "\",\"tipoMime\":\"application/pdf\"},"
+                            + "{\"id\":2,\"tipo\":\"EVIDENCIA_FOTO\",\"nombreArchivo\":\"\",\"tipoMime\":\"image/png\"},"
+                            + "{\"id\":3,\"tipo\":\"EVIDENCIA_FOTO\",\"tipoMime\":\"image/jpeg\"}]" + fin);
+                }
+                default -> responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+            }
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
