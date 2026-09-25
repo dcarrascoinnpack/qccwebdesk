@@ -710,15 +710,19 @@ class PhotinoRealTest(unittest.TestCase):
 
     def test_accion_dinamica_de_catalogo_cubre_metodo_generador_y_transformacion(self):
         fuente = pc.GitSource(PHOTINO_REAL, "6c42e05")
-        cb = set()
-        fr = pc.fragmentos_llamado_js(fuente.read(pc.WWW + "modules/no-conformidades/no-conformidades.controller.js"),
-                                      "noConformidades.catalogos.clientes.crear", cb)
-        self.assertEqual(len(fr), 1)
-        self.assertIn("metodo: async _catalogoCrear(action, nombre)", fr[0])
-        self.assertIn("creadoPor: this._usuarioActual()", fr[0])
-        self.assertIn("metodo: _usuarioActual()", fr[0])
-        self.assertNotIn("categoriasDefecto", fr[0])
-        self.assertEqual(cb, {"crear"})
+        js = fuente.read(pc.WWW + "modules/no-conformidades/no-conformidades.controller.js")
+        otros = {"clientes": "categoriasDefecto", "categoriasDefecto": "clientes"}
+        for cat, otro in otros.items():
+            with self.subTest(cat=cat):
+                cb = set()
+                fr = pc.fragmentos_llamado_js(js, "noConformidades.catalogos.%s.crear" % cat, cb)
+                self.assertEqual(len(fr), 1)
+                self.assertIn('crearAction: "noConformidades.catalogos.%s.crear"' % cat, fr[0])
+                self.assertIn("metodo: async _catalogoCrear(action, nombre)", fr[0])
+                self.assertIn("creadoPor: this._usuarioActual()", fr[0])
+                self.assertIn("metodo: _usuarioActual()", fr[0])
+                self.assertNotIn(otro, fr[0])
+                self.assertEqual(cb, {"crear"})
         self.assertIn("input.value.trim()", pc.fragmentos_callback_js(fuente.read(pc.WWW + "shared/utils.js"), "crear")[0])
 
 
