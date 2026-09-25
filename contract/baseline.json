@@ -289,6 +289,13 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-25T11:41:26Z"
+    },
+    "usuarios.list": {
+      "huella": "442012154484f0f6064178589f0cb99eebd7f9a35e111f4b92298910f4394fa9",
+      "handler": "UsuariosHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:52:46Z"
     }
   }
 }

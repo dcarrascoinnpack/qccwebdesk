@@ -11,6 +11,7 @@ import cl.faret.qccweb.bridge.handlers.ProductoTerminadoBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RecepcionCalidadBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosControlBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.UsuariosBridgeHandler;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +31,7 @@ import tools.jackson.databind.ObjectMapper;
 public class BridgeConfig {
 
     static final Set<String> ROLES_INNPACK = Set.of("admin", "admin_ti", "operador");
+    static final Set<String> ROLES_ADMIN_INNPACK = Set.of("admin", "admin_ti");
 
     @Bean
     public InnpackApiClient innpackApiClient(AuthProperties properties) {
@@ -87,12 +89,17 @@ public class BridgeConfig {
     }
 
     @Bean
+    public UsuariosBridgeHandler usuariosBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new UsuariosBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ActionPolicy actionPolicy(
             InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard,
             RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl,
             ProductoTerminadoBridgeHandler productoTerminado, CertificadosLiberacionBridgeHandler certificados,
             ControlDocumentalBridgeHandler controlDocumental, NoConformidadesBridgeHandler noConformidades,
-            RecepcionCalidadBridgeHandler recepcionCalidad) {
+            RecepcionCalidadBridgeHandler recepcionCalidad, UsuariosBridgeHandler usuarios) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -195,7 +202,13 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "recepcion.detalle", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::detalle),
                 new ActionPolicy.Regla(
-                        "recepcion.foto.abrir", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::fotoAbrir)));
+                        "recepcion.foto.abrir", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::fotoAbrir),
+                // Fase 2k — Gestión de Usuarios, SOLO LECTURA y SOLO admin/admin_ti (UsuariosHandler.
+                // IsAdmin + [Authorize(Roles)] de la API): primera regla con roles restringidos.
+                // Respuesta reproyectada a los 7 campos PascalCase de Photino. create/delete/
+                // resetPassword fuera (deny-by-default).
+                new ActionPolicy.Regla(
+                        "usuarios.list", Set.of("INNPACK"), ROLES_ADMIN_INNPACK, Map.of(), usuarios::list)));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),

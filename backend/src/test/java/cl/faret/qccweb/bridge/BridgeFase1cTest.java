@@ -141,7 +141,7 @@ class BridgeFase1cTest {
     void accionDesconocidaORegistradaEnPhotinoPeroNoHabilitadaSeRechaza() throws Exception {
         MockHttpSession sesion = login("admin1");
         int antes = API.llamadasDashboard();
-        for (String accion : List.of("usuarios.list", "inicio.frecuencias.actualizar", "excel.guardar",
+        for (String accion : List.of("usuarios.create", "inicio.frecuencias.actualizar", "excel.guardar",
                 "noConformidades.eliminar", "accion.inventada", "Inicio.getDashboard", "inicio.getdashboard")) {
             bridge(sesion, "{\"action\":\"" + accion + "\"}")
                     .andExpect(status().isForbidden())
@@ -176,7 +176,7 @@ class BridgeFase1cTest {
     }
 
     @Test
-    void soloAccionesHabilitadasHastaFase2j() {
+    void soloAccionesHabilitadasHastaFase2k() {
         assertThat(policy.accionesRegistradas()).containsExactlyInAnyOrder(
                 "inicio.getDashboard", "maquinasSeguimiento.obtenerResumen",
                 "dashboard.obtenerFiltros", "dashboard.obtenerResumen",
@@ -194,7 +194,8 @@ class BridgeFase1cTest {
                 "noConformidades.catalogos.revisores.list", "noConformidades.catalogos.areas.list",
                 "noConformidades.catalogos.familiasProducto.list", "noConformidades.catalogos.niveles.list",
                 "noConformidades.catalogos.impactos.list",
-                "recepcion.list", "recepcion.detalle", "recepcion.foto.abrir");
+                "recepcion.list", "recepcion.detalle", "recepcion.foto.abrir",
+                "usuarios.list");
     }
 
     // ------------------------------------------------------ manipulación desde DevTools
@@ -285,7 +286,7 @@ class BridgeFase1cTest {
     void niJwtNiContrasenaEnLogsNiRespuestas(CapturedOutput salida) throws Exception {
         MockHttpSession sesion = login("operador1");
         String body = bridge(sesion, "{\"action\":\"inicio.getDashboard\"}").andReturn().getResponse().getContentAsString();
-        bridge(sesion, "{\"action\":\"usuarios.list\"}");
+        bridge(sesion, "{\"action\":\"usuarios.create\"}");
 
         assertThat(body).doesNotContain(FakeInnpackApi.firmaDeToken(10), "eyJ");
         assertThat(salida.getAll())

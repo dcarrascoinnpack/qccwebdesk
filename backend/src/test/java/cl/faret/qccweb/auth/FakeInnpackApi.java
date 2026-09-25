@@ -55,6 +55,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/no-conformidades", this::noConformidades);
         server.createContext("/api/nc-catalogos", this::noConformidades);
         server.createContext("/api/recepcion-calidad", this::recepcionCalidad);
+        server.createContext("/api/usuarios", this::usuarios);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -96,6 +97,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesControlDocumental.clear();
         peticionesNoConformidades.clear();
         peticionesRecepcion.clear();
+        peticionesUsuarios.clear();
+        modoUsuarios = "NORMAL";
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -856,6 +859,59 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+    }
+
+    private final java.util.List<String> peticionesUsuarios = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private volatile String modoUsuarios = "NORMAL";
+
+    /** "<método> <ruta>" recibidos en api/usuarios*. */
+    public java.util.List<String> peticionesUsuarios() {
+        return java.util.List.copyOf(peticionesUsuarios);
+    }
+
+    /** NORMAL | VACIO (data []) | NULO (data null) | OBJETO (data {}) | ITEM_INVALIDO ([1]). */
+    public void modoUsuarios(String modo) {
+        this.modoUsuarios = modo;
+    }
+
+    /**
+     * GET api/usuarios con [Authorize(Roles = "admin,admin_ti")] (403 sin cuerpo para otro rol del
+     * JWT). Fila 1 trae campos EXTRA (passwordHash, token) que el gateway debe descartar; fila 2 viene
+     * incompleta y con nombres en PascalCase/mayúsculas mezcladas.
+     */
+    private void usuarios(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        peticionesUsuarios.add(ex.getRequestMethod() + " " + ex.getRequestURI().getRawPath());
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        Usuario actor = usuarios.values().stream().filter(u -> u.id() == sub).findFirst().orElse(null);
+        if (actor == null || !(actor.rol().equals("admin") || actor.rol().equals("admin_ti"))) {
+            ex.sendResponseHeaders(403, -1);
+            ex.close();
+            return;
+        }
+        if (!ex.getRequestMethod().equals("GET") || !ex.getRequestURI().getRawPath().equals("/api/usuarios")) {
+            responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
+            return;
+        }
+        String data = switch (modoUsuarios) {
+            case "VACIO" -> "[]";
+            case "NULO" -> "null";
+            case "OBJETO" -> "{\"id\":1}";
+            case "ITEM_INVALIDO" -> "[1]";
+            case "ACTIVO_TEXTO" -> "[{\"id\":1,\"activo\":\"true\"}]";
+            case "FECHA_NUMERO" -> "[{\"id\":1,\"creadoEn\":123}]";
+            case "ID_TEXTO" -> "[{\"id\":\"1\"}]";
+            default -> "[{\"id\":10,\"codigoUsuario\":\"operador1\",\"nombreCompleto\":\"María José Peña «ñ»\",\"rol\":\"operador\",\"activo\":true,"
+                    + "\"creadoEn\":\"2026-07-29T10:15:00\",\"actualizadoEn\":null,\"passwordHash\":\"$2a$11$SECRETO\",\"token\":\"eyJSECRETO\"},"
+                    + "{\"Id\":20,\"CODIGOUSUARIO\":\"admin1\",\"NombreCompleto\":\"<b>Admin</b>\",\"rol\":null}]";
+        };
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 
     private Integer subDeBearer(String authorization) {
