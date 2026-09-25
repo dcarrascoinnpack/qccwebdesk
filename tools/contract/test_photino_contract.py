@@ -294,6 +294,73 @@ public class MaquinasHandler {
 ''' % "\n".join("            // parseo largo %d { \"}\" }" % i + "\n            id = id ?? %d;" % i for i in range(60))
 
 
+INICIO_JS_FILTROS = '''
+window.InicioController = class {
+    _getFiltros() {
+        return { desde: document.getElementById("d").value, hasta: document.getElementById("h").value };
+    }
+    pintar() { document.body.style.color = "red"; } // visual, no es payload
+    async cargar() {
+        const filtros = this._getFiltros();
+        const pagina = 1;
+        return window.PhotinoBridge.send({ action: "inicio.getDashboard", data: { ...filtros, pagina } });
+    }
+};
+'''
+
+
+class HuellaFrontendTest(unittest.TestCase):
+    """Huella del LLAMADO del frontend: detecta cambios de payload, ignora cambios visuales."""
+
+    JS = "src/UI/www/modules/inicio/inicio.controller.js"
+
+    def setUp(self):
+        self.base = baseline_de(repo(**{self.JS: INICIO_JS_FILTROS}))
+
+    def estado_con(self, js):
+        filas, _ = estados(repo(**{self.JS: js}), baseline=self.base)
+        return filas["inicio.getDashboard"]
+
+    def test_mismo_frontend_es_compatible_y_la_baseline_guarda_huella_frontend(self):
+        self.assertEqual(self.estado_con(INICIO_JS_FILTROS)["estado"], "COMPATIBLE")
+        self.assertTrue(self.base["acciones"]["inicio.getDashboard"]["huellaFrontend"])
+
+    def test_cambio_de_clave_en_el_payload_pasa_a_revisar(self):
+        f = self.estado_con(INICIO_JS_FILTROS.replace("...filtros, pagina", "...filtros, pagina, empresa: \"X\""))
+        self.assertEqual(f["estado"], "REVISAR")
+        self.assertIn("payload del frontend", f["motivo"])
+
+    def test_cambio_en_el_helper_que_arma_el_payload_pasa_a_revisar(self):
+        f = self.estado_con(INICIO_JS_FILTROS.replace("hasta: document", "fechaHasta: document"))
+        self.assertEqual(f["estado"], "REVISAR")
+
+    def test_cambio_en_la_declaracion_local_pasa_a_revisar(self):
+        self.assertEqual(self.estado_con(INICIO_JS_FILTROS.replace("const pagina = 1;", "const pagina = \"1\";"))["estado"],
+                         "REVISAR")
+
+    def test_cambios_visuales_comentarios_y_espacios_no_la_alteran(self):
+        js = INICIO_JS_FILTROS.replace('style.color = "red"', 'style.color = "blue"; this.x = 1') \
+            .replace("async cargar() {", "// comentario\n    async cargar()   {\n") + "\n/* css-ish */ .clase {}\n"
+        self.assertEqual(self.estado_con(js)["estado"], "COMPATIBLE")
+
+    def test_baseline_antigua_sin_huella_frontend_es_revisar(self):
+        base = json.loads(json.dumps(self.base))
+        del base["acciones"]["inicio.getDashboard"]["huellaFrontend"]
+        filas, _ = estados(repo(**{self.JS: INICIO_JS_FILTROS}), baseline=base)
+        self.assertEqual(filas["inicio.getDashboard"]["estado"], "REVISAR")
+        self.assertIn("sin huella del frontend", filas["inicio.getDashboard"]["motivo"])
+
+    def test_literal_en_mapa_de_configuracion_usa_su_sentencia(self):
+        js = 'const CFG = [\n  { campo: "a", listAction: "inicio.getDashboard", otra: 1 },\n];\n'
+        fr = pc.fragmentos_llamado_js(js, "inicio.getDashboard")
+        self.assertEqual(len(fr), 1)
+        self.assertIn('listAction: "inicio.getDashboard"', fr[0])
+
+    def test_quitar_comentarios_js_respeta_strings_y_urls(self):
+        self.assertEqual(pc.quitar_comentarios_js('a = "http://x"; // c\nb = `/*no*/`; /* si */ c = 1'),
+                         'a = "http://x"; \nb = `/*no*/`;  c = 1')
+
+
 class BloqueIfLargoTest(unittest.TestCase):
     """Rama `if (action == ...) { ... }` más larga que cualquier tope: se toma el bloque completo."""
 

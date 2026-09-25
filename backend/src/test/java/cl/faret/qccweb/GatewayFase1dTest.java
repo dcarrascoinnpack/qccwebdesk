@@ -15,6 +15,7 @@ import java.net.http.HttpResponse;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
+import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
@@ -67,6 +68,20 @@ class GatewayFase1dTest {
         assertThat(c.get("compatibles").asInt()).isEqualTo(1);
         assertThat(c.get("accionesFrontend").asInt()).isEqualTo(236);
         assertThat(c.get("revisar").asInt()).isZero();
+    }
+
+    @Test
+    void versionDeclaraElPhotinoValidadoYLasAccionesPorEstado() throws Exception {
+        var v = mapper.readTree(http.send(HttpRequest.newBuilder(url("/version")).build(), HttpResponse.BodyHandlers.ofString()).body());
+        assertThat(v.at("/photino/validado/version").asString()).isEqualTo("1.8.12");
+        assertThat(v.at("/photino/validado/commit").asString()).isEqualTo("6c42e05d11c0");
+        assertThat(v.at("/frontend/webDistSha256").asString()).isEqualTo("41b37a00");
+        assertThat(v.at("/acciones/COMPATIBLE/0").asString()).isEqualTo("inicio.getDashboard");
+        assertThat(v.at("/acciones/PENDIENTE")).hasSize(2);
+        assertThat(v.at("/acciones/REVISAR")).isEmpty();
+        // PowerShell ConvertTo-Json puede aplanar una lista de 1 elemento: igual sale como lista.
+        assertThat(v.at("/acciones/SOLO_WEB/0").asString()).isEqualTo("c.z");
+        assertThat(v.toString()).doesNotContain("token", "password", "eyJ");
     }
 
     @Test
@@ -127,6 +142,10 @@ class GatewayFase1dTest {
             Files.writeString(dir.resolve("www/index.html"), "<html></html>");
             Files.writeString(dir.resolve("web-manifest.json"), new ObjectMapper().writeValueAsString(Map.of(
                     "photinoVersion", "1.8.12",
+                    "webDistSha256", "41b37a00",
+                    "photinoValidado", Map.of("version", "1.8.12", "commit", "6c42e05d11c0"),
+                    "acciones", Map.of("COMPATIBLE", List.of("inicio.getDashboard"), "PENDIENTE", List.of("a.x", "b.y"),
+                            "REVISAR", List.of(), "SOLO_WEB", "c.z"),
                     "contrato", Map.of("estado", "PARCIAL", "texto", "Photino 1.8.12 · Web compatible 1/236",
                             "compatibles", 1, "accionesFrontend", 236, "pendientes", 235, "revisar", 0, "soloWeb", 0,
                             "bloqueante", false))));

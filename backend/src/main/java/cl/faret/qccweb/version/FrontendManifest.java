@@ -29,6 +29,12 @@ public class FrontendManifest {
         return texto(raiz, campo);
     }
 
+    /** Bloque objeto del manifest (p. ej. "photinoValidado", "acciones"), o null si no existe. */
+    public JsonNode objeto(String campo) {
+        JsonNode c = raiz == null ? null : raiz.get(campo);
+        return c != null && c.isObject() ? c : null;
+    }
+
     /** Bloque "contrato" del manifest, o null si el contract check no se ejecutó. */
     public JsonNode contrato() {
         JsonNode c = raiz == null ? null : raiz.get("contrato");

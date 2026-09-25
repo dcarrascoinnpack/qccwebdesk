@@ -212,6 +212,140 @@ def _avanzar_hasta(src, j, fin):
     return len(src) - 1
 
 
+# =============================================================== frontend JS (huella del llamado)
+
+def quitar_comentarios_js(texto):
+    """Elimina comentarios // y /* */ de JS respetando strings '..', ".." y `..`."""
+    out, i, n = [], 0, len(texto)
+    while i < n:
+        c = texto[i]
+        if texto.startswith("//", i):
+            j = texto.find("\n", i)
+            i = n if j < 0 else j
+        elif texto.startswith("/*", i):
+            j = texto.find("*/", i + 2)
+            i = n if j < 0 else j + 2
+        elif c in "\"'`":
+            j = _fin_string_js(texto, i)
+            out.append(texto[i:j])
+            i = j
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def _fin_string_js(texto, i):
+    q, j, n = texto[i], i + 1, len(texto)
+    while j < n:
+        if texto[j] == "\\":
+            j += 2
+            continue
+        if texto[j] == q or (q != "`" and texto[j] == "\n"):
+            return j + 1
+        j += 1
+    return n
+
+
+def _cierre_js(texto, abre):
+    """Índice del cierre que balancea el ( [ { en `abre`, saltando strings JS; -1 si no cierra."""
+    pares = {"(": ")", "[": "]", "{": "}"}
+    pila, i, n = [], abre, len(texto)
+    while i < n:
+        c = texto[i]
+        if c in "\"'`":
+            i = _fin_string_js(texto, i)
+            continue
+        if c in pares:
+            pila.append(pares[c])
+        elif c in ")]}":
+            if not pila or pila.pop() != c:
+                return -1
+            if not pila:
+                return i
+        i += 1
+    return -1
+
+
+def _sentencia_js(texto, inicio):
+    """Desde `inicio` hasta el ; o fin de línea de nivel 0 (balanceando paréntesis/llaves)."""
+    i, n = inicio, len(texto)
+    while i < n:
+        c = texto[i]
+        if c in "\"'`":
+            i = _fin_string_js(texto, i)
+            continue
+        if c in "([{":
+            k = _cierre_js(texto, i)
+            if k < 0:
+                return texto[inicio:]
+            i = k + 1
+            continue
+        if c in ";\n":
+            return texto[inicio:i]
+        i += 1
+    return texto[inicio:]
+
+
+def _metodo_js(texto, nombre):
+    """Definición `nombre(...) {...}` (método de clase o function) del mismo archivo, o None."""
+    m = re.search(r"(?m)^[ \t]*(?:async\s+)?(?:function\s+)?" + re.escape(nombre) + r"\s*\([^)]*\)\s*\{", texto)
+    if not m:
+        return None
+    k = _cierre_js(texto, m.end() - 1)
+    return texto[m.start():k + 1] if k >= 0 else None
+
+
+def fragmentos_llamado_js(texto, accion):
+    """
+    Lo mínimo que define el PAYLOAD que el frontend manda para `accion`:
+      - el argumento completo de cada PhotinoBridge.send(...) que contiene el literal de la acción
+        (si el literal no está dentro de un send, p. ej. un mapa de configuración, su sentencia);
+      - un salto: declaraciones locales (const/let/var) de identificadores usados en ese argumento
+        (`...filtros`, `data`) dentro de las 80 líneas anteriores, y los métodos `this.x(...)`
+        llamados desde el argumento o desde esas declaraciones.
+    No cubre mutaciones posteriores (`data.x = ...`): documentado como límite.
+    """
+    limpio = quitar_comentarios_js(texto)
+    frag = []
+    for m in re.finditer(r"([\"'`])" + re.escape(accion) + r"\1", limpio):
+        pos = m.start()
+        send = limpio.rfind("PhotinoBridge.send(", 0, pos)
+        arg = None
+        if send >= 0:
+            abre = send + len("PhotinoBridge.send")
+            cierra = _cierre_js(limpio, abre)
+            if cierra > pos:
+                arg = limpio[abre:cierra + 1]
+        if arg is None:
+            ini = limpio.rfind("\n", 0, pos) + 1
+            arg = _sentencia_js(limpio, ini)
+            ancla = ini
+        else:
+            ancla = send
+        partes = ["llamado:" + arg]
+        previo = limpio[:ancla]
+        ventana = "\n".join(previo.split("\n")[-80:])
+        base = len(previo) - len(ventana)
+        extras = []
+        # Identificadores sueltos o en spread (`...x`), no accesos a miembro (`obj.x`).
+        idents = {mi.group(1) for mi in re.finditer(r"(?<![\w$])([A-Za-z_$][\w$]*)", arg)
+                  if not (arg[:mi.start()].endswith(".") and not arg[:mi.start()].endswith("..."))}
+        for ident in sorted(idents):
+            decl = None
+            for d in re.finditer(r"\b(?:const|let|var)\s+" + re.escape(ident) + r"\s*=", ventana):
+                decl = d
+            if decl:
+                extras.append(_sentencia_js(limpio, base + decl.start()))
+        partes += ["decl:" + e for e in extras]
+        for met in sorted(set(re.findall(r"this\.(\w+)\s*\(", arg + "\n" + "\n".join(extras)))):
+            cuerpo = _metodo_js(limpio, met)
+            if cuerpo:
+                partes.append("metodo:" + cuerpo)
+        frag.append("\n".join(re.sub(r"\s+", " ", p).strip() for p in partes))
+    return frag
+
+
 LLAMADA = re.compile(r"(?<![\w.])([A-Z]\w*)\s*\(")
 LLAMADA_CAMPO = re.compile(r"\b(_\w+)\s*\.\s*([A-Z]\w*)\s*\(")
 LITERAL_ACCION = re.compile(r'"([a-zA-Z]+(?:\.[a-zA-Z0-9_]+)+)"')
@@ -368,6 +502,23 @@ class Inventario:
         digest = hashlib.sha256("\n".join(sorted(partes)).encode("utf-8")).hexdigest()
         return digest, None, componentes[:2] + sorted(componentes[2:])
 
+    def huella_frontend(self, accion):
+        """
+        SHA-256 del LLAMADO del frontend a la acción (payload): fragmentos_llamado_js en cada
+        archivo .js/.html que la usa. Un cambio visual/CSS no la altera; un cambio en las claves o
+        en cómo se arma el payload sí → REVISAR. Devuelve (huella | None, error | None).
+        """
+        archivos = sorted(self.frontend.get(accion, []))
+        if not archivos:
+            return None, "el frontend no usa la acción"
+        partes = []
+        for rel in archivos:
+            for fr in fragmentos_llamado_js(self.fuente.read(WWW + rel), accion):
+                partes.append(rel + "\n" + fr)
+        if not partes:
+            return None, "no se encontró el llamado literal en " + ", ".join(archivos)
+        return hashlib.sha256("\n--\n".join(sorted(partes)).encode("utf-8")).hexdigest(), None
+
     def _huella_metodo_router(self, accion, metodo):
         """Acción atendida directamente por un método de MessageRouter (ruta exacta)."""
         cuerpo = extraer_metodo(self.fuente.read(ROUTER), metodo)
@@ -444,15 +595,23 @@ def comparar(inv, web_actions, baseline):
                 fila["motivo"] = "Photino ya no la " + ("atiende" if not en_back else "usa en el frontend")
             else:
                 h, error, componentes = inv.huella(a)
+                hf, error_f = inv.huella_frontend(a)
                 fila["huella"] = h
+                fila["huellaFrontend"] = hf
                 fila["componentesHuella"] = componentes
+                validada = "(%s)" % (base.get(a, {}).get("photinoVersion") or base.get(a, {}).get("photinoCommit", "?")[:7])
                 if h is None:
                     fila["estado"], fila["motivo"] = "REVISAR", "no se pudo calcular la huella: " + error
+                elif hf is None:
+                    fila["estado"], fila["motivo"] = "REVISAR", "no se pudo calcular la huella del frontend: " + error_f
                 elif a not in base:
                     fila["estado"], fila["motivo"] = "REVISAR", "sin huella validada (baseline)"
                 elif base[a].get("huella") != h:
-                    fila["estado"], fila["motivo"] = "REVISAR", "la lógica C# cambió desde la validación (%s)" % (
-                        base[a].get("photinoVersion") or base[a].get("photinoCommit", "?")[:7])
+                    fila["estado"], fila["motivo"] = "REVISAR", "la lógica C# cambió desde la validación " + validada
+                elif not base[a].get("huellaFrontend"):
+                    fila["estado"], fila["motivo"] = "REVISAR", "sin huella del frontend validada (baseline)"
+                elif base[a]["huellaFrontend"] != hf:
+                    fila["estado"], fila["motivo"] = "REVISAR", "el llamado/payload del frontend cambió desde la validación " + validada
                 else:
                     fila["estado"] = "COMPATIBLE"
         elif en_front and en_back:
@@ -533,13 +692,15 @@ def aprobar(baseline, filas, acciones, fuente):
     nuevas = dict(baseline.get("acciones", {}))
     for a in acciones:
         f = por_accion.get(a)
-        if not f or not f["web"] or not f["huella"]:
+        if not f or not f["web"] or not f["huella"] or not f.get("huellaFrontend"):
             raise ValueError("No se puede aprobar '%s': no está habilitada en web o no tiene huella calculable" % a)
-        nuevas[a] = {"huella": f["huella"], "handler": f["handler"], "photinoCommit": fuente.commit,
+        nuevas[a] = {"huella": f["huella"], "huellaFrontend": f["huellaFrontend"], "handler": f["handler"],
+                     "photinoCommit": fuente.commit,
                      "photinoVersion": version_photino(fuente),
                      "aprobado": datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")}
-    return {"descripcion": "Huellas de la lógica C# de Photino validadas para cada acción habilitada en web. "
-                           "Solo se actualiza con --aprobar tras revisar el cambio.",
+    return {"descripcion": "Huellas validadas por acción habilitada en web: lógica C# de Photino (huella) y "
+                           "llamado/payload del frontend (huellaFrontend). Solo se actualiza con --aprobar tras "
+                           "revisar el cambio.",
             "photinoCommit": fuente.commit, "photinoVersion": version_photino(fuente), "acciones": nuevas}
 
 
