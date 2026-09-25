@@ -190,7 +190,9 @@
         // Photino: imágenes/PDF se previsualizan en la modal (data: URI) y el resto se escribía en
         // %TEMP% y se abría con Process.Start. Web: previsualizable → mismo contrato; el resto se
         // descarga con un Blob.
-        "controlDocumental.adjunto.abrir": abrirAdjuntoEnNavegador
+        "controlDocumental.adjunto.abrir": abrirAdjuntoEnNavegador,
+        // Mismo contrato y mismo flujo de Photino en Laboratorio (%TEMP%\QCC_MuestraLaboratorio).
+        "muestraLab.adjunto.abrir": abrirAdjuntoEnNavegador
     };
     var MAX_ADJUNTO_BYTES = 25 * 1024 * 1024;
     var MIME_PREVISUALIZABLES = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/gif", "image/bmp", "image/webp"];

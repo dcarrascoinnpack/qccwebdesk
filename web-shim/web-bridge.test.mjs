@@ -196,7 +196,7 @@ test("calidadPdf.descargar pasa por el gateway (con CSRF) y descarga el PDF en e
     assert.equal(shim.blobs[0].size, Buffer.from(PDF_MINIMO, "base64").length);
     // No es una acción "de navegador": el contract check la ve en la ActionPolicy del gateway.
     assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesNavegador), ["excel.guardar"]);
-    assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesDescarga), [ACCION_PDF, "controlDocumental.adjunto.abrir"]);
+    assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesDescarga), [ACCION_PDF, "controlDocumental.adjunto.abrir", "muestraLab.adjunto.abrir"]);
 });
 
 test("un error del gateway en calidadPdf.descargar se devuelve tal cual, sin descarga", async () => {
@@ -267,7 +267,7 @@ test("adjunto previsualizable (PDF/imagen) se devuelve tal cual para la modal de
         assert.equal(JSON.parse(shim.registro.fetch[0].opciones.body).documentoVersionId, 1, "payload plano, sin data");
         assert.equal(shim.registro.descargas.length, 0);
     }
-    assert.deepEqual(plano(cargarShim().ctx.QCC_WEB.accionesDescarga), [ACCION_PDF, ACCION_ADJ]);
+    assert.deepEqual(plano(cargarShim().ctx.QCC_WEB.accionesDescarga), [ACCION_PDF, ACCION_ADJ, "muestraLab.adjunto.abrir"]);
 });
 
 test("adjunto no previsualizable se descarga con Blob y responde {previsualizable:false, nombreArchivo} como Photino", async () => {
@@ -310,4 +310,24 @@ test("adjunto vacío, corrupto o excesivo se rechaza limpiamente; el error del g
     const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ADJ, documentoVersionId: 404 });
     assert.equal(res.error, "Esta versión no tiene ningún archivo adjunto");
     assert.equal(shim.registro.descargas.length, 0);
+});
+
+// ------------------------------------------------------------------ Fase 2l: adjuntos de Laboratorio
+const ACCION_LAB = "muestraLab.adjunto.abrir";
+
+test("muestraLab.adjunto.abrir: PDF se previsualiza, docx se descarga; payload en data va al gateway con CSRF", async () => {
+    let shim = shimConPdf({ previsualizable: true, nombreArchivo: "informe ñ.pdf", tipoMime: "application/pdf", contenidoBase64: PDF_MINIMO });
+    let res = await shim.ctx.PhotinoBridge.send({ action: ACCION_LAB, data: { adjuntoId: 7 } });
+    assert.deepEqual(plano(res.data), { previsualizable: true, nombreArchivo: "informe ñ.pdf", tipoMime: "application/pdf", contenidoBase64: PDF_MINIMO });
+    assert.equal(shim.registro.fetch.length, 1);
+    assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
+    assert.deepEqual(JSON.parse(shim.registro.fetch[0].opciones.body).data, { adjuntoId: 7 });
+    assert.equal(shim.registro.descargas.length, 0);
+
+    shim = shimConPdf({ previsualizable: false, nombreArchivo: "..\certificado.docx",
+        tipoMime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", contenidoBase64: DOCX_MINIMO });
+    res = await shim.ctx.PhotinoBridge.send({ action: ACCION_LAB, data: { adjuntoId: 8 } });
+    assert.deepEqual(plano(res), { ok: true, success: true, data: { previsualizable: false, nombreArchivo: "certificado.docx" }, error: null });
+    assert.equal(shim.registro.descargas.length, 1);
+    assert.equal(shim.registro.descargas[0].nombre, "certificado.docx");
 });

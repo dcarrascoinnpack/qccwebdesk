@@ -120,6 +120,15 @@ public class ControlDocumentalBridgeHandler {
             return BridgeResult.error(MENSAJE_ID_VERSION);
         }
         BridgeResult upstream = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/adjunto/" + versionId), mapper);
+        return adjuntoParaNavegador(upstream, "adjunto_" + versionId, MAX_BASE64_CHARS, mapper);
+    }
+
+    /**
+     * Valida un adjunto {nombreArchivo, tipoMime, contenidoBase64} de la API (contenido, tamaño,
+     * base64, firma real vs. MIME, nombre) y arma el contrato {previsualizable, nombreArchivo, tipoMime,
+     * contenidoBase64} que web-bridge.js previsualiza o descarga. Compartido con Laboratorio (2l).
+     */
+    public static BridgeResult adjuntoParaNavegador(BridgeResult upstream, String nombrePorDefecto, int maxBase64Chars, ObjectMapper mapper) {
         if (!upstream.ok()) {
             return upstream;
         }
@@ -128,7 +137,7 @@ public class ControlDocumentalBridgeHandler {
         if (base64.isEmpty()) {
             return BridgeResult.error(MENSAJE_SIN_CONTENIDO);
         }
-        if (base64.length() > MAX_BASE64_CHARS) {
+        if (base64.length() > maxBase64Chars) {
             return BridgeResult.error(MENSAJE_TAMANO);
         }
         byte[] inicio = inicioDecodificado(base64);
@@ -136,7 +145,7 @@ public class ControlDocumentalBridgeHandler {
             return BridgeResult.error(MENSAJE_ADJUNTO_INVALIDO);
         }
         String tipoMime = textoDe(adjunto, "tipoMime").trim().toLowerCase();
-        String nombre = nombreArchivoSeguro(textoDe(adjunto, "nombreArchivo"), "adjunto_" + versionId);
+        String nombre = nombreArchivoSeguro(textoDe(adjunto, "nombreArchivo"), nombrePorDefecto);
         boolean previsualizable = firmaCoincide(tipoMime, inicio);
 
         ObjectNode salida = mapper.createObjectNode();

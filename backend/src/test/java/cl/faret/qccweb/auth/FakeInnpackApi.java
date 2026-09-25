@@ -56,6 +56,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/nc-catalogos", this::noConformidades);
         server.createContext("/api/recepcion-calidad", this::recepcionCalidad);
         server.createContext("/api/usuarios", this::usuarios);
+        server.createContext("/api/muestra-laboratorio", this::muestraLaboratorio);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -98,6 +99,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesNoConformidades.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
+        peticionesLaboratorio.clear();
         modoUsuarios = "NORMAL";
         modoDashboard = ModoDashboard.NORMAL;
     }
@@ -912,6 +914,115 @@ public final class FakeInnpackApi implements AutoCloseable {
                     + "{\"Id\":20,\"CODIGOUSUARIO\":\"admin1\",\"NombreCompleto\":\"<b>Admin</b>\",\"rol\":null}]";
         };
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
+    }
+
+    private final java.util.List<String> peticionesLaboratorio = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "<método> <ruta>[?<query cruda>]" recibidos en api/muestra-laboratorio*. */
+    public java.util.List<String> peticionesLaboratorio() {
+        return java.util.List.copyOf(peticionesLaboratorio);
+    }
+
+    /**
+     * Laboratorio - Muestras (lecturas). Detalle 404 → "Muestra no encontrada"; registro-produccion con
+     * np=ERROR → 400. Adjunto por id: 1 PDF, 2 PNG, 3 DOCX, 4 HTML declarado PDF, 404, 600 vacío,
+     * 700 excesivo (> 10 MB), 800 corrupto, 900 nombre malicioso.
+     */
+    private void muestraLaboratorio(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesLaboratorio.add(ex.getRequestMethod() + " " + path + (query == null ? "" : "?" + query));
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (!ex.getRequestMethod().equals("GET")) {
+            responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Filtro de fecha inválido"));
+            return;
+        }
+        String ok = "{\"success\":true,\"message\":null,\"data\":";
+        String fin = ",\"errors\":null}";
+        String q = query == null ? "" : query;
+        String base = "/api/muestra-laboratorio";
+        switch (path) {
+            case "/api/muestra-laboratorio" -> {
+                responder(ex, 200, ok + "[{\"id\":501,\"np\":\"NP-100\",\"cliente\":\"Viña Ñandú «1»\",\"estado\":\"EnAnalisis\",\"q\":\"" + q
+                        + "\",\"usuarioDelToken\":" + sub + "}]" + fin);
+                return;
+            }
+            case "/api/muestra-laboratorio/catalogos" -> {
+                responder(ex, 200, ok + "{\"maquinas\":[{\"id\":3,\"nombre\":\"Corrugadora ñ\"}],\"usuarioDelToken\":" + sub + "}" + fin);
+                return;
+            }
+            case "/api/muestra-laboratorio/indicadores" -> {
+                responder(ex, 200, ok + "{\"total\":12,\"enAnalisis\":4,\"usuarioDelToken\":" + sub + "}" + fin);
+                return;
+            }
+            case "/api/muestra-laboratorio/metodos" -> {
+                responder(ex, 200, ok + "[{\"id\":1,\"tipoEnsayo\":\"HUMEDAD\",\"nombre\":\"Estufa\",\"activo\":true}]" + fin);
+                return;
+            }
+            case "/api/muestra-laboratorio/especificaciones" -> {
+                responder(ex, 200, ok + "[{\"id\":2,\"tipoEnsayo\":\"ECT\",\"minimo\":5.5}]" + fin);
+                return;
+            }
+            case "/api/muestra-laboratorio/bobina-historial" -> {
+                responder(ex, 200, ok + "[{\"muestraId\":7,\"q\":\"" + q + "\"}]" + fin);
+                return;
+            }
+            case "/api/muestra-laboratorio/registro-produccion" -> {
+                if (q.contains("np=ERROR")) {
+                    responder(ex, 400, fallo("No hay controles para esa NP"));
+                } else {
+                    responder(ex, 200, ok + "[{\"control\":\"Humedad\",\"q\":\"" + q + "\"}]" + fin);
+                }
+                return;
+            }
+            default -> { }
+        }
+        java.util.regex.Matcher adj = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/adjunto/(\\d+)$").matcher(path);
+        if (adj.matches()) {
+            int id = Integer.parseInt(adj.group(1));
+            String nombre = "adjunto_" + id;
+            String mime = "application/pdf";
+            String base64 = "";
+            switch (id) {
+                case 404 -> { responder(ex, 404, fallo("Adjunto no encontrado")); return; }
+                case 1 -> { nombre = "informe ñ.pdf"; base64 = Base64.getEncoder().encodeToString(pdfMinimo(1)); }
+                case 2 -> { nombre = "foto.png"; mime = "image/png"; base64 = Base64.getEncoder().encodeToString(pngMinimo()); }
+                case 3 -> { nombre = "certificado.docx"; mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+                    base64 = Base64.getEncoder().encodeToString(new byte[] {0x50, 0x4b, 0x03, 0x04, 0x14, 0, 0, 0, 1, 2, 3}); }
+                case 4 -> { nombre = "falso.pdf"; base64 = Base64.getEncoder().encodeToString("<html><script>alert(1)</script></html>".getBytes(StandardCharsets.UTF_8)); }
+                case 600 -> nombre = "vacio.pdf";
+                case 700 -> base64 = "A".repeat(((10 * 1024 * 1024 + 2) / 3) * 4 + 4);
+                case 800 -> base64 = "%%%no-base64%%%";
+                case 900 -> { nombre = "..\\..\\evil<>.docx"; mime = "application/msword"; base64 = Base64.getEncoder().encodeToString("x".getBytes(StandardCharsets.UTF_8)); }
+                default -> base64 = Base64.getEncoder().encodeToString(pdfMinimo(id));
+            }
+            responder(ex, 200, ok + "{\"nombreArchivo\":\"" + nombre.replace("\\", "\\\\") + "\",\"tipoMime\":\"" + mime
+                    + "\",\"contenidoBase64\":\"" + base64 + "\"}" + fin);
+            return;
+        }
+        java.util.regex.Matcher det = java.util.regex.Pattern.compile("^" + base + "/(-?\\d+)$").matcher(path);
+        if (det.matches()) {
+            int id = Integer.parseInt(det.group(1));
+            if (id == 404 || id <= 0) {
+                responder(ex, 404, fallo("Muestra no encontrada"));
+                return;
+            }
+            responder(ex, 200, ok + "{\"id\":" + id + ",\"np\":\"NP-100\",\"ensayos\":[],\"adjuntos\":[{\"id\":1,\"nombreArchivo\":\"informe ñ.pdf\"}],"
+                    + "\"usuarioDelToken\":" + sub + "}" + fin);
+            return;
+        }
+        responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
     }
 
     private Integer subDeBearer(String authorization) {

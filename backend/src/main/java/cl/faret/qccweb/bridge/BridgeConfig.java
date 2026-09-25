@@ -6,6 +6,7 @@ import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.MuestraLaboratorioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ProductoTerminadoBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RecepcionCalidadBridgeHandler;
@@ -94,12 +95,18 @@ public class BridgeConfig {
     }
 
     @Bean
+    public MuestraLaboratorioBridgeHandler muestraLaboratorioBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new MuestraLaboratorioBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ActionPolicy actionPolicy(
             InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard,
             RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl,
             ProductoTerminadoBridgeHandler productoTerminado, CertificadosLiberacionBridgeHandler certificados,
             ControlDocumentalBridgeHandler controlDocumental, NoConformidadesBridgeHandler noConformidades,
-            RecepcionCalidadBridgeHandler recepcionCalidad, UsuariosBridgeHandler usuarios) {
+            RecepcionCalidadBridgeHandler recepcionCalidad, UsuariosBridgeHandler usuarios,
+            MuestraLaboratorioBridgeHandler laboratorio) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -208,7 +215,25 @@ public class BridgeConfig {
                 // Respuesta reproyectada a los 7 campos PascalCase de Photino. create/delete/
                 // resetPassword fuera (deny-by-default).
                 new ActionPolicy.Regla(
-                        "usuarios.list", Set.of("INNPACK"), ROLES_ADMIN_INNPACK, Map.of(), usuarios::list)));
+                        "usuarios.list", Set.of("INNPACK"), ROLES_ADMIN_INNPACK, Map.of(), usuarios::list),
+                // Fase 2l — Laboratorio - Muestras, SOLO LECTURA contra la API INNPACK (payload en
+                // "data", sin empresa ni rol). adjunto.abrir: validado como Control Documental y
+                // previsualizado/descargado en el navegador. Fuera: consultarNp/consultarRegistroProduccion/
+                // materialesFps/resolverBobina (otras APIs externas) y las 25 escrituras.
+                new ActionPolicy.Regla("muestraLab.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::list),
+                new ActionPolicy.Regla("muestraLab.detalle", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::detalle),
+                new ActionPolicy.Regla("muestraLab.catalogos", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::catalogos),
+                new ActionPolicy.Regla("muestraLab.indicadores", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::indicadores),
+                new ActionPolicy.Regla("muestraLab.metodo.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::metodoList),
+                new ActionPolicy.Regla(
+                        "muestraLab.especificacion.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::especificacionList),
+                new ActionPolicy.Regla(
+                        "muestraLab.bobinaHistorial", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::bobinaHistorial),
+                new ActionPolicy.Regla(
+                        "muestraLab.registroProduccion.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        laboratorio::registroProduccionList),
+                new ActionPolicy.Regla(
+                        "muestraLab.adjunto.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::adjuntoAbrir)));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
