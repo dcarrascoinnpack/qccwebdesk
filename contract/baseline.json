@@ -268,6 +268,27 @@
       "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-25T11:26:58Z"
+    },
+    "recepcion.list": {
+      "huella": "51efbed04941a666254533498d13a527a03a11cf7a5267aa257b0801155a55b0",
+      "handler": "RecepcionCalidadHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:41:26Z"
+    },
+    "recepcion.detalle": {
+      "huella": "ebb86900af2ca770ca07eecf5be9024b30a2bf6daa45c801c6cddb416d041b42",
+      "handler": "RecepcionCalidadHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:41:26Z"
+    },
+    "recepcion.foto.abrir": {
+      "huella": "d94a8c7b7f617398d3f9ce05fc764e1521917fa0de13ce3cff349ed1a16772f0",
+      "handler": "RecepcionCalidadHandler",
+      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
+      "photinoVersion": "1.8.12",
+      "aprobado": "2026-09-25T11:41:26Z"
     }
   }
 }

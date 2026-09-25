@@ -8,6 +8,7 @@ import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ProductoTerminadoBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.RecepcionCalidadBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosControlBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
 import cl.faret.qccweb.upstream.InnpackApiClient;
@@ -81,11 +82,17 @@ public class BridgeConfig {
     }
 
     @Bean
+    public RecepcionCalidadBridgeHandler recepcionCalidadBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new RecepcionCalidadBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ActionPolicy actionPolicy(
             InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard,
             RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl,
             ProductoTerminadoBridgeHandler productoTerminado, CertificadosLiberacionBridgeHandler certificados,
-            ControlDocumentalBridgeHandler controlDocumental, NoConformidadesBridgeHandler noConformidades) {
+            ControlDocumentalBridgeHandler controlDocumental, NoConformidadesBridgeHandler noConformidades,
+            RecepcionCalidadBridgeHandler recepcionCalidad) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -178,7 +185,17 @@ public class BridgeConfig {
                         "noConformidades.adjuntos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), noConformidades::adjuntosList),
                 new ActionPolicy.Regla(
                         "noConformidades.adjuntos.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
-                        noConformidades::adjuntosAbrir)));
+                        noConformidades::adjuntosAbrir),
+                // Fase 2j — Recepción Calidad, SOLO LECTURA (payload en "data"). "empresa" = sesión.
+                // foto.abrir: lote confirmado con el detalle de la empresa de sesión y MIME por firma
+                // real. Escrituras (crear/nc.crear/plan.generar/bobinas.muestrear/muestra.crear/
+                // estado.actualizar) y sap.* (otra API externa) fuera (deny-by-default).
+                new ActionPolicy.Regla(
+                        "recepcion.list", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::list),
+                new ActionPolicy.Regla(
+                        "recepcion.detalle", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::detalle),
+                new ActionPolicy.Regla(
+                        "recepcion.foto.abrir", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::fotoAbrir)));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),

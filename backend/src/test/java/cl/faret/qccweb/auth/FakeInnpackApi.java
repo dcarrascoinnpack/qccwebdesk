@@ -54,6 +54,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/control-documental", this::controlDocumental);
         server.createContext("/api/no-conformidades", this::noConformidades);
         server.createContext("/api/nc-catalogos", this::noConformidades);
+        server.createContext("/api/recepcion-calidad", this::recepcionCalidad);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -94,6 +95,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesCertificados.clear();
         peticionesControlDocumental.clear();
         peticionesNoConformidades.clear();
+        peticionesRecepcion.clear();
         modoDashboard = ModoDashboard.NORMAL;
     }
 
@@ -760,6 +762,97 @@ public final class FakeInnpackApi implements AutoCloseable {
                 }
                 default -> responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
             }
+            return;
+        }
+        responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+    }
+
+    private final java.util.List<String> peticionesRecepcion = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "<método> <ruta>[?<query cruda>]" recibidos en api/recepcion-calidad*. */
+    public java.util.List<String> peticionesRecepcion() {
+        return java.util.List.copyOf(peticionesRecepcion);
+    }
+
+    /** Tipo de materia prima de cada lote de prueba (el resto de ids → 404 en el detalle). */
+    private static String tipoLote(int id) {
+        return switch (id) {
+            case 1, 3, 4, 5, 6, 7, 8, 9 -> "PVA";
+            case 2 -> "PliegoFaret";
+            case 10 -> "Bobina";
+            default -> null;
+        };
+    }
+
+    public static String dataRecepcionList(int sub, String query) {
+        return "[{\"id\":1,\"fechaCreacion\":\"2026-09-20 08:00\",\"tipoMateriaPrima\":\"PVA\",\"proveedor\":\"Adhesivos Ñuñoa «1»\",\"itemCode\":\"PVA-01\","
+                + "\"descripcion\":\"=SUMA(1;2)\",\"cantidadTotalLote\":12.5,\"estado\":\"PendienteMuestreo\",\"totalBobinas\":0,\"totalMuestreadas\":0,"
+                + "\"query\":\"" + query + "\",\"usuarioDelToken\":" + sub + "},"
+                + "{\"id\":10,\"fechaCreacion\":\"2026-09-21 09:30\",\"tipoMateriaPrima\":\"Bobina\",\"proveedor\":\"Papelera\",\"itemCode\":\"B-99\","
+                + "\"descripcion\":\"Bobina kraft\",\"cantidadTotalLote\":null,\"estado\":\"EnAnalisis\",\"totalBobinas\":8,\"totalMuestreadas\":2}]";
+    }
+
+    /**
+     * Recepción Calidad. Detalle por id (empresa=INNPACK): 1,3-9 PVA, 2 PliegoFaret, 10 Bobina; 404 el
+     * resto o empresa≠INNPACK. Foto por loteId: 1 JPEG, 2 PNG (guardada como image/jpeg), 3 GIF, 4 WEBP,
+     * 5 HTML, 6 sin foto, 7 vacía, 8 excesiva, 9 base64 corrupto.
+     */
+    private void recepcionCalidad(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesRecepcion.add(ex.getRequestMethod() + " " + path + (query == null ? "" : "?" + query));
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (!ex.getRequestMethod().equals("GET")) {
+            responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Filtro de fecha inválido"));
+            return;
+        }
+        String ok = "{\"success\":true,\"message\":null,\"data\":";
+        String fin = ",\"errors\":null}";
+        String q = query == null ? "" : query;
+        if (path.equals("/api/recepcion-calidad")) {
+            responder(ex, 200, ok + dataRecepcionList(sub, q) + fin);
+            return;
+        }
+        java.util.regex.Matcher foto = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(\\d+)/foto$").matcher(path);
+        if (foto.matches()) {
+            int id = Integer.parseInt(foto.group(1));
+            String base64;
+            switch (id) {
+                case 1 -> base64 = Base64.getEncoder().encodeToString(jpegMinimo());
+                case 2 -> base64 = Base64.getEncoder().encodeToString(pngMinimo());
+                case 3 -> base64 = Base64.getEncoder().encodeToString("GIF89a\u0001\u0000".getBytes(StandardCharsets.ISO_8859_1));
+                case 4 -> base64 = Base64.getEncoder().encodeToString("RIFF\u0000\u0000\u0000\u0000WEBPVP8 ".getBytes(StandardCharsets.ISO_8859_1));
+                case 5 -> base64 = Base64.getEncoder().encodeToString("<html><script>alert(1)</script></html>".getBytes(StandardCharsets.UTF_8));
+                case 6 -> { responder(ex, 400, fallo("Este lote no tiene fotografía cargada")); return; }
+                case 7 -> base64 = "";
+                case 8 -> base64 = "/9j/" + "A".repeat(((10 * 1024 * 1024 + 2) / 3) * 4);
+                case 9 -> base64 = "%%%no-base64%%%";
+                default -> base64 = Base64.getEncoder().encodeToString(jpegMinimo());
+            }
+            responder(ex, 200, ok + "{\"base64\":\"" + base64 + "\",\"mime\":\"image/jpeg\",\"usuarioDelToken\":" + sub + "}" + fin);
+            return;
+        }
+        java.util.regex.Matcher det = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(-?\\d+)$").matcher(path);
+        if (det.matches()) {
+            int id = Integer.parseInt(det.group(1));
+            String tipo = tipoLote(id);
+            if (tipo == null || !q.equals("empresa=INNPACK")) {
+                responder(ex, 404, fallo("Lote no encontrado"));
+                return;
+            }
+            responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"" + tipo + "\",\"proveedor\":\"Adhesivos Ñuñoa\",\"estado\":\"PendienteMuestreo\","
+                    + "\"totalBobinas\":0,\"bobinas\":[],\"pva\":{\"tieneFoto\":true},\"usuarioDelToken\":" + sub + "}" + fin);
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
