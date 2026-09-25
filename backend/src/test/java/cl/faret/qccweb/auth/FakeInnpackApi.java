@@ -102,6 +102,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         accionesRecibidas.clear();
         analisisRecibidos.clear();
         analisisPorNc.clear();
+        catalogosRecibidos.clear();
+        creadosPorCatalogo.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
@@ -667,6 +669,73 @@ public final class FakeInnpackApi implements AutoCloseable {
                 + "\"conclusion\":null,\"creadoPor\":\"María\",\"creadoEn\":\"2026-09-20T10:00:00\",\"actualizadoPor\":null,\"actualizadoEn\":null}"));
     }
 
+    /** Cuerpo EXACTO recibido en POST api/nc-catalogos/{catalogo}. */
+    public record CatalogoRecibido(String catalogo, int sub, String cuerpo, String contentType) {}
+
+    private final java.util.List<CatalogoRecibido> catalogosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /** Valores creados por catálogo (estado simulado): {id, nombre, activo, creadoPor}. id 1 = semilla fija. */
+    private final Map<String, java.util.List<tools.jackson.databind.node.ObjectNode>> creadosPorCatalogo = new ConcurrentHashMap<>();
+
+    public java.util.List<CatalogoRecibido> catalogosRecibidos() {
+        return java.util.List.copyOf(catalogosRecibidos);
+    }
+
+    /** Valores del catálogo simulado (incluye inactivos); "Cliente Inactivo" (id 2) arranca desactivado. */
+    public synchronized java.util.List<tools.jackson.databind.node.ObjectNode> valoresCatalogo(String catalogo) {
+        return creadosPorCatalogo.computeIfAbsent(catalogo, k -> {
+            java.util.List<tools.jackson.databind.node.ObjectNode> l = new java.util.ArrayList<>();
+            tools.jackson.databind.node.ObjectNode inactivo = mapper.createObjectNode();
+            inactivo.put("id", 2).put("nombre", "Cliente Inactivo").put("activo", false).put("creadoPor", "Semilla");
+            l.add(inactivo);
+            return l;
+        });
+    }
+
+    /** Como NoConformidadesCatalogosService.CrearAsync + repositorio (UNIQUE(nombre) con collation CI). */
+    private synchronized void crearCatalogo(HttpExchange ex, String catalogo, int sub) throws IOException {
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        catalogosRecibidos.add(new CatalogoRecibido(catalogo, sub, cuerpo, ex.getRequestHeaders().getFirst("Content-Type")));
+        JsonNode b = mapper.readTree(cuerpo);
+        String raw = b.path("nombre").isString() ? b.get("nombre").asString() : null;
+        if (raw == null || raw.isBlank()) {
+            responder(ex, 400, fallo("Falta el nombre"));
+            return;
+        }
+        String nombre = raw.strip().replaceAll("\\s+", " ");
+        if (nombre.length() > 150) {
+            responder(ex, 400, fallo("El valor no puede superar los 150 caracteres."));
+            return;
+        }
+        if (nombre.equals("ERROR_API")) {
+            responder(ex, 400, fallo("No se pudo crear el valor"));
+            return;
+        }
+        if (nombre.equals("ERROR_500")) {
+            responder(ex, 500, "{\"title\":\"error interno\"}");
+            return;
+        }
+        java.util.List<tools.jackson.databind.node.ObjectNode> valores = valoresCatalogo(catalogo);
+        tools.jackson.databind.node.ObjectNode item = null;
+        for (tools.jackson.databind.node.ObjectNode v : valores) {
+            if (v.get("nombre").asString().equalsIgnoreCase(nombre)) {
+                item = v;
+                v.put("activo", true);
+            }
+        }
+        if (item == null && (catalogo + " ñ").equalsIgnoreCase(nombre)) {
+            item = mapper.createObjectNode().put("id", 1).put("nombre", catalogo + " ñ").put("activo", true);
+        }
+        if (item == null) {
+            item = mapper.createObjectNode();
+            item.put("id", 900 + valores.size()).put("nombre", nombre).put("activo", true);
+            item.set("creadoPor", b.get("creadoPor"));
+            valores.add(item);
+        }
+        tools.jackson.databind.node.ObjectNode data = mapper.createObjectNode();
+        data.put("id", item.get("id").asInt()).put("nombre", item.get("nombre").asString()).put("activo", true);
+        responder(ex, 200, "{\"success\":true,\"message\":\"Creado correctamente\",\"data\":" + data + ",\"errors\":null}");
+    }
+
     /** Cuerpo EXACTO recibido en POST api/no-conformidades/{id}/acciones. */
     public java.util.List<SeguimientoRecibido> accionesRecibidas() {
         return java.util.List.copyOf(accionesRecibidas);
@@ -778,6 +847,11 @@ public final class FakeInnpackApi implements AutoCloseable {
             }
             return;
         }
+        java.util.regex.Matcher catPost = java.util.regex.Pattern.compile("^/api/nc-catalogos/([A-Za-z]+)$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && catPost.matches()) {
+            crearCatalogo(ex, catPost.group(1), sub);
+            return;
+        }
         java.util.regex.Matcher seg = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/seguimiento$").matcher(path);
         if (ex.getRequestMethod().equals("POST") && seg.matches()) {
             String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
@@ -809,7 +883,15 @@ public final class FakeInnpackApi implements AutoCloseable {
                 responder(ex, 404, fallo("Catálogo no reconocido"));
                 return;
             }
-            responder(ex, 200, ok + "[{\"id\":1,\"nombre\":\"" + cat.group(1) + " ñ\",\"activo\":true,\"usuarioDelToken\":" + sub + "}]" + fin);
+            StringBuilder extra = new StringBuilder();
+            for (tools.jackson.databind.node.ObjectNode v : valoresCatalogo(cat.group(1))) {
+                if (v.get("activo").asBoolean()) {
+                    extra.append(",{\"id\":").append(v.get("id").asInt()).append(",\"nombre\":")
+                            .append(mapper.writeValueAsString(v.get("nombre").asString())).append(",\"activo\":true}");
+                }
+            }
+            responder(ex, 200, ok + "[{\"id\":1,\"nombre\":\"" + cat.group(1) + " ñ\",\"activo\":true,\"usuarioDelToken\":" + sub + "}"
+                    + extra + "]" + fin);
             return;
         }
         if (path.equals("/api/no-conformidades")) {

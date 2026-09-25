@@ -374,6 +374,124 @@ class HuellaFrontendTest(unittest.TestCase):
                          'a = "http://x"; \nb = `/*no*/`;  c = 1')
 
 
+NC_JS_DINAMICO = '''
+window.NcController = class {
+    _config() {
+        return [
+            { campo: "a", listAction: "inicio.a.list", crearAction: "inicio.getDashboard" },
+            { campo: "b", listAction: "inicio.b.list", crearAction: "inicio.otroCatalogo" },
+        ];
+    }
+    _usuarioActual() { return sessionStorage.getItem("nombreUsuario") || ""; }
+    _showMensaje(m) { document.body.style.color = "red"; }
+    pintar() { document.body.style.color = "red"; }
+    async _catalogoCrear(action, nombre) {
+        const res = await window.PhotinoBridge.send({ action, nombre, creadoPor: this._usuarioActual() });
+        if (!res.ok) { this._showMensaje(res.error); return null; }
+        return res.data;
+    }
+    _attach() {
+        this._config().forEach(cfg => {
+            window.CatalogCombo.attach(cfg.campo, {
+                obtenerOpciones: () => [],
+                crear: nombre => this._catalogoCrear(cfg.crearAction, nombre),
+            });
+        });
+    }
+};
+'''
+
+UTILS_JS = '''
+window.CatalogCombo = {
+    attach(input, opciones) {
+        const estado = { opciones };
+        input.addEventListener("click", async () => {
+            const texto = input.value.trim();
+            input.style.color = "red";
+            const nuevo = await estado.opciones.crear(texto);
+            input.value = nuevo.nombre;
+        });
+    }
+};
+'''
+
+
+class HuellaAccionDinamicaTest(unittest.TestCase):
+    """Acción armada desde un mapa (`crearAction: "..."` → cfg.crearAction → _catalogoCrear → send)."""
+
+    NC = "src/UI/www/modules/nc/nc.controller.js"
+    UTILS = "src/UI/www/shared/utils.js"
+
+    def fuente(self, nc=NC_JS_DINAMICO, utils=UTILS_JS):
+        return repo(**{"src/UI/www/modules/inicio/inicio.controller.js": "", self.NC: nc, self.UTILS: utils})
+
+    def setUp(self):
+        self.base = baseline_de(self.fuente())
+
+    def estado_con(self, **kw):
+        filas, _ = estados(self.fuente(**kw), baseline=self.base)
+        return filas["inicio.getDashboard"]
+
+    def test_fragmentos_cubren_metodo_generador_identidad_y_transformacion(self):
+        huella, err = pc.Inventario(self.fuente()).huella_frontend("inicio.getDashboard")
+        self.assertIsNone(err)
+        cb = set()
+        fr = pc.fragmentos_llamado_js(NC_JS_DINAMICO, "inicio.getDashboard", cb)
+        self.assertEqual(len(fr), 1)
+        self.assertIn("uso: crear: nombre => this._catalogoCrear(cfg.crearAction, nombre)", fr[0])
+        self.assertIn("metodo: async _catalogoCrear(action, nombre)", fr[0])
+        self.assertIn("metodo: _usuarioActual()", fr[0])
+        self.assertNotIn("inicio.otroCatalogo", fr[0])
+        self.assertNotIn("_showMensaje(m)", fr[0])
+        self.assertEqual(cb, {"crear"})
+        cbf = pc.fragmentos_callback_js(UTILS_JS, "crear")
+        self.assertEqual(len(cbf), 1)
+        self.assertIn("decl:const texto = input.value.trim()", cbf[0])
+        self.assertEqual(self.estado_con()["estado"], "COMPATIBLE")
+
+    def test_cambio_en_el_payload_dinamico_pasa_a_revisar(self):
+        for nc in (NC_JS_DINAMICO.replace("creadoPor: this._usuarioActual() }", "creadoPor: this._usuarioActual(), x: 1 }"),
+                   NC_JS_DINAMICO.replace("{ action, nombre,", "{ action, nombre: nombre.toUpperCase(),"),
+                   NC_JS_DINAMICO.replace('getItem("nombreUsuario")', 'getItem("codigoUsuario")'),
+                   NC_JS_DINAMICO.replace("this._catalogoCrear(cfg.crearAction, nombre)",
+                                          "this._catalogoCrear(cfg.crearAction, nombre + \" \")")):
+            with self.subTest(nc=nc[-600:]):
+                f = self.estado_con(nc=nc)
+                self.assertEqual(f["estado"], "REVISAR")
+                self.assertIn("payload del frontend", f["motivo"])
+
+    def test_cambio_en_la_transformacion_del_componente_compartido_pasa_a_revisar(self):
+        f = self.estado_con(utils=UTILS_JS.replace("input.value.trim()", "input.value"))
+        self.assertEqual(f["estado"], "REVISAR")
+
+    def test_cambio_del_metodo_generador_pasa_a_revisar(self):
+        nc = NC_JS_DINAMICO.replace("this._catalogoCrear(cfg.crearAction, nombre)", "this._crearV2(cfg.crearAction, nombre)") \
+            .replace("    pintar()", "    async _crearV2(action, nombre) { return window.PhotinoBridge.send({ action, nombre }); }\n    pintar()")
+        self.assertEqual(self.estado_con(nc=nc)["estado"], "REVISAR")
+
+    def test_cambio_del_nombre_final_de_la_accion_no_es_compatible(self):
+        f = self.estado_con(nc=NC_JS_DINAMICO.replace('crearAction: "inicio.getDashboard"', 'crearAction: "inicio.getDashboard2"'))
+        self.assertNotEqual(f["estado"], "COMPATIBLE")
+
+    def test_cambios_visuales_o_no_relacionados_no_alteran_la_huella(self):
+        antes = pc.Inventario(self.fuente()).huella_frontend("inicio.getDashboard")
+        nc = NC_JS_DINAMICO.replace('    pintar() { document.body.style.color = "red"; }',
+                                    '    pintar() { document.body.style.color = "blue"; } // visual') \
+            .replace('_showMensaje(m) { document.body.style.color = "red"; }', '_showMensaje(m) { alert(m); }')
+        utils = UTILS_JS.replace('input.style.color = "red";', 'input.style.color = "blue";')
+        self.assertEqual(pc.Inventario(self.fuente(nc=nc, utils=utils)).huella_frontend("inicio.getDashboard"), antes)
+        self.assertEqual(self.estado_con(nc=nc, utils=utils)["estado"], "COMPATIBLE")
+
+    def test_cambio_en_otra_accion_dinamica_no_contamina(self):
+        nc = NC_JS_DINAMICO.replace('{ campo: "b", listAction: "inicio.b.list", crearAction: "inicio.otroCatalogo" }',
+                                    '{ campo: "b2", listAction: "inicio.b.list", crearAction: "inicio.otroCatalogo", extra: 1 }')
+        self.assertEqual(pc.Inventario(self.fuente(nc=nc)).huella_frontend("inicio.getDashboard"),
+                         pc.Inventario(self.fuente()).huella_frontend("inicio.getDashboard"))
+        self.assertNotEqual(pc.Inventario(self.fuente(nc=nc)).huella_frontend("inicio.otroCatalogo"),
+                            pc.Inventario(self.fuente()).huella_frontend("inicio.otroCatalogo"))
+        self.assertEqual(self.estado_con(nc=nc)["estado"], "COMPATIBLE")
+
+
 class BloqueIfLargoTest(unittest.TestCase):
     """Rama `if (action == ...) { ... }` más larga que cualquier tope: se toma el bloque completo."""
 
@@ -589,6 +707,19 @@ class PhotinoRealTest(unittest.TestCase):
         self.assertEqual(rep["resumen"]["dinamicasSinResolver"], 0)
         self.assertEqual(rep["resumen"]["compatibles"], len(baseline["acciones"]))
         self.assertFalse(rep["bloqueante"])
+
+    def test_accion_dinamica_de_catalogo_cubre_metodo_generador_y_transformacion(self):
+        fuente = pc.GitSource(PHOTINO_REAL, "6c42e05")
+        cb = set()
+        fr = pc.fragmentos_llamado_js(fuente.read(pc.WWW + "modules/no-conformidades/no-conformidades.controller.js"),
+                                      "noConformidades.catalogos.clientes.crear", cb)
+        self.assertEqual(len(fr), 1)
+        self.assertIn("metodo: async _catalogoCrear(action, nombre)", fr[0])
+        self.assertIn("creadoPor: this._usuarioActual()", fr[0])
+        self.assertIn("metodo: _usuarioActual()", fr[0])
+        self.assertNotIn("categoriasDefecto", fr[0])
+        self.assertEqual(cb, {"crear"})
+        self.assertIn("input.value.trim()", pc.fragmentos_callback_js(fuente.read(pc.WWW + "shared/utils.js"), "crear")[0])
 
 
 

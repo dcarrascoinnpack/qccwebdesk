@@ -8,6 +8,7 @@ import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.InnpackRespuestas;
 import cl.faret.qccweb.upstream.UriEscape;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.springframework.web.util.HtmlUtils;
@@ -96,6 +97,14 @@ public class NoConformidadesBridgeHandler {
     public static final String[] CATALOGOS = {
         "clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores",
         "areas", "familiasProducto", "niveles", "impactos"};
+    /** Largo máximo de `nombre` por catálogo (NoConformidadesCatalogosService.Catalogos de la API = columnas cat_nc_*). */
+    static final Map<String, Integer> MAX_NOMBRE_CATALOGO = Map.of(
+            "clientes", 150, "categoriasDefecto", 150, "tiposFalla", 150, "supervisores", 150, "revisores", 150,
+            "areas", 150, "familiasProducto", 50, "niveles", 20, "impactos", 50);
+    /** Claves que manda Photino en _catalogoCrear (+ "action"); cualquier otra se rechaza. */
+    private static final Set<String> CAMPOS_CATALOGO_CREAR = Set.of("action", "nombre", "creadoPor");
+    /** Mismo colapso que la API (Regex.Replace(nombre.Trim(), @"\s+", " ")). */
+    private static final Pattern ESPACIOS = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
 
     /** MIME que NoConformidadesService acepta al subir (CAUSA_RAIZ_PDF / EVIDENCIA_FOTO). */
     private static final Set<String> MIME_ADJUNTO = Set.of("application/pdf", "image/png", "image/jpeg");
@@ -588,6 +597,73 @@ public class NoConformidadesBridgeHandler {
     static String autorDeSesion(SessionUser usuario) {
         String nombre = usuario.nombreCompleto();
         return nombre != null && !nombre.isBlank() ? nombre : usuario.codigoUsuario();
+    }
+
+    /**
+     * noConformidades.catalogos.{catalogo}.crear → POST api/nc-catalogos/{catalogo} con {nombre, creadoPor}.
+     * Photino (_catalogoCrear, desde el combo inline) manda {action, nombre, creadoPor}.
+     *
+     * IDENTIDAD — `creadoPor`: SIEMPRE el usuario de la sesión; lo que mande el navegador se descarta. Cualquier
+     * otra clave (usuario, autor, usuarioId, empresa, id, activo...) → error sin tocar la API.
+     * `nombre` con el contrato real (NoConformidadesCatalogosService.CrearAsync + UNIQUE(nombre) de cat_nc_*):
+     * obligatorio ("Falta el nombre"), trim + espacios internos colapsados a uno (igual que la API, que lo
+     * repite), ≤ largo de la columna en unidades UTF-16 (como `string.Length` de la API; clientes 150), una
+     * línea sin caracteres de control ni sustitutos UTF-16 sueltos, sin marcado HTML (el valor termina en
+     * no_conformidades y la vista lo pinta con innerHTML, SEC-27). Duplicados: los resuelve la API (devuelve
+     * el valor existente —y lo reactiva si estaba inactivo— con su id); el gateway no inventa otra política.
+     */
+    public BridgeAction catalogoCrear(String catalogo) {
+        int max = MAX_NOMBRE_CATALOGO.get(catalogo);
+        return (payload, usuario) -> {
+            for (String clave : payload.propertyNames()) {
+                if (!CAMPOS_CATALOGO_CREAR.contains(clave)) {
+                    return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+                }
+            }
+            JsonNode n = payload.get("nombre");
+            if (n != null && !n.isNull() && !n.isString()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+            String crudo = n == null || n.isNull() ? "" : n.asString();
+            if (CONTROL_UNA_LINEA.matcher(crudo).find() || tieneSustitutoSuelto(crudo)) {
+                return BridgeResult.error(MENSAJE_TEXTO_CARACTERES);
+            }
+            String nombre = ESPACIOS.matcher(crudo).replaceAll(" ").strip();
+            if (nombre.isEmpty()) {
+                return BridgeResult.error("Falta el nombre");
+            }
+            if (nombre.length() > max) {
+                return BridgeResult.error("El valor no puede superar los " + max + " caracteres.");
+            }
+            if (MARCADO_HTML.matcher(nombre).find()) {
+                return BridgeResult.error(MENSAJE_TEXTO_HTML);
+            }
+            ObjectNode cuerpo = mapper.createObjectNode();
+            cuerpo.put("nombre", nombre);
+            cuerpo.put("creadoPor", autorDeSesion(usuario));
+            return InnpackRespuestas.reenviar(api.postJson(usuario, BASE_CATALOGOS + "/" + catalogo, cuerpo), mapper);
+        };
+    }
+
+    /** Recurso auditado de catalogos.{catalogo}.crear: "catalogo:<catalogo>" y ":<id>" si la API devuelve el id. */
+    public static String recursoCatalogo(String catalogo, Object dataRespuesta) {
+        String recurso = "catalogo:" + catalogo;
+        if (dataRespuesta instanceof JsonNode d && d.isObject() && d.get("id") != null && d.get("id").canConvertToLong()) {
+            recurso += ":" + d.get("id").asLong();
+        }
+        return recurso;
+    }
+
+    private static boolean tieneSustitutoSuelto(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (Character.isHighSurrogate(c) && i + 1 < s.length() && Character.isLowSurrogate(s.charAt(i + 1))) {
+                i++;
+            } else if (Character.isSurrogate(c)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** noConformidades.catalogos.{catalogo}.list → GET api/nc-catalogos/{catalogo} (no lee el payload). */

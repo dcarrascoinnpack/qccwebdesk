@@ -287,7 +287,16 @@ public class BridgeConfig {
                         "noConformidades.analisis.guardar", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("usuario", IdentityOverride.Fuente.NOMBRE_COMPLETO),
-                        noConformidades::analisisGuardar, NoConformidadesBridgeHandler::recursoAnalisis)));
+                        noConformidades::analisisGuardar, NoConformidadesBridgeHandler::recursoAnalisis),
+                // Fase 3d — CUARTA ESCRITURA (acción dinámica del combo de catálogos; SOLO clientes): identidad
+                // "creadoPor" = sesión; `nombre` con el contrato real de la API (trim/colapso, ≤ 150, sin HTML ni
+                // controles); duplicados resueltos por la API; recurso auditado "catalogo:clientes:<id>".
+                new ActionPolicy.Regla(
+                        "noConformidades.catalogos.clientes.crear", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades.catalogoCrear("clientes"),
+                        (p, data) -> NoConformidadesBridgeHandler.recursoCatalogo("clientes", data))));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),

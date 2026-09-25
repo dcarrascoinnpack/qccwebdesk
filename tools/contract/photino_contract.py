@@ -296,14 +296,20 @@ def _metodo_js(texto, nombre):
     return texto[m.start():k + 1] if k >= 0 else None
 
 
-def fragmentos_llamado_js(texto, accion):
+def fragmentos_llamado_js(texto, accion, callbacks=None):
     """
     Lo mínimo que define el PAYLOAD que el frontend manda para `accion`:
       - el argumento completo de cada PhotinoBridge.send(...) que contiene el literal de la acción
         (si el literal no está dentro de un send, p. ej. un mapa de configuración, su sentencia);
       - un salto: declaraciones locales (const/let/var) de identificadores usados en ese argumento
-        (`...filtros`, `data`) dentro de las 80 líneas anteriores, y los métodos `this.x(...)`
-        llamados desde el argumento o desde esas declaraciones.
+        (`...filtros`, `data`) dentro del método que lo contiene, y los métodos `this.x(...)`
+        llamados desde el argumento o desde esas declaraciones;
+      - ACCIÓN DINÁMICA (literal como valor de una clave de un mapa, p. ej. `crearAction: "x.crear"`):
+        los usos de esa clave en el mismo archivo (`cfg.crearAction`), el método que arma el payload
+        (`this._catalogoCrear(...)`) y los métodos `this.x()` usados dentro de su PhotinoBridge.send.
+        Si el uso es un callback (`crear: nombre => ...`), su nombre se agrega a `callbacks` para que
+        huella_frontend incluya dónde el componente compartido lo invoca (`opciones.crear(texto)`).
+        Solo entra la entrada del mapa de ESTA acción, no las vecinas.
     No cubre mutaciones posteriores (`data.x = ...`): documentado como límite.
     """
     limpio = quitar_comentarios_js(texto)
@@ -317,40 +323,94 @@ def fragmentos_llamado_js(texto, accion):
             cierra = _cierre_js(limpio, abre)
             if cierra > pos:
                 arg = limpio[abre:cierra + 1]
+        dinamica = []
         if arg is None:
             ini = limpio.rfind("\n", 0, pos) + 1
             arg = _sentencia_js(limpio, ini)
             ancla = ini
+            dinamica = _usos_de_clave_js(limpio, ini, ini + len(arg), pos, callbacks)
         else:
             ancla = send
-        partes = ["llamado:" + arg]
-        previo = limpio[:ancla]
-        ventana = "\n".join(previo.split("\n")[-80:])
-        # Solo dentro del método/función que contiene el llamado (no cruzar a métodos vecinos).
-        cabeceras = [c for c in re.finditer(r"(?m)^[ \t]*(?:async\s+)?(?:function\s+)?([A-Za-z_$][\w$]*)\s*\([^\n]*\)\s*\{\s*$", ventana)
-                     if c.group(1) not in ("if", "for", "while", "switch", "catch", "with", "else")]
-        if cabeceras:
-            ventana = ventana[cabeceras[-1].start():]
-        base = len(previo) - len(ventana)
-        extras = []
-        # Identificadores sueltos o en spread (`...x`), no accesos a miembro (`obj.x`), ni la variable
-        # que declara la propia sentencia (`const res = await this._send(...)`).
-        propia = re.match(r"\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)", arg)
-        idents = {mi.group(1) for mi in re.finditer(r"(?<![\w$])([A-Za-z_$][\w$]*)", arg)
-                  if not (arg[:mi.start()].endswith(".") and not arg[:mi.start()].endswith("..."))}
-        if propia:
-            idents.discard(propia.group(1))
-        for ident in sorted(idents):
-            decl = None
-            for d in re.finditer(r"\b(?:const|let|var)\s+" + re.escape(ident) + r"\s*=", ventana):
-                decl = d
-            if decl:
-                extras.append(_sentencia_js(limpio, base + decl.start()))
-        partes += ["decl:" + e for e in extras]
+        partes = ["llamado:" + arg] + _contexto_js(limpio, ancla, arg) + dinamica
+        frag.append("\n".join(re.sub(r"\s+", " ", p).strip() for p in partes))
+    return frag
+
+
+def _contexto_js(limpio, ancla, arg, metodos=True):
+    """Declaraciones locales (mismo método) de los identificadores de `arg` y métodos this.x() usados."""
+    previo = limpio[:ancla]
+    ventana = "\n".join(previo.split("\n")[-80:])
+    # Solo dentro del método/función que contiene el llamado (no cruzar a métodos vecinos).
+    cabeceras = [c for c in re.finditer(r"(?m)^[ \t]*(?:async\s+)?(?:function\s+)?([A-Za-z_$][\w$]*)\s*\([^\n]*\)\s*\{\s*$", ventana)
+                 if c.group(1) not in ("if", "for", "while", "switch", "catch", "with", "else")]
+    if cabeceras:
+        ventana = ventana[cabeceras[-1].start():]
+    base = len(previo) - len(ventana)
+    extras = []
+    # Identificadores sueltos o en spread (`...x`), no accesos a miembro (`obj.x`), ni la variable
+    # que declara la propia sentencia (`const res = await this._send(...)`).
+    propia = re.match(r"\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)", arg)
+    idents = {mi.group(1) for mi in re.finditer(r"(?<![\w$])([A-Za-z_$][\w$]*)", arg)
+              if not (arg[:mi.start()].endswith(".") and not arg[:mi.start()].endswith("..."))}
+    if propia:
+        idents.discard(propia.group(1))
+    for ident in sorted(idents):
+        decl = None
+        for d in re.finditer(r"\b(?:const|let|var)\s+" + re.escape(ident) + r"\s*=", ventana):
+            decl = d
+        if decl:
+            extras.append(_sentencia_js(limpio, base + decl.start()))
+    partes = ["decl:" + e for e in extras]
+    if metodos:
         for met in sorted(set(re.findall(r"this\.(\w+)\s*\(", arg + "\n" + "\n".join(extras)))):
             cuerpo = _metodo_js(limpio, met)
             if cuerpo:
                 partes.append("metodo:" + cuerpo)
+    return partes
+
+
+def _usos_de_clave_js(limpio, ini_entrada, fin_entrada, pos, callbacks):
+    """Acción dinámica: usos de la clave del mapa que contiene el literal y el método que arma el payload."""
+    clave = re.search(r"([A-Za-z_$][\w$]*)\s*:\s*$", limpio[ini_entrada:pos])
+    if not clave:
+        return []
+    partes = []
+    for u in re.finditer(r"\.\s*" + re.escape(clave.group(1)) + r"(?![\w$])", limpio):
+        if ini_entrada <= u.start() < fin_entrada:
+            continue
+        uso = _sentencia_js(limpio, limpio.rfind("\n", 0, u.start()) + 1)
+        partes.append("uso:" + uso)
+        for met in sorted(set(re.findall(r"this\.(\w+)\s*\(", uso))):
+            cuerpo = _metodo_js(limpio, met)
+            if not cuerpo:
+                continue
+            partes.append("metodo:" + cuerpo)
+            # Métodos usados DENTRO del send de ese método (p. ej. creadoPor: this._usuarioActual()).
+            for s in re.finditer(r"PhotinoBridge\.send\s*\(", cuerpo):
+                cierra = _cierre_js(cuerpo, s.end() - 1)
+                args = cuerpo[s.end() - 1:cierra + 1] if cierra > 0 else ""
+                for m2 in sorted(set(re.findall(r"this\.(\w+)\s*\(", args))):
+                    cuerpo2 = _metodo_js(limpio, m2)
+                    if cuerpo2:
+                        partes.append("metodo:" + cuerpo2)
+        cb = re.match(r"\s*([A-Za-z_$][\w$]*)\s*:\s*(?:async\s*)?(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>", uso)
+        if cb and callbacks is not None:
+            callbacks.add(cb.group(1))
+    return partes
+
+
+def fragmentos_callback_js(texto, nombre):
+    """
+    Dónde un componente compartido invoca el callback `nombre` recibido en `opciones`
+    (CatalogCombo: `const nuevo = await estado.opciones.crear(texto)`) y la declaración local de sus
+    argumentos (`const texto = input.value.trim()`): la transformación del dato antes del envío.
+    """
+    limpio = quitar_comentarios_js(texto)
+    frag = []
+    for m in re.finditer(r"\bopciones\s*\.\s*" + re.escape(nombre) + r"\s*\(", limpio):
+        ini = limpio.rfind("\n", 0, m.start()) + 1
+        sentencia = _sentencia_js(limpio, ini)
+        partes = ["callback:" + sentencia] + _contexto_js(limpio, ini, sentencia, metodos=False)
         frag.append("\n".join(re.sub(r"\s+", " ", p).strip() for p in partes))
     return frag
 
@@ -521,11 +581,18 @@ class Inventario:
         if not archivos:
             return None, "el frontend no usa la acción"
         partes = []
+        callbacks = set()
         for rel in archivos:
-            for fr in fragmentos_llamado_js(self.fuente.read(WWW + rel), accion):
+            for fr in fragmentos_llamado_js(self.fuente.read(WWW + rel), accion, callbacks):
                 partes.append(rel + "\n" + fr)
         if not partes:
             return None, "no se encontró el llamado literal en " + ", ".join(archivos)
+        # Acción dinámica pasada como callback a un componente compartido: sitio donde se invoca.
+        for nombre in sorted(callbacks):
+            for p in self.fuente.paths():
+                if p.startswith(WWW) and p.endswith(".js") and "/libs/" not in p:
+                    for fr in fragmentos_callback_js(self.fuente.read(p), nombre):
+                        partes.append(p[len(WWW):] + "\n" + fr)
         return hashlib.sha256("\n--\n".join(sorted(partes)).encode("utf-8")).hexdigest(), None
 
     def _huella_metodo_router(self, accion, metodo):

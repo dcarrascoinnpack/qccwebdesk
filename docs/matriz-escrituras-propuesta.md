@@ -4,8 +4,9 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **3** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear` y
-`noConformidades.analisis.guardar`, estado VALIDADA). Las otras 78 siguen denegadas por `ActionPolicy`
+Escrituras habilitadas en la web: **4** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
+`noConformidades.analisis.guardar` y `noConformidades.catalogos.clientes.crear`, estado VALIDADA). Las otras 77 siguen
+denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -48,7 +49,7 @@ contract check C#/JS + gate de release).
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` | 39 / 38 / 4 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 78 APROBADA · 3 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 77 APROBADA · 4 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -121,7 +122,7 @@ justificación · estado.
 | `noConformidades.analisis.guardar` | PUT `api/no-conformidades/{id}/analisis` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `usuario` | `usuario` ← nombreCompleto | guarda el análisis de causa raíz (5 por qué) | NO recuperable: la API sobrescribe en sitio sin historial (SEC-28); se corrige volviendo a guardar | **BAJO** | no cambia estado | VALIDADA (Fase 3c, gateway 0.4.0) |
 | `noConformidades.catalogos.areas.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
 | `noConformidades.catalogos.categoriasDefecto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
-| `noConformidades.catalogos.clientes.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
+| `noConformidades.catalogos.clientes.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3d, gateway 0.4.0) |
 | `noConformidades.catalogos.familiasProducto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
 | `noConformidades.catalogos.impactos.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
 | `noConformidades.catalogos.niveles.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
@@ -242,6 +243,32 @@ Mismo patrón, con **separación explícita identidad / negocio**:
   Photino no tiene protección (SEC-28). Patrón a reutilizar en toda escritura que sobrescriba.
 - **Auditoría**: `recurso=nc:<id>:analisis:<analisisId>:NUEVO|REEMPLAZO` (sin textos del análisis).
 - Tests `BridgeFase3cTest` (18), E2E CDP 23/23 con escena A/B real (conflicto en UI, relectura, guardado a sabiendas).
+
+### Cuarta escritura — `noConformidades.catalogos.clientes.crear` — VALIDADA (Fase 3d) — acción DINÁMICA
+
+- **Acción dinámica**: el literal vive en el mapa `_catalogosPlanosConfig()` (`crearAction`) y el payload lo arma
+  `_catalogoCrear(action, nombre)` (`{action, nombre, creadoPor: _usuarioActual()}`), invocado por el callback `crear`
+  de `CatalogCombo` (`shared/utils.js`: `opciones.crear(input.value.trim())`). El contract check (huella JS) cubre
+  ahora: la entrada del mapa de ESTA acción, los usos de la clave (`cfg.crearAction`), el método generador, los
+  métodos usados dentro de su `send` (`_usuarioActual`) y el sitio del componente compartido que invoca el callback
+  con la declaración de su argumento (el `trim`). Otras entradas del mapa y código visual no alteran la huella.
+- **Contrato real (API `NoConformidadesCatalogosService.CrearAsync` + `cat_nc_clientes`)**: `nombre` obligatorio
+  ("Falta el nombre"); `Trim` + espacios internos colapsados (`\s+` → " "); ≤ 150 unidades UTF-16 (`string.Length`;
+  NVARCHAR(150)/VARCHAR(150)); `UNIQUE(nombre)` con la collation de la BD (no distingue mayúsculas). **Duplicado**:
+  la API devuelve el valor existente con su id (y lo **reactiva** si estaba inactivo) con `ok`; el gateway no
+  inventa otra política. La respuesta trae `{id, nombre, activo}`.
+- **Gateway**: lista blanca `{action, nombre, creadoPor}`; `creadoPor` del navegador se descarta (← sesión); cualquier
+  otra clave → rechazo; `nombre` string; mismo trim/colapso que la API antes de medir; una línea sin controles (tab se
+  colapsa como en la API) ni sustitutos UTF-16 sueltos; sin marcado HTML (el valor termina en `no_conformidades` y
+  vistas con innerHTML, SEC-27). Solo `clientes`: crear en los otros 8 catálogos, desactivar/editar/eliminar siguen
+  denegados.
+- **Refresco**: el combo agrega el ítem devuelto a su caché y lo selecciona (sin relectura); otra sesión lo ve al
+  cargar el catálogo. La UI no muestra `creadoPor`.
+- **Límites**: `creado_por` es ≤ 150 y se toma del nombre de la sesión (igual que Photino; un nombre mayor lo
+  rechazaría la BD). La reactivación de un valor inactivo ocurre sin aviso (comportamiento de la API).
+- **Auditoría**: `recurso=catalogo:clientes:<id>` (sin el nombre).
+- Tests `BridgeFase3dTest` (15), contract check Python (+7), E2E CDP 26/26 (combo real, dos sesiones, duplicado,
+  HTML/longitud/campo extra, otro catálogo y desactivar denegados, rol consulta).
 
 Diseño aprobado de la primera escritura (referencia):
 
