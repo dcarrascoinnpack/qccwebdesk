@@ -57,6 +57,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/recepcion-calidad", this::recepcionCalidad);
         server.createContext("/api/usuarios", this::usuarios);
         server.createContext("/api/muestra-laboratorio", this::muestraLaboratorio);
+        server.createContext("/api/talleres-externos", this::talleresExternos);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(8));
         server.start();
     }
@@ -100,6 +101,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
+        peticionesTalleres.clear();
         modoUsuarios = "NORMAL";
         modoDashboard = ModoDashboard.NORMAL;
     }
@@ -1020,6 +1022,78 @@ public final class FakeInnpackApi implements AutoCloseable {
             }
             responder(ex, 200, ok + "{\"id\":" + id + ",\"np\":\"NP-100\",\"ensayos\":[],\"adjuntos\":[{\"id\":1,\"nombreArchivo\":\"informe ñ.pdf\"}],"
                     + "\"usuarioDelToken\":" + sub + "}" + fin);
+            return;
+        }
+        responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+    }
+
+    private final java.util.List<String> peticionesTalleres = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "<método> <ruta>[?<query cruda>]" recibidos en api/talleres-externos*. */
+    public java.util.List<String> peticionesTalleres() {
+        return java.util.List.copyOf(peticionesTalleres);
+    }
+
+    /** Página de trabajos: 450 en total; items de la página pedida (máx. 200 por página, como la API ≤ 500). */
+    public static String dataTalleresList(int sub, int page, int pageSize) {
+        int total = 450;
+        int tam = pageSize < 1 ? 50 : Math.min(pageSize, 500);
+        int desde = Math.max(0, (page - 1) * tam);
+        int hasta = Math.min(total, desde + tam);
+        StringBuilder items = new StringBuilder();
+        for (int i = desde; i < hasta; i++) {
+            items.append(i > desde ? "," : "").append("{\"id\":").append(9000 + i).append(",\"nv\":\"NV-").append(i)
+                    .append("\",\"producto\":\"Caja ñ «").append(i).append("»\",\"tallerExternoNombre\":\"Taller Uno\",\"version\":1}");
+        }
+        return "{\"items\":[" + items + "],\"totalCount\":" + total + ",\"page\":" + page + ",\"pageSize\":" + tam
+                + ",\"usuarioDelToken\":" + sub + "}";
+    }
+
+    /** Talleres Externos (lecturas). historial de id 404 → []; id 500 → 500 de la API. */
+    private void talleresExternos(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesTalleres.add(ex.getRequestMethod() + " " + path + (query == null ? "" : "?" + query));
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (!ex.getRequestMethod().equals("GET")) {
+            responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 400, fallo("Filtro de fecha inválido"));
+            return;
+        }
+        String ok = "{\"success\":true,\"message\":null,\"data\":";
+        String fin = ",\"errors\":null}";
+        if (path.equals("/api/talleres-externos")) {
+            java.util.regex.Matcher p = java.util.regex.Pattern.compile("page=(-?\\d+)&pageSize=(-?\\d+)").matcher(String.valueOf(query));
+            int page = p.find() ? Integer.parseInt(p.group(1)) : 1;
+            int pageSize = p.find(0) ? Integer.parseInt(p.group(2)) : 50;
+            responder(ex, 200, ok + dataTalleresList(sub, page, pageSize) + fin);
+            return;
+        }
+        if (path.equals("/api/talleres-externos/catalogos")) {
+            responder(ex, 200, ok + "{\"talleres\":[{\"id\":1,\"nombre\":\"Taller Uno\"}],\"procesos\":[{\"id\":2,\"nombre\":\"Troquelado ñ\"}],"
+                    + "\"usuarioDelToken\":" + sub + "}" + fin);
+            return;
+        }
+        java.util.regex.Matcher h = java.util.regex.Pattern.compile("^/api/talleres-externos/(\\d+)/historial-liberaciones$").matcher(path);
+        if (h.matches()) {
+            long id = Long.parseLong(h.group(1));
+            if (id == 500) {
+                responder(ex, 500, "{\"title\":\"error interno\"}");
+            } else if (id == 404) {
+                responder(ex, 200, ok + "[]" + fin);
+            } else {
+                responder(ex, 200, ok + "[{\"folioFps\":\"F-1\",\"fechaLiberacion\":\"2026-09-20T10:00:00\",\"cantidad\":1500.5}]" + fin);
+            }
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");

@@ -12,6 +12,7 @@ import cl.faret.qccweb.bridge.handlers.ProductoTerminadoBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RecepcionCalidadBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosControlBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.TalleresExternosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.UsuariosBridgeHandler;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import java.util.ArrayList;
@@ -100,13 +101,18 @@ public class BridgeConfig {
     }
 
     @Bean
+    public TalleresExternosBridgeHandler talleresExternosBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new TalleresExternosBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ActionPolicy actionPolicy(
             InicioBridgeHandler inicio, MaquinasSeguimientoBridgeHandler maquinas, DashboardBridgeHandler dashboard,
             RegistrosProduccionBridgeHandler registrosProduccion, RegistrosControlBridgeHandler registrosControl,
             ProductoTerminadoBridgeHandler productoTerminado, CertificadosLiberacionBridgeHandler certificados,
             ControlDocumentalBridgeHandler controlDocumental, NoConformidadesBridgeHandler noConformidades,
             RecepcionCalidadBridgeHandler recepcionCalidad, UsuariosBridgeHandler usuarios,
-            MuestraLaboratorioBridgeHandler laboratorio) {
+            MuestraLaboratorioBridgeHandler laboratorio, TalleresExternosBridgeHandler talleres) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -233,7 +239,15 @@ public class BridgeConfig {
                         "muestraLab.registroProduccion.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         laboratorio::registroProduccionList),
                 new ActionPolicy.Regla(
-                        "muestraLab.adjunto.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::adjuntoAbrir)));
+                        "muestraLab.adjunto.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::adjuntoAbrir),
+                // Fase 2m — Talleres Externos, SOLO LECTURA (payload en "data", sin empresa ni rol).
+                // Escrituras (create/update/eliminar/catalogos.eliminar*/sincronizarFps) fuera.
+                new ActionPolicy.Regla("talleresExternos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::list),
+                new ActionPolicy.Regla(
+                        "talleresExternos.catalogos", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::catalogos),
+                new ActionPolicy.Regla(
+                        "talleresExternos.historialLiberaciones", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        talleres::historialLiberaciones)));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),

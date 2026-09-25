@@ -356,6 +356,19 @@ class HuellaFrontendTest(unittest.TestCase):
         self.assertEqual(len(fr), 1)
         self.assertIn('listAction: "inicio.getDashboard"', fr[0])
 
+    def test_no_cruza_a_otros_metodos_ni_toma_la_variable_propia(self):
+        js = ('class X {\n'
+              '    _send(a, d) { return window.PhotinoBridge.send({ action: a, data: d }); }\n'
+              '    async otro() {\n        const res = await this._send("inicio.otra", {});\n    }\n'
+              '    async ver(trigger, id) {\n        const res = await this._send("inicio.getDashboard", { id });\n    }\n}\n')
+        fr = pc.fragmentos_llamado_js(js, "inicio.getDashboard")
+        self.assertEqual(len(fr), 1)
+        self.assertNotIn("inicio.otra", fr[0])
+        self.assertIn("metodo: _send(a, d)", fr[0])
+        # Cambiar el método vecino no altera la huella.
+        fr2 = pc.fragmentos_llamado_js(js.replace('"inicio.otra", {}', '"inicio.otra", { x: 1 }'), "inicio.getDashboard")
+        self.assertEqual(fr, fr2)
+
     def test_quitar_comentarios_js_respeta_strings_y_urls(self):
         self.assertEqual(pc.quitar_comentarios_js('a = "http://x"; // c\nb = `/*no*/`; /* si */ c = 1'),
                          'a = "http://x"; \nb = `/*no*/`;  c = 1')

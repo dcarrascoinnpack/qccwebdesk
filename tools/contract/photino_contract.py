@@ -326,11 +326,20 @@ def fragmentos_llamado_js(texto, accion):
         partes = ["llamado:" + arg]
         previo = limpio[:ancla]
         ventana = "\n".join(previo.split("\n")[-80:])
+        # Solo dentro del método/función que contiene el llamado (no cruzar a métodos vecinos).
+        cabeceras = [c for c in re.finditer(r"(?m)^[ \t]*(?:async\s+)?(?:function\s+)?([A-Za-z_$][\w$]*)\s*\([^\n]*\)\s*\{\s*$", ventana)
+                     if c.group(1) not in ("if", "for", "while", "switch", "catch", "with", "else")]
+        if cabeceras:
+            ventana = ventana[cabeceras[-1].start():]
         base = len(previo) - len(ventana)
         extras = []
-        # Identificadores sueltos o en spread (`...x`), no accesos a miembro (`obj.x`).
+        # Identificadores sueltos o en spread (`...x`), no accesos a miembro (`obj.x`), ni la variable
+        # que declara la propia sentencia (`const res = await this._send(...)`).
+        propia = re.match(r"\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)", arg)
         idents = {mi.group(1) for mi in re.finditer(r"(?<![\w$])([A-Za-z_$][\w$]*)", arg)
                   if not (arg[:mi.start()].endswith(".") and not arg[:mi.start()].endswith("..."))}
+        if propia:
+            idents.discard(propia.group(1))
         for ident in sorted(idents):
             decl = None
             for d in re.finditer(r"\b(?:const|let|var)\s+" + re.escape(ident) + r"\s*=", ventana):
