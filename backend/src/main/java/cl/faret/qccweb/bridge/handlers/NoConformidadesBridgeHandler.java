@@ -339,12 +339,127 @@ public class NoConformidadesBridgeHandler {
     /**
      * noConformidades.acciones.list → GET api/no-conformidades/{id}/acciones, con `descripcion`,
      * `responsable` y `prioridad` escapados como HTML (misma razón que seguimiento.list, SEC-27). `estado`
-     * no se toca (la vista lo compara con valores fijos). OJO al habilitar acciones.actualizar: la vista
-     * reenvía descripcion/responsable tomados de esta lista → el gateway deberá des-escaparlos
-     * (HtmlUtils.htmlUnescape) antes de validarlos y enviarlos a la API.
+     * no se toca (la vista lo compara con valores fijos). Fase 3n: ANTES de escapar, registra en la sesión cada
+     * acción ORIGINAL (NC + JSON sin escapar) para acciones.actualizar: la vista reenvía descripcion/responsable
+     * tomados de esta lista (ya escapados) y el gateway los reemplaza por los originales (sin doble escape).
      */
     public BridgeResult accionesList(ObjectNode payload, SessionUser usuario) {
-        return escaparCampos(porId(payload, usuario, "/acciones"), "descripcion", "responsable", "prioridad");
+        BridgeResult upstream = porId(payload, usuario, "/acciones");
+        Integer ncId = entero(payload.get("id"));
+        if (upstream.ok() && ncId != null && upstream.data() instanceof ArrayNode items) {
+            for (JsonNode item : items) {
+                JsonNode aid = item.get("id");
+                if (item.isObject() && aid != null && aid.canConvertToInt()) {
+                    LecturasDeSesion.registrar(recursoLecturaAccion(aid.asInt()), ncId + "|" + item);
+                }
+            }
+        }
+        return escaparCampos(upstream, "descripcion", "responsable", "prioridad");
+    }
+
+    private static final Set<String> CAMPOS_ACCION_ACTUALIZAR = Set.of("action", "accionId", "descripcion", "responsable",
+            "fechaLimite", "prioridad", "estado", "actualizadoPor");
+    private static final List<String> ESTADOS_ACCION = List.of("PENDIENTE", "EN_PROCESO", "COMPLETADA", "CANCELADA");
+    static final String MENSAJE_ACCION_SIN_LEER = "Abre el análisis de la no conformidad antes de actualizar la acción.";
+    static final String MENSAJE_ACCION_CONFLICTO = "La acción fue modificada por otra persona desde que la abriste. "
+            + "Vuelve a abrir el análisis para ver los cambios.";
+    static final String MARCA_NC = "__qccAuditoriaNc";
+
+    static String recursoLecturaAccion(int accionId) {
+        return "nc-accion:" + accionId;
+    }
+
+    /**
+     * noConformidades.acciones.actualizar → PUT api/no-conformidades/acciones/{accionId} {descripcion, responsable,
+     * fechaLimite, prioridad, estado, actualizadoPor}. Photino (`_actualizarEstadoAccion`) solo deja cambiar el ESTADO
+     * y reenvía el resto copiado de acciones.list (que la web entrega escapado) y sin el id de la NC.
+     *
+     * La API sobrescribe todos los campos sin verificar existencia ni pertenencia. La web (Fase 3n; para el usuario,
+     * igual que Photino): exige que la acción se haya visto en esta sesión (acciones.list registra NC + valores
+     * ORIGINALES); toma del navegador SOLO `estado` y envía descripción/responsable/fecha/prioridad ORIGINALES (sin doble
+     * escape ni falsificación); `actualizadoPor` ← sesión; relee las acciones de la NC antes del PUT y rechaza si la
+     * acción ya no existe o cambió (lost update). NC cerrada: permitido, igual que Photino (decisión 3n-b).
+     */
+    public BridgeResult accionesActualizar(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CAMPOS_ACCION_ACTUALIZAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer accionId = entero(payload.get("accionId"));
+        if (accionId == null || accionId <= 0) {
+            return BridgeResult.error("Falta el id de la acción correctiva");
+        }
+        for (String campo : new String[] {"descripcion", "responsable", "fechaLimite", "prioridad", "estado"}) {
+            JsonNode n = payload.get(campo);
+            if (n != null && !n.isNull() && !n.isString()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+        }
+        String estado = textoPlano(payload.get("estado"));
+        if (estado.isEmpty()) {
+            return BridgeResult.error("Falta el estado");
+        }
+        if (!ESTADOS_ACCION.contains(estado)) {
+            return BridgeResult.error("Estado inválido. Valores permitidos: PENDIENTE, EN_PROCESO, COMPLETADA, CANCELADA");
+        }
+        String registro = LecturasDeSesion.huella(recursoLecturaAccion(accionId));
+        int corte = registro == null ? -1 : registro.indexOf('|');
+        if (corte <= 0) {
+            return BridgeResult.error(MENSAJE_ACCION_SIN_LEER);
+        }
+        int ncId = Integer.parseInt(registro.substring(0, corte));
+        String original = registro.substring(corte + 1);
+        BridgeResult vigentes = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + ncId + "/acciones"), mapper);
+        if (!vigentes.ok()) {
+            return vigentes;
+        }
+        JsonNode actual = null;
+        if (vigentes.data() instanceof ArrayNode items) {
+            for (JsonNode item : items) {
+                JsonNode aid = item.get("id");
+                if (aid != null && aid.canConvertToInt() && aid.asInt() == accionId) {
+                    actual = item;
+                }
+            }
+        }
+        if (actual == null) {
+            return BridgeResult.error("La acción correctiva ya no existe.");
+        }
+        if (!actual.toString().equals(original)) {
+            return BridgeResult.error(MENSAJE_ACCION_CONFLICTO);
+        }
+        String fechaLimite = textoDe(actual, "fechaLimite");
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("descripcion", textoDe(actual, "descripcion"));
+        cuerpo.put("responsable", textoDe(actual, "responsable"));
+        cuerpo.put("fechaLimite", fechaLimite.length() > 10 ? fechaLimite.substring(0, 10) : fechaLimite);
+        String prioridad = textoDe(actual, "prioridad");
+        if (prioridad.isEmpty()) {
+            cuerpo.putNull("prioridad");
+        } else {
+            cuerpo.put("prioridad", prioridad);
+        }
+        cuerpo.put("estado", estado);
+        cuerpo.put("actualizadoPor", autorDeSesion(usuario));
+        // Canal interno para la auditoría (el payload saneado no vuelve al navegador ni a la API).
+        payload.put(MARCA_NC, ncId);
+        BridgeResult resultado = InnpackRespuestas.reenviar(api.putJson(usuario, BASE + "/acciones/" + accionId, cuerpo), mapper);
+        if (resultado.ok()) {
+            // La vista recarga acciones.list enseguida y vuelve a registrar la acción con su nuevo estado.
+            LecturasDeSesion.olvidar(recursoLecturaAccion(accionId));
+        }
+        return resultado;
+    }
+
+    /** Recurso auditado: "nc:<ncId>:accion:<accionId>:<ESTADO>" (solo valores validados; sin textos de la acción). */
+    public static String recursoAccionActualizada(ObjectNode payload, Object dataRespuesta) {
+        Integer accionId = entero(payload.get("accionId"));
+        JsonNode nc = payload.get(MARCA_NC);
+        JsonNode e = payload.get("estado");
+        String estado = e != null && e.isString() ? e.asString().strip() : "";
+        return "nc:" + (nc != null && nc.canConvertToInt() ? nc.asInt() : "?") + ":accion:"
+                + (accionId != null && accionId > 0 ? accionId : "?") + (ESTADOS_ACCION.contains(estado) ? ":" + estado : "");
     }
 
     /** Escapa como HTML (UTF-8: solo & < > " ') los campos string indicados de cada ítem de una lista. */

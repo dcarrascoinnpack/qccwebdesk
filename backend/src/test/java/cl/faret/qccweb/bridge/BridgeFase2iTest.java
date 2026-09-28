@@ -317,7 +317,7 @@ class BridgeFase2iTest {
     @Test
     void escriturasDelModuloSiguenBloqueadas() throws Exception {
         MockHttpSession admin = login("admin1");
-        assertThat(ESCRITURAS).hasSize(12); // 3a-3c, crear en los 9 catalogos (3d-3i; niveles solo admin_ti), create (3j), adjuntos.subir (3k), update (3l), gestion/cerrar (3m) ya habilitadas
+        assertThat(ESCRITURAS).hasSize(11); // 3a-3c, crear en los 9 catalogos (3d-3i; niveles solo admin_ti), create (3j), adjuntos.subir (3k), update (3l), gestion/cerrar (3m), acciones.actualizar (3n) ya habilitadas
         for (String escritura : ESCRITURAS) {
             accion(admin, "{\"action\":\"" + escritura + "\",\"id\":501,\"adjuntoId\":1,\"accionId\":3,\"nombre\":\"x\"}")
                     .andExpect(status().isForbidden())
@@ -356,7 +356,8 @@ class BridgeFase2iTest {
                         && !a.equals("noConformidades.adjuntos.subir")
                         && !a.equals("noConformidades.update")
                         && !a.equals("noConformidades.gestion.actualizar")
-                        && !a.equals("noConformidades.cerrar")).toList();
+                        && !a.equals("noConformidades.cerrar")
+                        && !a.equals("noConformidades.acciones.actualizar")).toList();
         assertThat(lecturas).hasSize(18);
         for (String a : lecturas) {
             assertThat(policy.evaluar(a, usuario("INNPACK", "operador"))).isInstanceOf(ActionPolicy.Decision.Permitida.class);
@@ -421,7 +422,6 @@ class BridgeFase2iTest {
 
     private static List<String> escrituras() {
         List<String> e = new ArrayList<>(List.of("noConformidades.eliminar",
-                "noConformidades.acciones.actualizar",
                 "noConformidades.adjuntos.eliminar"));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             if (!List.of("clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas", "familiasProducto",

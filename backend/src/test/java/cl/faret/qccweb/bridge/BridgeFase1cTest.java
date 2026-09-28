@@ -176,7 +176,7 @@ class BridgeFase1cTest {
     }
 
     @Test
-    void soloAccionesHabilitadasHastaFase3m() {
+    void soloAccionesHabilitadasHastaFase3n() {
         assertThat(policy.accionesRegistradas()).containsExactlyInAnyOrder(
                 "inicio.getDashboard", "maquinasSeguimiento.obtenerResumen",
                 "dashboard.obtenerFiltros", "dashboard.obtenerResumen",
@@ -206,7 +206,8 @@ class BridgeFase1cTest {
                 "noConformidades.catalogos.revisores.crear", "noConformidades.catalogos.areas.crear",
                 "noConformidades.catalogos.familiasProducto.crear", "noConformidades.catalogos.impactos.crear",
                 "noConformidades.catalogos.niveles.crear", "noConformidades.create", "noConformidades.adjuntos.subir",
-                "noConformidades.update", "noConformidades.gestion.actualizar", "noConformidades.cerrar");
+                "noConformidades.update", "noConformidades.gestion.actualizar", "noConformidades.cerrar",
+                "noConformidades.acciones.actualizar");
     }
 
     // ------------------------------------------------------ manipulación desde DevTools

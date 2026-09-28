@@ -110,6 +110,9 @@ public final class FakeInnpackApi implements AutoCloseable {
         gestionesRecibidas.clear();
         cierresRecibidos.clear();
         ncCerradas.clear();
+        accionesActualizadas.clear();
+        estadoAccion.clear();
+        versionAccion.clear();
         creadosPorCatalogo.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
@@ -707,6 +710,21 @@ public final class FakeInnpackApi implements AutoCloseable {
         return java.util.List.copyOf(cierresRecibidos);
     }
 
+    /** Cuerpos EXACTOS de PUT api/no-conformidades/acciones/{accionId}; estado y versión simulados por acción. */
+    private final java.util.List<SeguimientoRecibido> accionesActualizadas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final Map<Integer, String> estadoAccion = new ConcurrentHashMap<>();
+    private final Map<Integer, Integer> versionAccion = new ConcurrentHashMap<>();
+
+    /** ncId de cada cuerpo = accionId de la URL. */
+    public java.util.List<SeguimientoRecibido> accionesActualizadas() {
+        return java.util.List.copyOf(accionesActualizadas);
+    }
+
+    /** Simula que otra persona modificó la acción: cambia lo que devuelve GET api/no-conformidades/{id}/acciones. */
+    public void modificarAccionPorOtro(int accionId) {
+        versionAccion.merge(accionId, 1, Integer::sum);
+    }
+
     /** Simula que otra persona (Photino u otra sesión) modificó la NC: cambia lo que devuelve GET api/no-conformidades/{id}. */
     public void modificarNcPorOtro(int id) {
         versionNc.merge(id, 1, Integer::sum);
@@ -914,6 +932,22 @@ public final class FakeInnpackApi implements AutoCloseable {
             responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + ncId + "},\"errors\":null}");
             return;
         }
+        java.util.regex.Matcher accPut = java.util.regex.Pattern.compile("^/api/no-conformidades/acciones/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && accPut.matches()) {
+            // Como NoConformidadesController.AccionesActualizar: sin verificar existencia; descripcion ERROR_API → 400.
+            String cuerpoAcc = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            int accionId = Integer.parseInt(accPut.group(1));
+            accionesActualizadas.add(new SeguimientoRecibido(accionId, sub, cuerpoAcc, ex.getRequestHeaders().getFirst("Content-Type")));
+            JsonNode b = mapper.readTree(cuerpoAcc);
+            if ("ERROR_API".equals(b.path("estado").asString("")) || "ERROR_API".equals(b.path("descripcion").asString(""))) {
+                responder(ex, 400, fallo("Error de negocio simulado"));
+                return;
+            }
+            estadoAccion.put(accionId, b.path("estado").asString(""));
+            versionAccion.merge(accionId, 1, Integer::sum);
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + accionId + "},\"errors\":null}");
+            return;
+        }
         java.util.regex.Matcher gesCer = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/(gestion|cerrar)$").matcher(path);
         if (gesCer.matches() && (ex.getRequestMethod().equals("PATCH") && gesCer.group(2).equals("gestion")
                 || ex.getRequestMethod().equals("POST") && gesCer.group(2).equals("cerrar"))) {
@@ -1070,8 +1104,12 @@ public final class FakeInnpackApi implements AutoCloseable {
                     responder(ex, 200, ok + (a == null ? "null" : a.toString()) + fin);
                 }
                 case "/acciones" -> responder(ex, 200, ok + (id == 901
-                        ? "[{\"id\":4,\"descripcion\":\"<img src=x onerror=alert(1)> & ñ\",\"responsable\":\"<b>Mallory</b>\",\"prioridad\":\"ALTA\",\"estado\":\"PENDIENTE\"}]"
-                        : "[{\"id\":3,\"descripcion\":\"Cambiar rodillo\",\"estado\":\"PENDIENTE\",\"usuarioDelToken\":" + sub + "}]") + fin);
+                        ? "[{\"id\":4,\"descripcion\":\"<img src=x onerror=alert(1)> & ñ\",\"responsable\":\"<b>Mallory</b>\",\"prioridad\":\"ALTA\","
+                                + "\"fechaLimite\":\"2026-10-15T00:00:00\",\"estado\":\"" + estadoAccion.getOrDefault(4, "PENDIENTE")
+                                + "\",\"version\":" + versionAccion.getOrDefault(4, 0) + "}]"
+                        : "[{\"id\":3,\"descripcion\":\"Cambiar rodillo\",\"responsable\":\"Juan Pérez\",\"fechaLimite\":\"2026-10-20\","
+                                + "\"prioridad\":null,\"estado\":\"" + estadoAccion.getOrDefault(3, "PENDIENTE") + "\",\"version\":"
+                                + versionAccion.getOrDefault(3, 0) + ",\"usuarioDelToken\":" + sub + "}]") + fin);
                 case "/adjuntos" -> {
                     String n1 = id == 900 ? "..\\\\<img src=x onerror=alert(1)>.pdf" : "causa raíz ñ.pdf";
                     responder(ex, 200, ok + "[{\"id\":1,\"tipo\":\"CAUSA_RAIZ_PDF\",\"nombreArchivo\":\"" + n1 + "\",\"tipoMime\":\"application/pdf\"},"

@@ -332,7 +332,15 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "noConformidades.cerrar", Set.of("INNPACK"), ROLES_ADMIN_INNPACK,
                         Map.of("cerradoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
-                        noConformidades::cerrar, NoConformidadesBridgeHandler::recursoCierre)));
+                        noConformidades::cerrar, NoConformidadesBridgeHandler::recursoCierre),
+                // Fase 3n — estado de una acción correctiva (modal de análisis): solo `estado` viene del navegador; el
+                // resto son los valores ORIGINALES registrados al listar (sin doble escape); lost update; NC cerrada
+                // permitida como en Photino (decisión 3n-b). Identidad "actualizadoPor" = sesión.
+                new ActionPolicy.Regla(
+                        "noConformidades.acciones.actualizar", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::accionesActualizar, NoConformidadesBridgeHandler::recursoAccionActualizada)));
         // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas), 3h
         // (familiasProducto, impactos; largo 50) y 3i (niveles; largo 20, solo admin_ti) — escrituras del combo de
         // catálogos (acción dinámica, mismo contrato): identidad "creadoPor" = sesión; `nombre` con el contrato real
