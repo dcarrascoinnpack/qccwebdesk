@@ -314,7 +314,15 @@ public class BridgeConfig {
                         "noConformidades.adjuntos.subir", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("subidoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
-                        noConformidades::adjuntosSubir, NoConformidadesBridgeHandler::recursoAdjunto)));
+                        noConformidades::adjuntosSubir, NoConformidadesBridgeHandler::recursoAdjunto),
+                // Fase 3l — editar NC: mismo contrato que create; identidad "actualizadoPor" = sesión; exige haber
+                // abierto la NC (huella de noConformidades.get) y rechaza si cambió (lost update), si no existe o si está
+                // CERRADA (más estricto que Photino); recurso "nc:<id>".
+                new ActionPolicy.Regla(
+                        "noConformidades.update", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::ncActualizar, (p, data) -> NoConformidadesBridgeHandler.recursoNc(p))));
         // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas), 3h
         // (familiasProducto, impactos; largo 50) y 3i (niveles; largo 20, solo admin_ti) — escrituras del combo de
         // catálogos (acción dinámica, mismo contrato): identidad "creadoPor" = sesión; `nombre` con el contrato real

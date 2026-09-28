@@ -105,6 +105,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         catalogosRecibidos.clear();
         ncCreadasRecibidas.clear();
         adjuntosRecibidos.clear();
+        ncActualizadasRecibidas.clear();
+        versionNc.clear();
         creadosPorCatalogo.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
@@ -681,6 +683,19 @@ public final class FakeInnpackApi implements AutoCloseable {
         return java.util.List.copyOf(ncCreadasRecibidas);
     }
 
+    /** Cuerpos EXACTOS recibidos en PUT api/no-conformidades/{id} (editar NC) y versión simulada por NC. */
+    private final java.util.List<SeguimientoRecibido> ncActualizadasRecibidas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final Map<Integer, Integer> versionNc = new ConcurrentHashMap<>();
+
+    public java.util.List<SeguimientoRecibido> ncActualizadasRecibidas() {
+        return java.util.List.copyOf(ncActualizadasRecibidas);
+    }
+
+    /** Simula que otra persona (Photino u otra sesión) modificó la NC: cambia lo que devuelve GET api/no-conformidades/{id}. */
+    public void modificarNcPorOtro(int id) {
+        versionNc.merge(id, 1, Integer::sum);
+    }
+
     /** Cuerpos EXACTOS recibidos en POST api/no-conformidades/{id}/adjuntos (ncId = id de la URL). */
     private final java.util.List<SeguimientoRecibido> adjuntosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
@@ -869,6 +884,20 @@ public final class FakeInnpackApi implements AutoCloseable {
             }
             return;
         }
+        java.util.regex.Matcher ncPut = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && ncPut.matches()) {
+            // Como NoConformidadesController.Actualizar: {id} (la API real no verifica existencia ni cierre).
+            String cuerpoPut = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            int ncId = Integer.parseInt(ncPut.group(1));
+            ncActualizadasRecibidas.add(new SeguimientoRecibido(ncId, sub, cuerpoPut, ex.getRequestHeaders().getFirst("Content-Type")));
+            if ("ERROR_API".equals(mapper.readTree(cuerpoPut).path("cliente").asString(""))) {
+                responder(ex, 400, fallo("No se recibió ningún campo para actualizar"));
+                return;
+            }
+            versionNc.merge(ncId, 1, Integer::sum);
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + ncId + "},\"errors\":null}");
+            return;
+        }
         java.util.regex.Matcher adjPost = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/adjuntos$").matcher(path);
         if (ex.getRequestMethod().equals("POST") && adjPost.matches()) {
             // Como NoConformidadesController.AdjuntosSubir: {id}; NC 404 no existe, 777 cerrada (400 de negocio).
@@ -994,7 +1023,8 @@ public final class FakeInnpackApi implements AutoCloseable {
             }
             switch (rama) {
                 case "" -> responder(ex, 200, ok + "{\"id\":" + id + ",\"codigo\":\"NC-0001\",\"descripcion\":\"=HYPERLINK(1)\","
-                        + "\"estadoGestion\":\"ASIGNADA\",\"usuarioDelToken\":" + sub + "}" + fin);
+                        + "\"estadoGestion\":\"" + (id == 503 ? "CERRADA" : "ASIGNADA") + "\",\"version\":" + versionNc.getOrDefault(id, 0)
+                        + ",\"usuarioDelToken\":" + sub + "}" + fin);
                 case "/seguimiento" -> responder(ex, 200, ok + (id == 901
                         // Comentario malicioso guardado desde Photino (que no valida): la web debe mostrarlo sin ejecutarlo.
                         ? "[{\"id\":9,\"comentario\":\"<img src=x onerror=alert(1)> & 'x' \\\"y\\\" ñ\",\"autor\":\"<b>Mallory</b>\",\"creadoEn\":\"2026-09-20T10:00:00\"}]"

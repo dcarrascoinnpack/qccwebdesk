@@ -172,8 +172,8 @@ class BridgeFase3aTest {
                         "noConformidades.catalogos.revisores.crear", "noConformidades.catalogos.areas.crear",
                         "noConformidades.catalogos.familiasProducto.crear", "noConformidades.catalogos.impactos.crear",
                         "noConformidades.catalogos.niveles.crear", "noConformidades.create",
-                        "noConformidades.adjuntos.subir");
-        for (String otra : List.of("noConformidades.cerrar", "noConformidades.eliminar", "noConformidades.update",
+                        "noConformidades.adjuntos.subir", "noConformidades.update");
+        for (String otra : List.of("noConformidades.cerrar", "noConformidades.eliminar",
                 "noConformidades.acciones.actualizar", "noConformidades.gestion.actualizar", "noConformidades.adjuntos.eliminar")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);
         }

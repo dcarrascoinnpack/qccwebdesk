@@ -4,10 +4,10 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **14** (`noConformidades.create`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
+Escrituras habilitadas en la web: **15** (`noConformidades.create`, `noConformidades.update`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-`niveles` solo `admin_ti`, restricción inicial). Las otras 67 siguen denegadas por `ActionPolicy`
+`niveles` solo `admin_ti`, restricción inicial). Las otras 66 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -50,7 +50,7 @@ contract check C#/JS + gate de release).
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 67 APROBADA · 14 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 66 APROBADA · 15 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -135,7 +135,7 @@ justificación · estado.
 | `noConformidades.acciones.actualizar` | PUT `api/no-conformidades/acciones/{accionId}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | cambia estado/datos de una acción correctiva | sí: volver a editar | **MEDIO** | puede cerrar acciones; actualizadoPor desde sesión | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
 | `noConformidades.cerrar` | POST `api/no-conformidades/{id}/cerrar` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `cerradoPor` | `cerradoPor` ← nombreCompleto | cierra la NC (CERRADA) | no hay 'reabrir' en la UI | **MEDIO** | cambio de estado final; cerradoPor desde sesión | APROBADA |
 | `noConformidades.gestion.actualizar` | PATCH `api/no-conformidades/{id}/gestion` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | asigna responsable, estado de gestión y fecha compromiso | sí: volver a editar | **MEDIO** | decisión de gestión | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
-| `noConformidades.update` | PUT `api/no-conformidades/{id}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | edita campos de la NC (actualización parcial) | sí: volver a editar | **MEDIO** | payload pasa entero a la API: lista blanca de campos en gateway | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
+| `noConformidades.update` | PUT `api/no-conformidades/{id}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | edita campos de la NC (actualización parcial) | sí: volver a editar | **MEDIO** | sobrescribe sin historial: lista blanca, cabecera recalculada, lost update y NC cerrada no editable | VALIDADA (Fase 3l, gateway 0.4.0) |
 | `noConformidades.adjuntos.eliminar` | DELETE `api/no-conformidades/{id}/adjuntos/{adjuntoId}` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un adjunto | no desde la UI | **ALTO** | destructivo; sin autor | APROBADA |
 | `noConformidades.eliminar` | DELETE `api/no-conformidades/{id}` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto | borrado lógico de la NC | no desde la UI | **ALTO** | destructivo | APROBADA |
 
@@ -381,6 +381,22 @@ Mismo patrón, con **separación explícita identidad / negocio**:
   web ya lo saneaba en adjuntos.list/abrir).
 - Auditoría `recurso=nc:<id>:adjunto:<id>` sin nombre ni contenido. `adjuntos.eliminar` sigue denegada (ALTO).
 - Tests: `BridgeFase3kTest` (9) + `BridgeFase3kSubidasOcupadasTest` (1), Node (ruta del shim), E2E CDP.
+
+### Decimoquinta escritura — `noConformidades.update` (editar NC) — VALIDADA (Fase 3l)
+
+- Photino: "Ver" (`noConformidades.get`) → "Editar" → `_guardarForm` con `_editingId`: `{action, id, actualizadoPor,
+  ...30 campos, ...cabecera}` (misma cabecera recalculada que el alta). El botón Editar aparece también en NC cerradas.
+- API (`PUT api/no-conformidades/{id}`): actualización parcial, `empresa` editable, `UPDATE ... WHERE id` SIN verificar
+  existencia/borrado/cierre (responde OK aunque no actualice), no toca `fecha_actualizacion` (observación para la API),
+  sobrescribe sin historial.
+- **Web:** validación y armado COMUNES con create (`cuerpoNc`: lista blanca, largos, cabecera recalculada);
+  `actualizadoPor` ← sesión; **lost update** como 3c: `noConformidades.get` registra la huella SHA-256 del detalle leído
+  en la sesión (`LecturasDeSesion`, recurso `nc-detalle:<id>`); `update` exige esa lectura ("Abre la no conformidad
+  antes de editarla"), relee antes del PUT (404/eliminada → error sin escribir) y rechaza si cambió ("fue modificada por
+  otra persona…"); tras guardar hay que reabrir. **NC CERRADA no editable (decisión 3l-a, más estricta que Photino):**
+  "La no conformidad está cerrada; no se puede editar." Auditoría `recurso=nc:<id>`.
+- Tests: `BridgeFase3lTest` (9: cuerpo exacto, identidad, sin abrir / otra sesión / otra NC, conflicto entre dos
+  sesiones, reapertura tras guardar, cerrada/inexistente, lista blanca y validación común, roles, auditoría), E2E CDP.
 
 Diseño aprobado de la primera escritura (referencia):
 

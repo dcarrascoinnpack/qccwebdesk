@@ -151,9 +151,17 @@ public class NoConformidadesBridgeHandler {
         return InnpackRespuestas.reenviar(api.get(usuario, BASE + "/filtros-opciones"), mapper);
     }
 
-    /** noConformidades.get → GET api/no-conformidades/{id} */
+    /**
+     * noConformidades.get → GET api/no-conformidades/{id}. Además registra en la sesión la huella de la NC que el
+     * usuario queda viendo (detección de lost update en noConformidades.update, Fase 3l).
+     */
     public BridgeResult get(ObjectNode payload, SessionUser usuario) {
-        return porId(payload, usuario, "");
+        BridgeResult upstream = porId(payload, usuario, "");
+        Integer id = entero(payload.get("id"));
+        if (upstream.ok() && id != null) {
+            LecturasDeSesion.registrar(recursoLecturaNc(id), huellaNc(upstream.data()));
+        }
+        return upstream;
     }
 
     /**
@@ -589,11 +597,91 @@ public class NoConformidadesBridgeHandler {
      * cantidades ≥ 0 dentro de DECIMAL(12,2). Los adjuntos elegidos se suben después con adjuntos.subir (otra acción).
      */
     public BridgeResult ncCrear(ObjectNode payload, SessionUser usuario) {
+        CuerpoNc c = cuerpoNc(payload, "creadoPor", false, usuario);
+        return c.error() != null ? c.error() : InnpackRespuestas.reenviar(api.postJson(usuario, BASE, c.cuerpo()), mapper);
+    }
+
+    static final String MENSAJE_NC_SIN_LEER = "Abre la no conformidad antes de editarla.";
+    static final String MENSAJE_NC_CONFLICTO = "La no conformidad fue modificada por otra persona desde que la abriste. "
+            + "Ciérrala y vuelve a abrirla para ver los cambios antes de editar.";
+    static final String MENSAJE_NC_CERRADA = "La no conformidad está cerrada; no se puede editar.";
+
+    /**
+     * noConformidades.update → PUT api/no-conformidades/{id}. Mismo formulario y payload que create (Photino
+     * `_guardarForm` con `_editingId`: {action, id, actualizadoPor, ...campos, ...cabecera}); misma lista blanca,
+     * validaciones y cabecera recalculada (cuerpoNc). `actualizadoPor` ← sesión.
+     *
+     * La API actualiza sin verificar existencia, borrado ni cierre (UPDATE ... WHERE id) y sobrescribe sin historial.
+     * La web (Fase 3l): exige haber abierto la NC en esta sesión (huella registrada por noConformidades.get), la
+     * relee antes del PUT (404/eliminada → error sin escribir), NO permite editar una NC CERRADA (decisión 3l-a, más
+     * estricta que Photino) y rechaza si la NC cambió desde que se abrió (lost update).
+     */
+    public BridgeResult ncActualizar(ObjectNode payload, SessionUser usuario) {
+        Integer id = entero(payload.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_ID_NC);
+        }
+        CuerpoNc c = cuerpoNc(payload, "actualizadoPor", true, usuario);
+        if (c.error() != null) {
+            return c.error();
+        }
+        String leida = LecturasDeSesion.huella(recursoLecturaNc(id));
+        if (leida == null) {
+            return BridgeResult.error(MENSAJE_NC_SIN_LEER);
+        }
+        BridgeResult vigente = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+        if (!vigente.ok()) {
+            return vigente;
+        }
+        JsonNode nc = vigente.data() instanceof JsonNode n ? n : null;
+        if ("CERRADA".equalsIgnoreCase(textoDe(nc, "estadoGestion")) || "CERRADA".equalsIgnoreCase(textoDe(nc, "estado"))) {
+            return BridgeResult.error(MENSAJE_NC_CERRADA);
+        }
+        if (!huellaNc(vigente.data()).equals(leida)) {
+            return BridgeResult.error(MENSAJE_NC_CONFLICTO);
+        }
+        BridgeResult resultado = InnpackRespuestas.reenviar(api.putJson(usuario, BASE + "/" + id, c.cuerpo()), mapper);
+        if (resultado.ok()) {
+            // Photino cierra el formulario y, para volver a editar, relee la NC (y vuelve a registrar la huella).
+            LecturasDeSesion.olvidar(recursoLecturaNc(id));
+        }
+        return resultado;
+    }
+
+    private record CuerpoNc(ObjectNode cuerpo, BridgeResult error) {
+        static CuerpoNc error(String mensaje) {
+            return new CuerpoNc(null, BridgeResult.error(mensaje));
+        }
+    }
+
+    static String recursoLecturaNc(int ncId) {
+        return "nc-detalle:" + ncId;
+    }
+
+    /** SHA-256 del detalle vigente de la NC (claves ordenadas): cualquier cambio de contenido o estado la altera. */
+    static String huellaNc(Object data) {
+        if (!(data instanceof JsonNode d) || !d.isObject()) {
+            return "SIN_NC";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String campo : d.propertyNames().stream().sorted().toList()) {
+            sb.append(campo).append('=').append(d.get(campo).toString()).append('\n');
+        }
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(h);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** Validación y armado común de create/update (lista blanca de Photino, cabecera recalculada, largos del esquema). */
+    private CuerpoNc cuerpoNc(ObjectNode payload, String claveAutor, boolean conId, SessionUser usuario) {
         for (String clave : payload.propertyNames()) {
-            if (!clave.equals("action") && !clave.equals("creadoPor") && !CAMPOS_NC_TEXTO.containsKey(clave)
+            if (!clave.equals("action") && !clave.equals(claveAutor) && !(conId && clave.equals("id")) && !CAMPOS_NC_TEXTO.containsKey(clave)
                     && !CAMPOS_NC_MULTILINEA.contains(clave) && !CAMPOS_NC_NUMERO.contains(clave)
                     && !CAMPOS_NC_FECHA.contains(clave) && !CAMPOS_NC_CABECERA.contains(clave)) {
-                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+                return CuerpoNc.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
             }
         }
         ObjectNode cuerpo = mapper.createObjectNode();
@@ -601,25 +689,25 @@ public class NoConformidadesBridgeHandler {
         for (String campo : CAMPOS_NC_TEXTO.keySet().stream().sorted().toList()) {
             JsonNode n = payload.get(campo);
             if (n != null && !n.isNull() && !n.isString()) {
-                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+                return CuerpoNc.error(MENSAJE_PARAMETRO_INVALIDO);
             }
             String valor = textoPlano(n);
             int max = CAMPOS_NC_TEXTO.get(campo);
             if (valor.length() > max) {
-                return BridgeResult.error("El campo " + campo + " supera el máximo de " + max + " caracteres.");
+                return CuerpoNc.error("El campo " + campo + " supera el máximo de " + max + " caracteres.");
             }
             if (CONTROL_UNA_LINEA.matcher(valor).find() || tieneSustitutoSuelto(valor)) {
-                return BridgeResult.error(MENSAJE_TEXTO_CARACTERES);
+                return CuerpoNc.error(MENSAJE_TEXTO_CARACTERES);
             }
             if (MARCADO_HTML.matcher(valor).find()) {
-                return BridgeResult.error(MENSAJE_TEXTO_HTML);
+                return CuerpoNc.error(MENSAJE_TEXTO_HTML);
             }
             textos.put(campo, valor);
         }
         for (String campo : CAMPOS_NC_MULTILINEA) {
             JsonNode n = payload.get(campo);
             if (n != null && !n.isNull() && !n.isString()) {
-                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+                return CuerpoNc.error(MENSAJE_PARAMETRO_INVALIDO);
             }
             String valor = textoPlano(n);
             String error = validarTextoAnalisis(campo, valor, true);
@@ -627,15 +715,15 @@ public class NoConformidadesBridgeHandler {
                 error = MENSAJE_TEXTO_CARACTERES;
             }
             if (error != null) {
-                return BridgeResult.error(error);
+                return CuerpoNc.error(error);
             }
             textos.put(campo, valor);
         }
         if (!TIPOS_PNC.contains(textos.get("tipoPnc"))) {
-            return BridgeResult.error("Tipo PNC inválido.");
+            return CuerpoNc.error("Tipo PNC inválido.");
         }
         if (!DISPOSICIONES.contains(textos.get("disposicion"))) {
-            return BridgeResult.error("Disposición inválida.");
+            return CuerpoNc.error("Disposición inválida.");
         }
         Map<String, JsonNode> numeros = new java.util.HashMap<>();
         for (String campo : CAMPOS_NC_NUMERO) {
@@ -644,11 +732,11 @@ public class NoConformidadesBridgeHandler {
                 continue;
             }
             if (!n.isNumber()) {
-                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+                return CuerpoNc.error(MENSAJE_PARAMETRO_INVALIDO);
             }
             java.math.BigDecimal v = n.decimalValue();
             if (v.signum() < 0 || v.compareTo(MAX_CANTIDAD) > 0) {
-                return BridgeResult.error("La cantidad " + campo + " no es válida (0 a 9.999.999.999,99).");
+                return CuerpoNc.error("La cantidad " + campo + " no es válida (0 a 9.999.999.999,99).");
             }
             numeros.put(campo, n); // se reenvía el número tal como lo manda Photino
         }
@@ -656,44 +744,44 @@ public class NoConformidadesBridgeHandler {
         for (String campo : CAMPOS_NC_FECHA) {
             JsonNode n = payload.get(campo);
             if (n != null && !n.isNull() && !n.isString()) {
-                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+                return CuerpoNc.error(MENSAJE_PARAMETRO_INVALIDO);
             }
             String valor = textoPlano(n);
             if (valor.isEmpty()) {
                 continue;
             }
             if (!FECHA_ISO.matcher(valor).matches()) {
-                return BridgeResult.error("La fecha " + campo + " no es válida (formato AAAA-MM-DD).");
+                return CuerpoNc.error("La fecha " + campo + " no es válida (formato AAAA-MM-DD).");
             }
             try {
                 java.time.LocalDate.parse(valor);
             } catch (java.time.format.DateTimeParseException e) {
-                return BridgeResult.error("La fecha " + campo + " no es válida (formato AAAA-MM-DD).");
+                return CuerpoNc.error("La fecha " + campo + " no es válida (formato AAAA-MM-DD).");
             }
             fechas.put(campo, valor);
         }
         for (String obligatorio : List.of("npNv", "cliente", "codigoProducto", "producto", "categoriaDefecto", "nivel",
                 "descripcionDefecto")) {
             if (textos.get(obligatorio).isEmpty()) {
-                return BridgeResult.error(MENSAJE_NC_OBLIGATORIOS);
+                return CuerpoNc.error(MENSAJE_NC_OBLIGATORIOS);
             }
         }
         if (!numeros.containsKey("cantRequerida") || !numeros.containsKey("cantRechazada")) {
-            return BridgeResult.error(MENSAJE_NC_OBLIGATORIOS);
+            return CuerpoNc.error(MENSAJE_NC_OBLIGATORIOS);
         }
         // Cabecera: misma lógica que _guardarForm de Photino, calculada con los valores ya validados.
         String fechaIngreso = fechas.getOrDefault("fechaIngreso", java.time.LocalDate.now(ZONA_PLANTA).toString());
         String producto = textos.get("producto");
         String titulo = ("PNC " + textos.get("npNv") + " - " + (producto.isEmpty() ? textos.get("cliente") : producto)).strip();
         if (titulo.length() > 255) {
-            return BridgeResult.error("El título de la no conformidad (PNC + NP/NV + producto) supera el máximo de 255 caracteres.");
+            return CuerpoNc.error("El título de la no conformidad (PNC + NP/NV + producto) supera el máximo de 255 caracteres.");
         }
         String descripcion = java.util.stream.Stream.of(textos.get("categoriaDefecto"), textos.get("descripcionDefecto"))
                 .filter(s -> !s.isEmpty()).collect(java.util.stream.Collectors.joining(" - "));
         String proceso = !textos.get("tipoPnc").isEmpty() ? textos.get("tipoPnc")
                 : !textos.get("area").isEmpty() ? textos.get("area") : "PNC Nueva";
-        // Mismo orden de claves que Photino ({creadoPor, ...campos, fechaIngreso, ...cabecera}).
-        cuerpo.put("creadoPor", autorDeSesion(usuario));
+        // Mismo orden de claves que Photino ({creadoPor|actualizadoPor, ...campos, fechaIngreso, ...cabecera}).
+        cuerpo.put(claveAutor, autorDeSesion(usuario));
         for (String campo : List.of("fechaIngreso", "npNv", "cliente", "codigoProducto", "producto", "familiaProducto", "tipoPnc",
                 "nivel", "categoriaDefecto", "tipoFalla", "impacto", "cantRequerida", "cantRechazada", "cantRecuperada", "pncReal",
                 "disposicion", "cantDestruida", "cantRepuesta", "area", "maquina", "operador", "supervisor", "revisadoPor",
@@ -724,7 +812,7 @@ public class NoConformidadesBridgeHandler {
         cuerpo.put("severidad", severidadDeNivel(textos.get("nivel")));
         cuerpo.put("proceso", proceso);
         cuerpo.put("fechaDeteccion", fechaIngreso);
-        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE, cuerpo), mapper);
+        return new CuerpoNc(cuerpo, null);
     }
 
     private static final Set<String> CAMPOS_ADJUNTO_SUBIR = Set.of("action", "id", "tipo", "nombreArchivo", "tipoMime",
