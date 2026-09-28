@@ -167,7 +167,9 @@ class BridgeFase3aTest {
         // Solo las escrituras aprobadas una a una (3a seguimiento.crear, 3b acciones.crear) están habilitadas.
         assertThat(policy.describir().stream().filter(d -> Boolean.TRUE.equals(d.get("escritura"))).map(d -> d.get("accion")))
                 .containsExactlyInAnyOrder(CREAR, "noConformidades.acciones.crear", "noConformidades.analisis.guardar",
-                        "noConformidades.catalogos.clientes.crear", "noConformidades.catalogos.categoriasDefecto.crear");
+                        "noConformidades.catalogos.clientes.crear", "noConformidades.catalogos.categoriasDefecto.crear",
+                        "noConformidades.catalogos.tiposFalla.crear", "noConformidades.catalogos.supervisores.crear",
+                        "noConformidades.catalogos.revisores.crear");
         for (String otra : List.of("noConformidades.create", "noConformidades.cerrar", "noConformidades.eliminar", "noConformidades.update",
                 "noConformidades.acciones.actualizar", "noConformidades.gestion.actualizar", "noConformidades.adjuntos.subir")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);

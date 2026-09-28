@@ -317,7 +317,7 @@ class BridgeFase2iTest {
     @Test
     void escriturasDelModuloSiguenBloqueadas() throws Exception {
         MockHttpSession admin = login("admin1");
-        assertThat(ESCRITURAS).hasSize(24); // 3a-3c + catalogos.clientes.crear (3d) y catalogos.categoriasDefecto.crear (3e) ya habilitadas
+        assertThat(ESCRITURAS).hasSize(21); // 3a-3c + catalogos clientes (3d), categoriasDefecto (3e) y tiposFalla/supervisores/revisores (3f) ya habilitadas
         for (String escritura : ESCRITURAS) {
             accion(admin, "{\"action\":\"" + escritura + "\",\"id\":501,\"adjuntoId\":1,\"accionId\":3,\"nombre\":\"x\"}")
                     .andExpect(status().isForbidden())
@@ -344,7 +344,10 @@ class BridgeFase2iTest {
                 .filter(a -> a.startsWith("noConformidades.") && !a.equals("noConformidades.seguimiento.crear")
                         && !a.equals("noConformidades.acciones.crear") && !a.equals("noConformidades.analisis.guardar")
                         && !a.equals("noConformidades.catalogos.clientes.crear")
-                        && !a.equals("noConformidades.catalogos.categoriasDefecto.crear")).toList();
+                        && !a.equals("noConformidades.catalogos.categoriasDefecto.crear")
+                        && !a.equals("noConformidades.catalogos.tiposFalla.crear")
+                        && !a.equals("noConformidades.catalogos.supervisores.crear")
+                        && !a.equals("noConformidades.catalogos.revisores.crear")).toList();
         assertThat(lecturas).hasSize(18);
         for (String a : lecturas) {
             assertThat(policy.evaluar(a, usuario("INNPACK", "operador"))).isInstanceOf(ActionPolicy.Decision.Permitida.class);
@@ -413,7 +416,7 @@ class BridgeFase2iTest {
                 "noConformidades.acciones.actualizar",
                 "noConformidades.adjuntos.subir", "noConformidades.adjuntos.eliminar"));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
-            if (!catalogo.equals("clientes") && !catalogo.equals("categoriasDefecto")) { // habilitadas en 3d/3e
+            if (!List.of("clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores").contains(catalogo)) { // habilitadas en 3d/3e/3f
                 e.add("noConformidades.catalogos." + catalogo + ".crear");
             }
             e.add("noConformidades.catalogos." + catalogo + ".desactivar");

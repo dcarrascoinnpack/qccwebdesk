@@ -46,7 +46,7 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Contrato común de noConformidades.catalogos.{catalogo}.crear (acción dinámica del combo de catálogos; mismo
- * handler `catalogoCrear`). Cada catálogo habilitado lo hereda con su propia clase (3d clientes, 3e categoriasDefecto).
+ * handler `catalogoCrear`). Cada catálogo habilitado lo hereda con su propia clase (3d clientes, 3e categoriasDefecto, 3f tiposFalla/supervisores/revisores).
  * Foco: identidad (creadoPor → siempre la sesión), `nombre` con el contrato real de la API (trim/colapso, ≤ 150
  * UTF-16, sin controles ni HTML), duplicados resueltos por la API, refresco inmediato.
  */
@@ -61,7 +61,9 @@ abstract class CatalogoCrearBase {
 
     /** Escrituras de catálogo habilitadas en la web (todo lo demás debe seguir denegado). */
     static final java.util.Set<String> HABILITADAS = java.util.Set.of(
-            "noConformidades.catalogos.clientes.crear", "noConformidades.catalogos.categoriasDefecto.crear");
+            "noConformidades.catalogos.clientes.crear", "noConformidades.catalogos.categoriasDefecto.crear",
+            "noConformidades.catalogos.tiposFalla.crear", "noConformidades.catalogos.supervisores.crear",
+            "noConformidades.catalogos.revisores.crear");
     private static final String MSG_HTML = "El texto no puede contener etiquetas HTML (por ejemplo \"<b>\" o \"<script>\").";
     private static final String MSG_CARACTERES = "El texto contiene caracteres no permitidos.";
     private static final String MSG_LARGO = "El valor no puede superar los 150 caracteres.";
@@ -303,7 +305,7 @@ abstract class CatalogoCrearBase {
             }
         }
         MockHttpSession s = login("admin1");
-        crear(s, "{\"action\":\"noConformidades.catalogos.tiposFalla.crear\",\"nombre\":\"X\"}").andExpect(status().isForbidden());
+        crear(s, "{\"action\":\"noConformidades.catalogos.areas.crear\",\"nombre\":\"X\"}").andExpect(status().isForbidden());
         crear(s, "{\"action\":\"noConformidades.catalogos." + catalogo + ".desactivar\",\"id\":1}").andExpect(status().isForbidden());
         assertThat(API.catalogosRecibidos()).hasSize(3);
     }

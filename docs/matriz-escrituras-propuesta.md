@@ -4,9 +4,9 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **5** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
-`noConformidades.analisis.guardar`, `noConformidades.catalogos.clientes.crear` y
-`noConformidades.catalogos.categoriasDefecto.crear`, estado VALIDADA). Las otras 76 siguen denegadas por `ActionPolicy`
+Escrituras habilitadas en la web: **8** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
+`noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,categoriasDefecto,tiposFalla,supervisores,
+revisores}.crear`, estado VALIDADA). Las otras 73 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -49,7 +49,7 @@ contract check C#/JS + gate de release).
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` | 39 / 38 / 4 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 76 APROBADA · 5 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 73 APROBADA · 8 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -126,9 +126,9 @@ justificación · estado.
 | `noConformidades.catalogos.familiasProducto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
 | `noConformidades.catalogos.impactos.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
 | `noConformidades.catalogos.niveles.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
-| `noConformidades.catalogos.revisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
-| `noConformidades.catalogos.supervisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
-| `noConformidades.catalogos.tiposFalla.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
+| `noConformidades.catalogos.revisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
+| `noConformidades.catalogos.supervisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
+| `noConformidades.catalogos.tiposFalla.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
 | `noConformidades.create` | POST `api/no-conformidades` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | crea una No Conformidad | sí: editar / eliminar (admin) | **BAJO** | registro operativo; creadoPor desde sesión | APROBADA |
 | `noConformidades.seguimiento.crear` | POST `api/no-conformidades/{id}/seguimiento` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `autor` | `autor` ← nombreCompleto | agrega un comentario de seguimiento (append-only) | no se borra; se corrige con otro comentario | **BAJO** | aditivo, sin cambio de estado; autor desde sesión | VALIDADA (Fase 3a, gateway 0.4.0) |
 | `noConformidades.acciones.actualizar` | PUT `api/no-conformidades/acciones/{accionId}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | cambia estado/datos de una acción correctiva | sí: volver a editar | **MEDIO** | puede cerrar acciones; actualizadoPor desde sesión | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
@@ -285,9 +285,20 @@ Mismo patrón, con **separación explícita identidad / negocio**:
 - Contract check: huella propia (entrada del mapa de esta acción + método generador + callback compartido); test real
   en 6c42e05 verifica que no incluye la entrada de clientes. E2E CDP 26/26 (y regresión de clientes 26/26).
 
+### Sexta a octava escrituras — `noConformidades.catalogos.{tiposFalla,supervisores,revisores}.crear` — VALIDADAS (Fase 3f)
+
+- **Diferencias reales con `clientes.crear`: ninguna de contrato.** Entradas del mapa `tipo-falla`, `supervisor` y
+  `revisado-por` (inputs de texto libre sin `maxlength`); mismo `_catalogoCrear`, mismo `HandleCatalogoCrear` en C#,
+  mismo endpoint/servicio/repositorio de la API; tablas `cat_nc_tipos_falla`, `cat_nc_supervisores`, `cat_nc_revisores`
+  con `nombre` (150) `UNIQUE` y `creado_por` (150).
+- **Identidad vs negocio:** "Supervisor" y "Revisado por" son datos de negocio (como `responsable` en 3b): el `nombre`
+  se conserva; solo `creadoPor` ← sesión. Los filtros Supervisor/Revisado por salen de `noConformidades.filtrosOpciones` (NC
+  registradas), no de estos catálogos: un valor nuevo aparece en filtros recién cuando una NC lo usa (igual en Photino).
+- Implementación: solo `BridgeConfig.CATALOGOS_CREAR_HABILITADOS` + una subclase de `CatalogoCrearBase` por catálogo
+  (`BridgeFase3fTiposFallaTest`, `…SupervisoresTest`, `…RevisoresTest`, 15 casos c/u). Huella propia por acción; el
+  test real en 6c42e05 verifica que el fragmento de cada catálogo no incluye la entrada de los otros habilitados.
+
 ### Catálogos restantes (propuesta, no implementada)
-- Estructuralmente idénticos (150, texto libre, sin dependencias en la vista): `tiposFalla`, `supervisores`,
-  `revisores` → lote sugerido de la próxima fase.
 - Revisar aparte: `areas` (150; posible uso como alcance de otros combos), `familiasProducto`/`impactos` (50) y
   `niveles` (20) — límites distintos (el fake de tests usa 150 y debe tomar el límite por catálogo) y valores por
   defecto en el formulario ("Mayor", "Calidad") que pilotan indicadores.
