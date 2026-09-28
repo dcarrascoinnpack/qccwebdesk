@@ -227,7 +227,7 @@ public class BridgeConfig {
                         noConformidades::adjuntosAbrir),
                 // Fase 2j — Recepción Calidad, SOLO LECTURA (payload en "data"). "empresa" = sesión.
                 // foto.abrir: lote confirmado con el detalle de la empresa de sesión y MIME por firma
-                // real. Escrituras (crear/nc.crear/plan.generar/bobinas.muestrear/muestra.crear/
+                // real. Escrituras (crear/nc.crear/plan.generar/muestra.crear/
                 // estado.actualizar) y sap.* (otra API externa) fuera (deny-by-default).
                 new ActionPolicy.Regla(
                         "recepcion.list", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::list),
@@ -235,6 +235,13 @@ public class BridgeConfig {
                         "recepcion.detalle", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::detalle),
                 new ActionPolicy.Regla(
                         "recepcion.foto.abrir", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::fotoAbrir),
+                // Fase 3q — PRIMERA escritura de Recepción: guardar bobinas muestreadas. Roles = Photino (cualquier
+                // usuario INNPACK); "usuario" ← sesión; lote confirmado con la empresa de sesión; detección de cambios
+                // concurrentes en la selección; recurso "recepcion:<lote>:muestreadas:<n>".
+                new ActionPolicy.Regla(
+                        "recepcion.bobinas.muestrear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("usuario", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        recepcionCalidad::bobinasMuestrear, RecepcionCalidadBridgeHandler::recursoMuestreo),
                 // Fase 2k — Gestión de Usuarios, SOLO LECTURA y SOLO admin/admin_ti (UsuariosHandler.
                 // IsAdmin + [Authorize(Roles)] de la API): primera regla con roles restringidos.
                 // Respuesta reproyectada a los 7 campos PascalCase de Photino. create/delete/

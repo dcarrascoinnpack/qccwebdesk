@@ -115,6 +115,9 @@ public final class FakeInnpackApi implements AutoCloseable {
         versionAccion.clear();
         creadosPorCatalogo.clear();
         peticionesRecepcion.clear();
+        muestreosRecibidos.clear();
+        muestreadasPorLote.clear();
+        estadoLote.clear();
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
         peticionesTalleres.clear();
@@ -1135,9 +1138,74 @@ public final class FakeInnpackApi implements AutoCloseable {
         return switch (id) {
             case 1, 3, 4, 5, 6, 7, 8, 9 -> "PVA";
             case 2 -> "PliegoFaret";
-            case 10 -> "Bobina";
+            case 10, 20, 21, 22 -> "Bobina";
             default -> null;
         };
+    }
+
+    /** Bobinas de los lotes Bobina con estado (20: 4 bobinas; 21: otro lote; 22: EnAnalisis). */
+    private static java.util.List<String> bobinasLote(int id) {
+        return switch (id) {
+            case 20 -> java.util.List.of("B-001", "B-002", "B-003", "B-004");
+            case 21 -> java.util.List.of("X-001");
+            case 22 -> java.util.List.of("C-001", "C-002");
+            default -> java.util.List.of();
+        };
+    }
+
+    /** Cuerpos EXACTOS de POST api/recepcion-calidad/{id}/bobinas-muestreadas (ncId = loteId). */
+    private final java.util.List<SeguimientoRecibido> muestreosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final Map<Integer, String> muestreadasPorLote = new ConcurrentHashMap<>();
+    private final Map<Integer, String> estadoLote = new ConcurrentHashMap<>();
+
+    public java.util.List<SeguimientoRecibido> muestreosRecibidos() {
+        return java.util.List.copyOf(muestreosRecibidos);
+    }
+
+    public String estadoLote(int id) {
+        return estadoLote.getOrDefault(id, id == 22 ? "EnAnalisis" : "PendienteMuestreo");
+    }
+
+    /** Simula que otra persona (Photino u otra sesión) guardó otra selección del lote. */
+    public void muestrearPorOtro(int loteId, String numeroBobina) {
+        muestreadasPorLote.put(loteId, "[{\"numeroBobina\":\"" + numeroBobina + "\",\"seleccionTipo\":\"Manual\",\"criterioManual\":null,"
+                + "\"usuario\":\"Otra Persona\",\"fechaSeleccion\":\"2026-09-28 10:00\"}]");
+    }
+
+    /** Como RecepcionCalidadRepository.MuestrearBobinas: valida pertenencia, REEMPLAZA la selección y avanza el estado. */
+    private void muestrear(HttpExchange ex, int loteId, int sub) throws IOException {
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        muestreosRecibidos.add(new SeguimientoRecibido(loteId, sub, cuerpo, ex.getRequestHeaders().getFirst("Content-Type")));
+        JsonNode b = mapper.readTree(cuerpo);
+        java.util.List<String> invalidas = new java.util.ArrayList<>();
+        StringBuilder sel = new StringBuilder("[");
+        for (JsonNode x : b.path("bobinas")) {
+            String n = x.path("numeroBobina").asString("");
+            if (n.equals("ERROR_500")) {
+                responder(ex, 500, "{\"title\":\"error interno\"}");
+                return;
+            }
+            if (!bobinasLote(loteId).contains(n)) {
+                invalidas.add(n);
+            }
+            sel.append(sel.length() > 1 ? "," : "").append("{\"numeroBobina\":").append(mapper.writeValueAsString(n))
+                    .append(",\"seleccionTipo\":").append(mapper.writeValueAsString(x.path("seleccionTipo").asString("")))
+                    .append(",\"criterioManual\":").append(x.path("criterioManual").isNull() ? "null" : mapper.writeValueAsString(x.path("criterioManual").asString("")))
+                    .append(",\"usuario\":").append(mapper.writeValueAsString(b.path("usuario").asString(""))).append(",\"fechaSeleccion\":\"2026-09-28 11:00\"}");
+        }
+        if (b.path("bobinas").isEmpty()) {
+            responder(ex, 400, fallo("Falta el lote o la lista de bobinas muestreadas"));
+            return;
+        }
+        if (!invalidas.isEmpty()) {
+            responder(ex, 400, fallo("Las siguientes bobinas no pertenecen a este lote: " + String.join(", ", invalidas)));
+            return;
+        }
+        muestreadasPorLote.put(loteId, sel.append("]").toString());
+        if (estadoLote(loteId).equals("PendienteMuestreo")) {
+            estadoLote.put(loteId, "PendienteLaboratorio");
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"muestreadas\":" + b.path("bobinas").size() + "},\"errors\":null}");
     }
 
     public static String dataRecepcionList(int sub, String query) {
@@ -1163,6 +1231,11 @@ public final class FakeInnpackApi implements AutoCloseable {
         if (sub == null || revocados.contains(sub)) {
             ex.sendResponseHeaders(401, -1);
             ex.close();
+            return;
+        }
+        java.util.regex.Matcher mue = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(\\d+)/bobinas-muestreadas$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && mue.matches()) {
+            muestrear(ex, Integer.parseInt(mue.group(1)), sub);
             return;
         }
         if (!ex.getRequestMethod().equals("GET")) {
@@ -1205,6 +1278,12 @@ public final class FakeInnpackApi implements AutoCloseable {
             String tipo = tipoLote(id);
             if (tipo == null || !q.equals("empresa=INNPACK")) {
                 responder(ex, 404, fallo("Lote no encontrado"));
+                return;
+            }
+            if (!bobinasLote(id).isEmpty()) {
+                responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"Bobina\",\"proveedor\":\"Papeles Ñuble\",\"estado\":\"" + estadoLote(id)
+                        + "\",\"totalBobinas\":" + bobinasLote(id).size() + ",\"bobinas\":" + mapper.writeValueAsString(bobinasLote(id))
+                        + ",\"plan\":null,\"muestreadas\":" + muestreadasPorLote.getOrDefault(id, "[]") + ",\"usuarioDelToken\":" + sub + "}" + fin);
                 return;
             }
             responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"" + tipo + "\",\"proveedor\":\"Adhesivos Ñuñoa\",\"estado\":\"PendienteMuestreo\","

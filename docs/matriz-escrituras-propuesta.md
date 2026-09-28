@@ -14,11 +14,11 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **18** (`noConformidades.create`, `noConformidades.update`, `noConformidades.gestion.actualizar`,
+Escrituras habilitadas en la web: **19** (`recepcion.bobinas.muestrear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-mismos roles que Photino). Las otras 63 siguen denegadas por `ActionPolicy`
+mismos roles que Photino). Las otras 62 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -63,7 +63,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 63 APROBADA · 18 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 62 APROBADA · 19 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -163,7 +163,7 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `recepcion.bobinas.muestrear` | POST `api/recepcion-calidad/{id}/bobinas-muestreadas` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | genera plan AQL / registra bobinas muestreadas | sí: regenerar / volver a guardar | **BAJO** | operativo; sin autor en plan | APROBADA |
+| `recepcion.bobinas.muestrear` | POST `api/recepcion-calidad/{id}/bobinas-muestreadas` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | genera plan AQL / registra bobinas muestreadas | sí: regenerar / volver a guardar | **BAJO** | operativo; sin autor en plan | VALIDADA (Fase 3q, gateway 0.4.0) |
 | `recepcion.crear` | POST `api/recepcion-calidad` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea un lote de recepción (con foto opcional) | no hay eliminar en la UI | **BAJO** | registro operativo; empresa y autor desde sesión | APROBADA |
 | `recepcion.muestra.crear` | POST `api/recepcion-calidad/{id}/muestra-laboratorio` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | crea muestra de laboratorio / NC desde el lote | sí: anular/eliminar en su módulo (admin) | **BAJO** | aditivo; autor y empresa desde sesión | APROBADA |
 | `recepcion.nc.crear` | POST `api/recepcion-calidad/{id}/nc` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea muestra de laboratorio / NC desde el lote | sí: anular/eliminar en su módulo (admin) | **BAJO** | aditivo; autor y empresa desde sesión | APROBADA |
@@ -488,6 +488,44 @@ imágenes de inspección con URL absoluta de otro origen en `ruta_archivo` (revi
 `recepcion.foto.abrir` con formatos BMP/HEIC o > 10 MB. **Acciones aún no habilitadas visibles en pantallas de lectura**
 (no son divergencias de lo COMPATIBLE): `muestraLab.materialesFps`, módulo Trazabilidad, `recepcion.sap.*`,
 `muestraLab.consultarNp/consultarRegistroProduccion/resolverBobina`.
+
+## Recepción de Calidad — primera escritura y hallazgos (Fase 3q, 2026-09-28)
+
+### `recepcion.bobinas.muestrear` — VALIDADA (Fase 3q)
+
+- **Photino (= Web para el usuario):** en el detalle del lote (Bobina) se marcan las bobinas (o "Selección aleatoria",
+  que exige plan) y "Guardar" envía `{action, data:{loteId, bobinas[{numeroBobina, seleccionTipo, criterioManual}]}}`;
+  si la selección manual no calza con el plan se pide el motivo (`prompt`). C# arma `{bobinas, usuario}` con el usuario de
+  su sesión; la API (`POST api/recepcion-calidad/{id}/bobinas-muestreadas`) valida que cada bobina pertenezca al lote,
+  **REEMPLAZA** la selección (DELETE + INSERT, sin transacción) y pasa `PendienteMuestreo → PendienteLaboratorio`
+  (otros estados no cambian). Se puede volver a guardar en cualquier estado y re-seleccionar bobinas ya muestreadas.
+  Respuesta `{muestreadas: n}`; la vista reabre el detalle y recarga la lista. Rollback: volver a guardar (el estado no
+  retrocede). Roles: cualquier usuario INNPACK (Photino sin gating; API `[Authorize]`).
+- **Web — seguridad transparente:** `usuario` ← `SessionUser`; lista blanca (raíz, `data` y cada bobina); tipos;
+  número ≤ 100, tipo ∈ {Manual, Aleatoria} (vacío → Manual, como C#), motivo ≤ 255 una línea sin controles ni HTML
+  (columnas reales); bobina repetida rechazada (sin UNIQUE en la tabla; solo la manda un payload manipulado); el lote se
+  confirma con el detalle de la **empresa de sesión** (id ajeno → no existe); la pertenencia de cada bobina la valida la
+  API (mismo mensaje). **Concurrencia:** `recepcion.detalle` registra en la sesión la huella de la selección vigente; el
+  guardado exige esa lectura, relee el detalle y, si otra sesión cambió la selección, responde "fue modificada por otra
+  persona… vuelve a abrirlo" en vez de pisarla. **Ventana residual (hardening futuro en la API):** entre la relectura y el
+  POST (milisegundos) y el DELETE+INSERT no transaccional de la API (dos guardados simultáneos pueden intercalarse).
+  Auditoría `recurso=recepcion:<lote>:muestreadas:<n>` (sin números de bobina ni motivo).
+- Contract check: la huella cubre el `send` y la declaración de `data`; no sigue la declaración de `tipo`/motivo
+  (límite documentado del contract check).
+- Tests: `BridgeFase3qTest` (9), E2E CDP.
+
+### Hallazgos en la API INNPACK (backlog, NO corregidos; no bloquean `bobinas.muestrear`)
+
+| # | Hallazgo | Evidencia | Impacto |
+|---|---|---|---|
+| R1 | `REPLACE INTO recepcion_plan_muestreo` no es T-SQL (la API corre sobre SQL Server) | `RecepcionCalidadRepository.cs:534` | `recepcion.plan.generar` fallaría siempre (también en Photino) |
+| R2 | `(foto IS NOT NULL) AS tiene_foto` no es T-SQL | `RecepcionCalidadRepository.cs:331, 358` | el detalle de lotes PVA/PliegoFaret fallaría (y con él `foto.abrir` en web y el refresco tras crearlos) |
+| R3 | Sin transacciones en escrituras multi-sentencia | crear (lote + bobinas + PVA/Pliego), muestrear (DELETE + INSERT), muestra.crear y nc.crear (INSERT + UPDATE) | datos parciales ante un error intermedio |
+| R4 | Carreras / duplicados | muestrear (dos guardados intercalados), nc.crear (verificación → escritura: 2 NC), muestra.crear (duplica) | mitigado en web solo para muestrear (detección de cambios) |
+| R5 | La API no filtra por empresa ni `eliminado` en nc/plan/muestrear/estado/foto | `RecepcionCalidadRepository.cs` | la web confirma el lote con el detalle de la empresa de sesión antes de escribir |
+| R6 | `foto_mime` siempre `image/jpeg` | `RecepcionCalidadRepository.cs:83, 113` | la web detecta el tipo real (ajuste BMP/ICO/AVIF y 25 MB propuesto, pendiente) |
+
+Confirmar R1/R2 en producción requiere acceso de solo lectura a SQL Server `calidad_db` (o el log de la API).
 
 Diseño aprobado de la primera escritura (referencia):
 

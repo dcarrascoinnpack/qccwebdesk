@@ -2,10 +2,15 @@ package cl.faret.qccweb.bridge.handlers;
 
 import cl.faret.qccweb.auth.SessionUser;
 import cl.faret.qccweb.bridge.BridgeResult;
+import cl.faret.qccweb.bridge.LecturasDeSesion;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.InnpackRespuestas;
 import cl.faret.qccweb.upstream.UriEscape;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.regex.Pattern;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
@@ -27,8 +32,8 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * bool/objeto/array en filtros de texto → "Parámetro de filtro inválido." (regla 2e).
  *
- * Escrituras (crear, nc.crear, plan.generar, bobinas.muestrear, muestra.crear, estado.actualizar) NO
- * habilitadas. sap.consultar/sap.lotes (apisapfaret, otra API con API key; solo se usan al crear un
+ * Escrituras: solo bobinas.muestrear (Fase 3q). crear, nc.crear, plan.generar, muestra.crear y
+ * estado.actualizar NO habilitadas. sap.consultar/sap.lotes (apisapfaret, otra API con API key; solo se usan al crear un
  * lote) tampoco: requieren un cliente upstream nuevo.
  */
 public class RecepcionCalidadBridgeHandler {
@@ -74,10 +79,206 @@ public class RecepcionCalidadBridgeHandler {
         return InnpackRespuestas.reenviar(api.get(usuario, path.toString()), mapper);
     }
 
-    /** recepcion.detalle → GET api/recepcion-calidad/{id}?empresa=.. (id ausente/inválido → 0, como Photino). */
+    /**
+     * recepcion.detalle → GET api/recepcion-calidad/{id}?empresa=.. (id ausente/inválido → 0, como Photino). Además
+     * registra en la sesión la huella de la selección de bobinas muestreadas que el usuario queda viendo (detección de
+     * cambios concurrentes en bobinas.muestrear).
+     */
     public BridgeResult detalle(ObjectNode payload, SessionUser usuario) {
         Integer id = entero(data(payload).get("id"));
-        return detalleLote(id != null ? id : 0, usuario);
+        BridgeResult upstream = detalleLote(id != null ? id : 0, usuario);
+        if (upstream.ok() && id != null && id > 0) {
+            LecturasDeSesion.registrar(recursoLecturaMuestreo(id), huellaMuestreadas(upstream.data()));
+        }
+        return upstream;
+    }
+
+    static final String MENSAJE_FALTA_LOTE_BOBINAS = "Falta el lote o la lista de bobinas muestreadas";
+    static final String MENSAJE_MUESTREO_SIN_LEER = "Abre el detalle del lote antes de guardar las bobinas muestreadas.";
+    static final String MENSAJE_MUESTREO_CONFLICTO = "La selección de bobinas muestreadas fue modificada por otra persona desde que "
+            + "abriste el lote. Vuelve a abrirlo para ver los cambios.";
+    static final String MENSAJE_CAMPO_NO_PERMITIDO = "Campo no permitido: ";
+    static final String MENSAJE_PARAMETRO_INVALIDO = "Parámetro inválido.";
+    static final String MENSAJE_TEXTO_CARACTERES = "El texto contiene caracteres no permitidos.";
+    static final String MENSAJE_TEXTO_HTML = "El texto no puede contener etiquetas HTML (por ejemplo \"<b>\" o \"<script>\").";
+    static final String MARCA_BOBINAS = "__qccAuditoriaBobinas";
+    /** Claves de _guardarMuestreadas de Photino ({action, data:{loteId, bobinas}}) + "usuario" de IdentityOverride. */
+    private static final Set<String> CLAVES_RAIZ_MUESTREAR = Set.of("action", "data", "usuario");
+    private static final Set<String> CLAVES_DATA_MUESTREAR = Set.of("loteId", "bobinas", "usuario");
+    private static final Set<String> CLAVES_BOBINA = Set.of("numeroBobina", "seleccionTipo", "criterioManual");
+    /** Valores que produce la vista (botón Aleatoria / selección manual); vacío → "Manual" como C# y la API. */
+    private static final List<String> TIPOS_SELECCION = List.of("Manual", "Aleatoria");
+    private static final Pattern CONTROL_UNA_LINEA = Pattern.compile("[\\x00-\\x1F\\x7F]");
+    private static final Pattern MARCADO_HTML = Pattern.compile("<[A-Za-z/!?]");
+
+    /**
+     * recepcion.bobinas.muestrear → POST api/recepcion-calidad/{loteId}/bobinas-muestreadas {bobinas[{numeroBobina,
+     * seleccionTipo, criterioManual}], usuario}. PRIMERA ESCRITURA de Recepción (Fase 3q), igual que Photino para el
+     * usuario: la API REEMPLAZA la selección del lote (DELETE + INSERT, sin transacción), valida que cada bobina
+     * pertenezca al lote y pasa el estado PendienteMuestreo → PendienteLaboratorio (desde otros estados no lo cambia);
+     * se puede volver a guardar en cualquier estado y re-seleccionar bobinas ya muestreadas (reemplazo), como en Photino.
+     *
+     * Seguridad transparente: `usuario` ← sesión (Photino lo toma de su sesión C#); lista blanca de claves y tipos;
+     * número de bobina ≤ 100, tipo ≤ 20, criterio ≤ 255 una línea (columnas reales) sin controles ni HTML; bobinas
+     * repetidas rechazadas (sin UNIQUE en la tabla: solo un payload manipulado las mandaría); el lote se confirma con el
+     * detalle de la EMPRESA DE SESIÓN (ids ajenos → error) y la API valida la pertenencia de cada bobina. Concurrencia:
+     * exige haber abierto el detalle en esta sesión y lo relee antes del POST; si la selección cambió desde entonces
+     * (otra sesión la guardó) rechaza en vez de pisarla. Ventana residual: entre la relectura y el POST (milisegundos)
+     * y el DELETE+INSERT no transaccional de la API (hardening futuro en la API).
+     */
+    public BridgeResult bobinasMuestrear(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_RAIZ_MUESTREAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_DATA_MUESTREAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer loteId = entero(data.get("loteId"));
+        JsonNode bobinas = data.get("bobinas");
+        if (bobinas != null && !bobinas.isNull() && !bobinas.isArray()) {
+            return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+        }
+        if (loteId == null || loteId <= 0 || bobinas == null || bobinas.isNull() || bobinas.isEmpty()) {
+            return BridgeResult.error(MENSAJE_FALTA_LOTE_BOBINAS);
+        }
+        ArrayNode lista = mapper.createArrayNode();
+        Set<String> vistas = new HashSet<>();
+        for (JsonNode b : bobinas) {
+            if (!b.isObject()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+            for (String clave : b.propertyNames()) {
+                if (!CLAVES_BOBINA.contains(clave)) {
+                    return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+                }
+            }
+            for (String campo : new String[] {"numeroBobina", "seleccionTipo", "criterioManual"}) {
+                JsonNode v = b.get(campo);
+                if (v != null && !v.isNull() && !(v.isString() || v.isNumber() && campo.equals("numeroBobina"))) {
+                    return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+                }
+            }
+            String numero = texto(b.get("numeroBobina"));
+            String error = validarUnaLinea(numero, 100, "El número de bobina supera el máximo de 100 caracteres.");
+            if (error != null) {
+                return BridgeResult.error(error);
+            }
+            if (!numero.isEmpty() && !vistas.add(numero)) {
+                return BridgeResult.error("La bobina " + numero + " está repetida en la selección.");
+            }
+            String tipo = texto(b.get("seleccionTipo")).trim();
+            if (tipo.isEmpty()) {
+                tipo = "Manual";
+            }
+            if (!TIPOS_SELECCION.contains(tipo)) {
+                return BridgeResult.error("Tipo de selección inválido (Manual o Aleatoria).");
+            }
+            JsonNode c = b.get("criterioManual");
+            String criterio = c == null || c.isNull() ? null : c.asString().strip();
+            if (criterio != null) {
+                error = validarUnaLinea(criterio, 255, "El motivo supera el máximo de 255 caracteres.");
+                if (error != null) {
+                    return BridgeResult.error(error);
+                }
+            }
+            ObjectNode item = lista.addObject();
+            item.put("numeroBobina", numero);
+            item.put("seleccionTipo", tipo);
+            if (criterio == null || criterio.isEmpty()) {
+                item.putNull("criterioManual");
+            } else {
+                item.put("criterioManual", criterio);
+            }
+        }
+        String leida = LecturasDeSesion.huella(recursoLecturaMuestreo(loteId));
+        if (leida == null) {
+            return BridgeResult.error(MENSAJE_MUESTREO_SIN_LEER);
+        }
+        BridgeResult vigente = detalleLote(loteId, usuario); // empresa de sesión: un lote ajeno no existe para esta sesión
+        if (!vigente.ok()) {
+            return vigente;
+        }
+        if (!huellaMuestreadas(vigente.data()).equals(leida)) {
+            return BridgeResult.error(MENSAJE_MUESTREO_CONFLICTO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.set("bobinas", lista);
+        cuerpo.put("usuario", autorDeSesion(usuario));
+        // Canal interno para la auditoría (cantidad de bobinas; el payload saneado no vuelve al navegador ni a la API).
+        payload.put(MARCA_BOBINAS, lista.size());
+        BridgeResult resultado = InnpackRespuestas.reenviar(
+                api.postJson(usuario, BASE + "/" + loteId + "/bobinas-muestreadas", cuerpo), mapper);
+        if (resultado.ok()) {
+            // La vista vuelve a abrir el detalle enseguida y registra la huella de la nueva selección.
+            LecturasDeSesion.olvidar(recursoLecturaMuestreo(loteId));
+        }
+        return resultado;
+    }
+
+    /** Recurso auditado: "recepcion:<loteId>:muestreadas:<n bobinas>" (sin números de bobina ni motivo). */
+    public static String recursoMuestreo(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer loteId = data == null ? null : entero(data.get("loteId"));
+        JsonNode n = payload.get(MARCA_BOBINAS);
+        return "recepcion:" + (loteId != null && loteId > 0 ? loteId : "?") + ":muestreadas"
+                + (n != null && n.canConvertToInt() ? ":" + n.asInt() : "");
+    }
+
+    static String recursoLecturaMuestreo(int loteId) {
+        return "recepcion-muestreo:" + loteId;
+    }
+
+    /** SHA-256 de la selección vigente (muestreadas del detalle): cambia si otra sesión la reemplaza. */
+    static String huellaMuestreadas(Object detalle) {
+        JsonNode m = detalle instanceof JsonNode d && d.isObject() ? d.get("muestreadas") : null;
+        String base = m == null || m.isNull() ? "SIN_SELECCION" : m.toString();
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(base.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(h);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /** ≤ max caracteres, una sola línea, sin controles, sustitutos sueltos ni marcado HTML; null si es válido. */
+    private static String validarUnaLinea(String valor, int max, String largo) {
+        if (valor.length() > max) {
+            return largo;
+        }
+        if (CONTROL_UNA_LINEA.matcher(valor).find() || tieneSustitutoSuelto(valor)) {
+            return MENSAJE_TEXTO_CARACTERES;
+        }
+        if (MARCADO_HTML.matcher(valor).find()) {
+            return MENSAJE_TEXTO_HTML;
+        }
+        return null;
+    }
+
+    private static boolean tieneSustitutoSuelto(String s) {
+        for (int i = 0; i < s.length(); i++) {
+            char ch = s.charAt(i);
+            if (Character.isHighSurrogate(ch) && i + 1 < s.length() && Character.isLowSurrogate(s.charAt(i + 1))) {
+                i++;
+            } else if (Character.isSurrogate(ch)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static String nombreCampoSeguro(String clave) {
+        return clave != null && clave.matches("[A-Za-z0-9_]{1,40}") ? clave : "?";
+    }
+
+    /** Mismo criterio que la sesión C# de Photino (nombre completo; si no, el código). */
+    private static String autorDeSesion(SessionUser usuario) {
+        String nombre = usuario.nombreCompleto();
+        return nombre != null && !nombre.isBlank() ? nombre : usuario.codigoUsuario();
     }
 
     /** recepcion.foto.abrir → (detalle de la empresa de sesión) + GET api/recepcion-calidad/{loteId}/foto?tipoMateriaPrima=.. */
