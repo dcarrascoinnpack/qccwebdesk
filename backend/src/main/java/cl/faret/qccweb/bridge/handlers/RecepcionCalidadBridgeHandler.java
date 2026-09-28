@@ -32,7 +32,7 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * bool/objeto/array en filtros de texto → "Parámetro de filtro inválido." (regla 2e).
  *
- * Escrituras: solo bobinas.muestrear (Fase 3q). crear, nc.crear, plan.generar, muestra.crear y
+ * Escrituras: bobinas.muestrear (Fase 3q) y muestra.crear (Fase 3s). crear, nc.crear, plan.generar y
  * estado.actualizar NO habilitadas. sap.consultar/sap.lotes (apisapfaret, otra API con API key; solo se usan al crear un
  * lote) tampoco: requieren un cliente upstream nuevo.
  */
@@ -89,8 +89,100 @@ public class RecepcionCalidadBridgeHandler {
         BridgeResult upstream = detalleLote(id != null ? id : 0, usuario);
         if (upstream.ok() && id != null && id > 0) {
             LecturasDeSesion.registrar(recursoLecturaMuestreo(id), huellaMuestreadas(upstream.data()));
+            LecturasDeSesion.registrar(recursoLecturaMuestra(id), huellaMuestra(upstream.data()));
         }
         return upstream;
+    }
+
+    static final String MENSAJE_FALTA_LOTE = "Falta indicar el lote";
+    static final String MENSAJE_MUESTRA_SIN_LEER = "Abre el detalle del lote antes de crear la muestra de Laboratorio.";
+    static final String MENSAJE_MUESTRA_CONFLICTO = "El lote fue modificado por otra persona desde que lo abriste (muestra de "
+            + "Laboratorio o estado). Vuelve a abrirlo para ver los cambios.";
+    /** Claves de crearMuestra de Photino INNPACK ({action, data:{loteId}}). */
+    private static final Set<String> CLAVES_RAIZ_MUESTRA = Set.of("action", "data");
+    private static final Set<String> CLAVES_DATA_MUESTRA = Set.of("loteId");
+    /** Un candado por lote: serializa en este gateway las creaciones del mismo lote (doble clic, dos sesiones). */
+    private final java.util.concurrent.ConcurrentHashMap<Integer, Object> candadosMuestra = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * recepcion.muestra.crear → POST api/recepcion-calidad/{loteId}/muestra-laboratorio {empresa, usuarioId, usuarioNombre}
+     * (Fase 3s), igual que Photino para el usuario: la API lee el lote, INSERTA una muestra en muestra_laboratorio
+     * (origen ControlRecepcion, analista = usuario) y pone el lote en EnAnalisis, en cualquier estado y SIN control de
+     * duplicados (Photino deja crear otra aunque ya exista una: la vista solo lo informa). Responde {muestraLaboratorioId}.
+     *
+     * Seguridad transparente: empresa, usuarioId y usuarioNombre ← sesión (Photino los toma de su sesión C#); lista blanca
+     * {loteId}; el lote se confirma con el detalle de la EMPRESA DE SESIÓN (la API no filtra empresa ni eliminado).
+     * Duplicados accidentales: exige haber abierto el detalle en esta sesión, serializa por lote en el gateway y relee el
+     * detalle; si la muestra vinculada o el estado cambiaron desde la apertura (otra sesión, doble clic, reintento tras un
+     * timeout que sí creó) rechaza en vez de crear otra. Crear otra a sabiendas (tras reabrir el lote) sigue permitido.
+     * Ventana residual: creaciones desde Photino u otra instancia entre la relectura y el POST, y una segunda muestra
+     * paralela cuando ya existía una en EnAnalisis (el detalle solo muestra TOP 1). Fallo parcial (API sin transacción):
+     * muestra creada con el lote sin pasar a EnAnalisis; el reintento lo detecta la huella.
+     */
+    public BridgeResult muestraCrear(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_RAIZ_MUESTRA.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_DATA_MUESTRA.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer loteId = entero(data.get("loteId"));
+        if (loteId == null || loteId <= 0) {
+            return BridgeResult.error(MENSAJE_FALTA_LOTE);
+        }
+        String leida = LecturasDeSesion.huella(recursoLecturaMuestra(loteId));
+        if (leida == null) {
+            return BridgeResult.error(MENSAJE_MUESTRA_SIN_LEER);
+        }
+        synchronized (candadosMuestra.computeIfAbsent(loteId, k -> new Object())) {
+            // Una petición en espera (doble clic) ve aquí la huella ya olvidada por la anterior.
+            if (!leida.equals(LecturasDeSesion.huella(recursoLecturaMuestra(loteId)))) {
+                return BridgeResult.error(MENSAJE_MUESTRA_SIN_LEER);
+            }
+            BridgeResult vigente = detalleLote(loteId, usuario); // empresa de sesión: un lote ajeno no existe para esta sesión
+            if (!vigente.ok()) {
+                return vigente;
+            }
+            if (!huellaMuestra(vigente.data()).equals(leida)) {
+                return BridgeResult.error(MENSAJE_MUESTRA_CONFLICTO);
+            }
+            ObjectNode cuerpo = mapper.createObjectNode();
+            cuerpo.put("empresa", usuario.empresa());
+            cuerpo.put("usuarioId", usuario.userId());
+            cuerpo.put("usuarioNombre", autorDeSesion(usuario));
+            BridgeResult resultado = InnpackRespuestas.reenviar(
+                    api.postJson(usuario, BASE + "/" + loteId + "/muestra-laboratorio", cuerpo), mapper);
+            if (resultado.ok()) {
+                // La vista vuelve a abrir el detalle enseguida y registra la huella nueva.
+                LecturasDeSesion.olvidar(recursoLecturaMuestra(loteId));
+            }
+            return resultado;
+        }
+    }
+
+    /** Recurso auditado: "recepcion:<loteId>:muestra[:<muestraLaboratorioId>]". */
+    public static String recursoMuestra(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer loteId = data == null ? null : entero(data.get("loteId"));
+        JsonNode id = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("muestraLaboratorioId") : null;
+        return "recepcion:" + (loteId != null && loteId > 0 ? loteId : "?") + ":muestra"
+                + (id != null && id.canConvertToInt() ? ":" + id.asInt() : "");
+    }
+
+    static String recursoLecturaMuestra(int loteId) {
+        return "recepcion-muestra:" + loteId;
+    }
+
+    /** Lo que cambia muestra.crear en el detalle: muestra vinculada (TOP 1) y estado del lote. */
+    static String huellaMuestra(Object detalle) {
+        JsonNode d = detalle instanceof JsonNode n && n.isObject() ? n : null;
+        JsonNode m = d == null ? null : d.get("muestraLaboratorioId");
+        return (m == null || m.isNull() ? "SIN_MUESTRA" : m.asString()) + "|" + (d == null ? "" : texto(d.get("estado")));
     }
 
     static final String MENSAJE_FALTA_LOTE_BOBINAS = "Falta el lote o la lista de bobinas muestreadas";

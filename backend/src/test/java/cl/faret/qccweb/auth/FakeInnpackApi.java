@@ -118,6 +118,10 @@ public final class FakeInnpackApi implements AutoCloseable {
         muestreosRecibidos.clear();
         muestreadasPorLote.clear();
         estadoLote.clear();
+        muestrasRecibidas.clear();
+        muestraPorLote.clear();
+        siguienteMuestra.set(700);
+        demoraMuestraMs = 0;
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
         peticionesTalleres.clear();
@@ -1160,7 +1164,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         return switch (id) {
             case 1, 3, 4, 5, 6, 7, 8, 9 -> "PVA";
             case 2 -> "PliegoFaret";
-            case 10, 20, 21, 22 -> "Bobina";
+            case 10, 20, 21, 22, 23 -> "Bobina";
             default -> null;
         };
     }
@@ -1171,6 +1175,7 @@ public final class FakeInnpackApi implements AutoCloseable {
             case 20 -> java.util.List.of("B-001", "B-002", "B-003", "B-004");
             case 21 -> java.util.List.of("X-001");
             case 22 -> java.util.List.of("C-001", "C-002");
+            case 23 -> java.util.List.of("D-001");
             default -> java.util.List.of();
         };
     }
@@ -1186,6 +1191,62 @@ public final class FakeInnpackApi implements AutoCloseable {
 
     public String estadoLote(int id) {
         return estadoLote.getOrDefault(id, id == 22 ? "EnAnalisis" : "PendienteMuestreo");
+    }
+
+    /** Cuerpos EXACTOS de POST api/recepcion-calidad/{id}/muestra-laboratorio (ncId = loteId). */
+    private final java.util.List<SeguimientoRecibido> muestrasRecibidas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /** Muestra vinculada que muestra el detalle (TOP 1 = la primera creada del lote). */
+    private final Map<Integer, Integer> muestraPorLote = new ConcurrentHashMap<>();
+    private final java.util.concurrent.atomic.AtomicInteger siguienteMuestra = new java.util.concurrent.atomic.AtomicInteger(700);
+    private volatile long demoraMuestraMs;
+
+    public java.util.List<SeguimientoRecibido> muestrasRecibidas() {
+        return java.util.List.copyOf(muestrasRecibidas);
+    }
+
+    /** Muestras de Laboratorio creadas en total (la API no evita duplicados: cada POST inserta una). */
+    public int muestrasCreadas() {
+        return siguienteMuestra.get() - 700;
+    }
+
+    /** Demora de la API al crear la muestra (para superponer doble clic / sesiones concurrentes). */
+    public void demoraMuestra(long ms) {
+        this.demoraMuestraMs = ms;
+    }
+
+    /** Simula que otra persona (Photino u otra sesión) creó una muestra de Laboratorio del lote. */
+    public void crearMuestraPorOtro(int loteId) {
+        int id = siguienteMuestra.getAndIncrement();
+        muestraPorLote.putIfAbsent(loteId, id);
+        estadoLote.put(loteId, "EnAnalisis");
+    }
+
+    /**
+     * Como RecepcionCalidadRepository.CrearMuestraLaboratorio (sin transacción ni control de duplicados): lee el lote,
+     * INSERTA la muestra y pone el lote EnAnalisis. Lote 23: fallo parcial (muestra insertada, UPDATE de estado falla → 500).
+     */
+    private void crearMuestra(HttpExchange ex, int loteId, int sub) throws IOException {
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        muestrasRecibidas.add(new SeguimientoRecibido(loteId, sub, cuerpo, ex.getRequestHeaders().getFirst("Content-Type")));
+        if (demoraMuestraMs > 0) {
+            try {
+                Thread.sleep(demoraMuestraMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (tipoLote(loteId) == null) {
+            responder(ex, 400, fallo("Lote no encontrado"));
+            return;
+        }
+        int id = siguienteMuestra.getAndIncrement();
+        muestraPorLote.putIfAbsent(loteId, id);
+        if (loteId == 23) {
+            responder(ex, 500, "{\"title\":\"error interno\"}");
+            return;
+        }
+        estadoLote.put(loteId, "EnAnalisis");
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"muestraLaboratorioId\":" + id + "},\"errors\":null}");
     }
 
     /** Simula que otra persona (Photino u otra sesión) guardó otra selección del lote. */
@@ -1260,6 +1321,11 @@ public final class FakeInnpackApi implements AutoCloseable {
             muestrear(ex, Integer.parseInt(mue.group(1)), sub);
             return;
         }
+        java.util.regex.Matcher mlab = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(\\d+)/muestra-laboratorio$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && mlab.matches()) {
+            crearMuestra(ex, Integer.parseInt(mlab.group(1)), sub);
+            return;
+        }
         if (!ex.getRequestMethod().equals("GET")) {
             responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
             return;
@@ -1305,7 +1371,8 @@ public final class FakeInnpackApi implements AutoCloseable {
             if (!bobinasLote(id).isEmpty()) {
                 responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"Bobina\",\"proveedor\":\"Papeles Ñuble\",\"estado\":\"" + estadoLote(id)
                         + "\",\"totalBobinas\":" + bobinasLote(id).size() + ",\"bobinas\":" + mapper.writeValueAsString(bobinasLote(id))
-                        + ",\"plan\":null,\"muestreadas\":" + muestreadasPorLote.getOrDefault(id, "[]") + ",\"usuarioDelToken\":" + sub + "}" + fin);
+                        + ",\"plan\":null,\"muestreadas\":" + muestreadasPorLote.getOrDefault(id, "[]")
+                        + ",\"muestraLaboratorioId\":" + muestraPorLote.get(id) + ",\"usuarioDelToken\":" + sub + "}" + fin);
                 return;
             }
             responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"" + tipo + "\",\"proveedor\":\"Adhesivos Ñuñoa\",\"estado\":\"PendienteMuestreo\","

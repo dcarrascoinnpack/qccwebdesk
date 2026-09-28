@@ -227,7 +227,7 @@ public class BridgeConfig {
                         noConformidades::adjuntosAbrir),
                 // Fase 2j — Recepción Calidad, SOLO LECTURA (payload en "data"). "empresa" = sesión.
                 // foto.abrir: lote confirmado con el detalle de la empresa de sesión y MIME por firma
-                // real. Escrituras (crear/nc.crear/plan.generar/muestra.crear/
+                // real. Escrituras (crear/nc.crear/plan.generar/
                 // estado.actualizar) y sap.* (otra API externa) fuera (deny-by-default).
                 new ActionPolicy.Regla(
                         "recepcion.list", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::list),
@@ -242,6 +242,12 @@ public class BridgeConfig {
                         "recepcion.bobinas.muestrear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("usuario", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                         recepcionCalidad::bobinasMuestrear, RecepcionCalidadBridgeHandler::recursoMuestreo),
+                // Fase 3s — crear muestra de Laboratorio desde el lote. Roles = Photino (cualquier usuario INNPACK);
+                // empresa/usuarioId/usuarioNombre ← sesión (los arma el handler); lote de la empresa de sesión; creaciones
+                // del mismo lote serializadas + detección de cambios; recurso "recepcion:<lote>:muestra:<id>".
+                new ActionPolicy.Regla(
+                        "recepcion.muestra.crear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), recepcionCalidad::muestraCrear, RecepcionCalidadBridgeHandler::recursoMuestra),
                 // Fase 2k — Gestión de Usuarios, SOLO LECTURA y SOLO admin/admin_ti (UsuariosHandler.
                 // IsAdmin + [Authorize(Roles)] de la API): primera regla con roles restringidos.
                 // Respuesta reproyectada a los 7 campos PascalCase de Photino. create/delete/

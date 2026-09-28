@@ -54,7 +54,7 @@ class BridgeFase2jTest {
     private static final String DETALLE = "recepcion.detalle";
     private static final String FOTO = "recepcion.foto.abrir";
     private static final List<String> NO_HABILITADAS = List.of("recepcion.crear", "recepcion.nc.crear", "recepcion.plan.generar",
-            "recepcion.muestra.crear", "recepcion.estado.actualizar",
+            "recepcion.estado.actualizar",
             "recepcion.sap.consultar", "recepcion.sap.lotes");
     private static final String BASE = "GET /api/recepcion-calidad";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());

@@ -173,7 +173,7 @@ class BridgeFase3aTest {
                         "noConformidades.catalogos.familiasProducto.crear", "noConformidades.catalogos.impactos.crear",
                         "noConformidades.catalogos.niveles.crear", "noConformidades.create",
                         "noConformidades.adjuntos.subir", "noConformidades.update", "noConformidades.gestion.actualizar",
-                        "noConformidades.cerrar", "noConformidades.acciones.actualizar", "recepcion.bobinas.muestrear",
+                        "noConformidades.cerrar", "noConformidades.acciones.actualizar", "recepcion.bobinas.muestrear", "recepcion.muestra.crear",
                         "noConformidades.eliminar", "noConformidades.adjuntos.eliminar");
         for (String otra : List.of("noConformidades.catalogos.clientes.desactivar",
                 "noConformidades.catalogos.nciAreas.crear")) {
