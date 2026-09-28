@@ -298,7 +298,15 @@ public class BridgeConfig {
                         "noConformidades.analisis.guardar", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("usuario", IdentityOverride.Fuente.NOMBRE_COMPLETO),
-                        noConformidades::analisisGuardar, NoConformidadesBridgeHandler::recursoAnalisis)));
+                        noConformidades::analisisGuardar, NoConformidadesBridgeHandler::recursoAnalisis),
+                // Fase 3j — alta de NC ("Nueva NC"): identidad "creadoPor" = sesión; lista blanca de las claves de
+                // Photino (sin empresa/ambito: la NC queda como en Photino); cabecera recalculada en el gateway;
+                // largos del esquema; recurso "nc:<id creado>". Los adjuntos (adjuntos.subir) siguen denegados.
+                new ActionPolicy.Regla(
+                        "noConformidades.create", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::ncCrear, NoConformidadesBridgeHandler::recursoNcCreada)));
         // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas), 3h
         // (familiasProducto, impactos; largo 50) y 3i (niveles; largo 20, solo admin_ti) — escrituras del combo de
         // catálogos (acción dinámica, mismo contrato): identidad "creadoPor" = sesión; `nombre` con el contrato real

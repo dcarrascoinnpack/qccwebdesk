@@ -103,6 +103,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         analisisRecibidos.clear();
         analisisPorNc.clear();
         catalogosRecibidos.clear();
+        ncCreadasRecibidas.clear();
         creadosPorCatalogo.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
@@ -672,6 +673,13 @@ public final class FakeInnpackApi implements AutoCloseable {
     /** Cuerpo EXACTO recibido en POST api/nc-catalogos/{catalogo}. */
     public record CatalogoRecibido(String catalogo, int sub, String cuerpo, String contentType) {}
 
+    /** Cuerpos EXACTOS recibidos en POST api/no-conformidades (alta de NC). */
+    private final java.util.List<SeguimientoRecibido> ncCreadasRecibidas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    public java.util.List<SeguimientoRecibido> ncCreadasRecibidas() {
+        return java.util.List.copyOf(ncCreadasRecibidas);
+    }
+
     private final java.util.List<CatalogoRecibido> catalogosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     /** Valores creados por catálogo (estado simulado): {id, nombre, activo, creadoPor}. id 1 = semilla fija. */
     private final Map<String, java.util.List<tools.jackson.databind.node.ObjectNode>> creadosPorCatalogo = new ConcurrentHashMap<>();
@@ -850,6 +858,22 @@ public final class FakeInnpackApi implements AutoCloseable {
             } else {
                 // La API real responde Ok(new { }): no devuelve el id de la acción creada.
                 responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{},\"errors\":null}");
+            }
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/no-conformidades")) {
+            // Como NoConformidadesController.Crear: {id, codigo}; ERROR_API → 400 de negocio, ERROR_500 → 500.
+            String cuerpoNc = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            ncCreadasRecibidas.add(new SeguimientoRecibido(0, sub, cuerpoNc, ex.getRequestHeaders().getFirst("Content-Type")));
+            String cliente = mapper.readTree(cuerpoNc).path("cliente").asString("");
+            if ("ERROR_API".equals(cliente)) {
+                responder(ex, 400, fallo("Falta el campo obligatorio: cliente"));
+            } else if ("ERROR_500".equals(cliente)) {
+                responder(ex, 500, "{\"title\":\"error interno\"}");
+            } else {
+                int id = 950 + ncCreadasRecibidas.size();
+                responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"codigo\":\"NC-2026-" + id
+                        + "\"},\"errors\":null}");
             }
             return;
         }

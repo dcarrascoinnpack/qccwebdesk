@@ -310,6 +310,10 @@ def fragmentos_llamado_js(texto, accion, callbacks=None):
         Si el uso es un callback (`crear: nombre => ...`), su nombre se agrega a `callbacks` para que
         huella_frontend incluya dónde el componente compartido lo invoca (`opciones.crear(texto)`).
         Solo entra la entrada del mapa de ESTA acción, no las vecinas.
+      - ACCIÓN EN VARIABLE LOCAL (`const action = cond ? "x.update" : "x.create"` y luego
+        `PhotinoBridge.send({ action, ...payload })` en el mismo método): el método desde su cabecera hasta
+        el cierre de ESE send (armado completo del payload, incluidas mutaciones previas) y los métodos
+        `this.x()` llamados en ese tramo.
     No cubre mutaciones posteriores (`data.x = ...`): documentado como límite.
     """
     limpio = quitar_comentarios_js(texto)
@@ -329,6 +333,8 @@ def fragmentos_llamado_js(texto, accion, callbacks=None):
             arg = _sentencia_js(limpio, ini)
             ancla = ini
             dinamica = _usos_de_clave_js(limpio, ini, ini + len(arg), pos, callbacks)
+            if not dinamica:
+                dinamica = _variable_local_hasta_send_js(limpio, ini, arg)
         else:
             ancla = send
         partes = ["llamado:" + arg] + _contexto_js(limpio, ancla, arg) + dinamica
@@ -365,6 +371,35 @@ def _contexto_js(limpio, ancla, arg, metodos=True):
         for met in sorted(set(re.findall(r"this\.(\w+)\s*\(", arg + "\n" + "\n".join(extras)))):
             cuerpo = _metodo_js(limpio, met)
             if cuerpo:
+                partes.append("metodo:" + cuerpo)
+    return partes
+
+
+def _variable_local_hasta_send_js(limpio, ini, sentencia):
+    """Literal asignado a una variable local: tramo del método hasta el send que la usa + métodos this.x()."""
+    var = re.match(r"\s*(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=", sentencia)
+    if not var:
+        return []
+    cabeceras = [c for c in re.finditer(r"(?m)^[ \t]*(?:async\s+)?(?:function\s+)?([A-Za-z_$][\w$]*)\s*\([^\n]*\)\s*\{\s*$", limpio[:ini])
+                 if c.group(1) not in ("if", "for", "while", "switch", "catch", "with", "else")]
+    if not cabeceras:
+        return []
+    cabecera = cabeceras[-1]
+    met_fin = _cierre_js(limpio, limpio.index("{", cabecera.start()))
+    if met_fin < ini:
+        return []
+    uso = re.compile(r"(?<![\w$.])" + re.escape(var.group(1)) + r"(?![\w$])")
+    partes = []
+    for s in re.finditer(r"PhotinoBridge\.send\s*\(", limpio[ini:met_fin]):
+        abre = ini + s.end() - 1
+        cierra = _cierre_js(limpio, abre)
+        if cierra < 0 or not uso.search(limpio[abre:cierra + 1]):
+            continue
+        tramo = limpio[cabecera.start():cierra + 1]
+        partes.append("metodo_hasta_send:" + tramo)
+        for met in sorted(set(re.findall(r"this\.(\w+)\s*\(", tramo))):
+            cuerpo = _metodo_js(limpio, met)
+            if cuerpo and met != cabecera.group(1):
                 partes.append("metodo:" + cuerpo)
     return partes
 

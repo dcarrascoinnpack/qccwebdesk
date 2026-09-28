@@ -299,7 +299,7 @@ class BridgeFase3bTest {
         assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti", "operador"));
         assertThat(d.get("identidad")).isEqualTo(Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO));
         for (String otra : List.of("noConformidades.acciones.actualizar", "noConformidades.cerrar", "noConformidades.eliminar",
-                "noConformidades.update", "noConformidades.create", "noConformidades.gestion.actualizar")) {
+                "noConformidades.update", "noConformidades.gestion.actualizar")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);
         }
     }

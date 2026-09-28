@@ -492,6 +492,71 @@ class HuellaAccionDinamicaTest(unittest.TestCase):
         self.assertEqual(self.estado_con(nc=nc)["estado"], "COMPATIBLE")
 
 
+NC_JS_VARIABLE_LOCAL = """class NcController {
+    _campos() { return { nivel: "ncq-f-nivel", cliente: "ncq-f-cliente" }; }
+
+    _severidad(nivel) { return nivel.toUpperCase().includes("CRIT") ? "ALTA" : "MEDIA"; }
+
+    _usuarioActual() { return sessionStorage.getItem("nombreUsuario"); }
+
+    async _guardarForm() {
+        const campos = {};
+        Object.entries(this._campos()).forEach(([k, id]) => { campos[k] = document.getElementById(id).value.trim(); });
+        const cabecera = { severidad: this._severidad(campos.nivel) };
+        const payload = { ...campos, ...cabecera };
+        const action = this._editingId ? "inicio.actualizar" : "inicio.getDashboard";
+        const res = await window.PhotinoBridge.send({
+            action,
+            ...(this._editingId ? { id: this._editingId } : { creadoPor: this._usuarioActual() }),
+            ...payload,
+        });
+        this._mensaje(res.ok ? "ok" : "error");
+    }
+
+    _mensaje(m) { document.body.style.color = "red"; }
+}
+"""
+
+
+class HuellaAccionEnVariableLocalTest(unittest.TestCase):
+    """`const action = cond ? "x.update" : "x.create"` + send({ action, ...payload }) en el mismo método."""
+
+    NC = "src/UI/www/modules/nc/nc.controller.js"
+
+    def fuente(self, nc=NC_JS_VARIABLE_LOCAL):
+        return repo(**{"src/UI/www/modules/inicio/inicio.controller.js": "", self.NC: nc})
+
+    def setUp(self):
+        self.base = baseline_de(self.fuente())
+
+    def estado_con(self, nc):
+        filas, _ = estados(self.fuente(nc=nc), baseline=self.base)
+        return filas["inicio.getDashboard"]
+
+    def test_fragmento_cubre_el_metodo_hasta_el_send_y_sus_metodos(self):
+        fr = pc.fragmentos_llamado_js(NC_JS_VARIABLE_LOCAL, "inicio.getDashboard")
+        self.assertEqual(len(fr), 1)
+        self.assertIn("metodo_hasta_send: async _guardarForm()", fr[0])
+        self.assertIn("metodo: _campos()", fr[0])
+        self.assertIn("metodo: _severidad(nivel)", fr[0])
+        self.assertIn("metodo: _usuarioActual()", fr[0])
+        self.assertNotIn("_mensaje(m) {", fr[0])
+        self.assertEqual(self.estado_con(NC_JS_VARIABLE_LOCAL)["estado"], "COMPATIBLE")
+
+    def test_cambio_en_el_armado_del_payload_pasa_a_revisar(self):
+        for nc in (NC_JS_VARIABLE_LOCAL.replace('"ALTA" : "MEDIA"', '"ALTA" : "BAJA"'),
+                   NC_JS_VARIABLE_LOCAL.replace('cliente: "ncq-f-cliente"', 'cliente: "ncq-f-cliente", empresa: "ncq-f-empresa"'),
+                   NC_JS_VARIABLE_LOCAL.replace(".value.trim()", ".value"),
+                   NC_JS_VARIABLE_LOCAL.replace("{ ...campos, ...cabecera }", "{ ...campos, ...cabecera, ambito: \"INTERNA\" }")):
+            with self.subTest(nc=nc[:300]):
+                self.assertEqual(self.estado_con(nc)["estado"], "REVISAR")
+
+    def test_cambios_despues_del_send_no_alteran_la_huella(self):
+        nc = NC_JS_VARIABLE_LOCAL.replace('this._mensaje(res.ok ? "ok" : "error");', 'this._mensaje(res.ok ? "listo" : "falló");') \
+            .replace('_mensaje(m) { document.body.style.color = "red"; }', '_mensaje(m) { alert(m); }')
+        self.assertEqual(self.estado_con(nc)["estado"], "COMPATIBLE")
+
+
 class BloqueIfLargoTest(unittest.TestCase):
     """Rama `if (action == ...) { ... }` más larga que cualquier tope: se toma el bloque completo."""
 
@@ -727,6 +792,18 @@ class PhotinoRealTest(unittest.TestCase):
                         self.assertNotIn(otro, fr[0])
                 self.assertEqual(cb, {"crear"})
         self.assertIn("input.value.trim()", pc.fragmentos_callback_js(fuente.read(pc.WWW + "shared/utils.js"), "crear")[0])
+
+    def test_alta_de_nc_cubre_armado_de_payload_y_cabecera(self):
+        # noConformidades.create: literal en `const action = ... ? update : create`; el gateway recalcula la cabecera
+        # con la lógica de _guardarForm/_mapNivelASeveridad, así que un cambio ahí debe llevar a REVISAR.
+        js = pc.GitSource(PHOTINO_REAL, "6c42e05").read(pc.WWW + "modules/no-conformidades/no-conformidades.controller.js")
+        fr = pc.fragmentos_llamado_js(js, "noConformidades.create")
+        self.assertEqual(len(fr), 1)
+        for pieza in ("metodo_hasta_send: async _guardarForm()", "metodo: _camposMap()", "metodo: _leerCampo(campo, tipo)",
+                      "metodo: _mapNivelASeveridad(nivel)", "metodo: _usuarioActual()", 'tipo: "INTERNA"',
+                      'proceso: campos.tipoPnc || campos.area || "PNC Nueva"'):
+            self.assertIn(pieza, fr[0])
+        self.assertNotIn("_subirAdjuntosNuevaNc(ncId, pdfFile, fotoFiles) {", fr[0])
 
 
 

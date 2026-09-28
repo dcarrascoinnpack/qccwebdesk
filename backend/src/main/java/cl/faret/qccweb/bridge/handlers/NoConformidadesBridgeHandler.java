@@ -551,6 +551,205 @@ public class NoConformidadesBridgeHandler {
         return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + id + "/acciones", cuerpo), mapper);
     }
 
+    /** Campos del formulario "Nueva NC" de Photino (_camposMap) con el largo de su columna en no_conformidades. */
+    private static final Map<String, Integer> CAMPOS_NC_TEXTO = Map.ofEntries(
+            Map.entry("npNv", 100), Map.entry("cliente", 150), Map.entry("codigoProducto", 100), Map.entry("producto", 255),
+            Map.entry("familiaProducto", 50), Map.entry("tipoPnc", 50), Map.entry("nivel", 20), Map.entry("categoriaDefecto", 150),
+            Map.entry("tipoFalla", 150), Map.entry("impacto", 50), Map.entry("disposicion", 50), Map.entry("area", 150),
+            Map.entry("maquina", 150), Map.entry("operador", 150), Map.entry("supervisor", 150), Map.entry("revisadoPor", 150));
+    /** Textareas del formulario (columnas NVARCHAR(MAX)/TEXT): multilínea, tope en bytes como el análisis (3c). */
+    private static final List<String> CAMPOS_NC_MULTILINEA = List.of("descripcionDefecto", "observacion", "causaRaiz",
+            "accionesCorrectivas", "verificacionSeguimiento");
+    private static final List<String> CAMPOS_NC_NUMERO = List.of("cantRequerida", "cantRechazada", "cantRecuperada", "pncReal",
+            "cantDestruida", "cantRepuesta");
+    private static final List<String> CAMPOS_NC_FECHA = List.of("fechaIngreso", "fechaSalida", "fechaFabricacion");
+    /** Cabecera que Photino arma en el navegador: la web la RECALCULA (lo recibido se descarta). */
+    private static final Set<String> CAMPOS_NC_CABECERA = Set.of("tipo", "origen", "titulo", "descripcion", "severidad", "proceso",
+            "fechaDeteccion");
+    /** Opciones exactas de los <select> de la vista (ncq-f-tipo-pnc / ncq-f-disposicion). */
+    private static final Set<String> TIPOS_PNC = Set.of("", "Cuarentena", "Rechazo", "Rechazo Cliente", "Reclamo", "Interna");
+    private static final Set<String> DISPOSICIONES = Set.of("", "No aplica", "Reposición", "Destrucción", "Reposición y destrucción");
+    /** DECIMAL(12,2). */
+    private static final java.math.BigDecimal MAX_CANTIDAD = new java.math.BigDecimal("9999999999.99");
+    public static final String MENSAJE_NC_OBLIGATORIOS = "NP/NV, Cliente, Código, Producto, Categoría defecto, Nivel, Descripción defecto, "
+            + "Cant. requerida y Cant. rechazada son obligatorios";
+    private static final java.time.ZoneId ZONA_PLANTA = java.time.ZoneId.of("America/Santiago");
+
+    /**
+     * noConformidades.create → POST api/no-conformidades. Formulario "Nueva NC" de Photino (_guardarForm):
+     * {action, creadoPor, 34 campos de _camposMap, cabecera tipo/origen/titulo/descripcion/severidad/proceso/fechaDeteccion}.
+     *
+     * IDENTIDAD — `creadoPor`: SIEMPRE la sesión. ALCANCE — la API acepta `empresa`/`ambito` (y otras columnas que
+     * Photino INNPACK no manda: reportadoPor, norma, areasSecundarias, tiempoPerdidoHoras): lista blanca ESTRICTA de
+     * las claves de Photino, cualquier otra → error sin tocar la API. Sin `empresa` la NC queda NULL/PRODUCTO, igual
+     * que Photino (el listado INNPACK incluye empresa NULL). CABECERA — se recalcula aquí con la misma lógica de
+     * Photino (severidad desde el nivel, título, descripción, proceso, fechaDeteccion = fechaIngreso); lo que mande el
+     * navegador se descarta. Validación (la API no valida largos: el exceso sería un 500 de SQL): obligatorios de
+     * Photino, largo de cada columna, sin controles ni HTML, selects con sus opciones exactas, fechas AAAA-MM-DD,
+     * cantidades ≥ 0 dentro de DECIMAL(12,2). Los adjuntos elegidos se suben después con adjuntos.subir (otra acción).
+     */
+    public BridgeResult ncCrear(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!clave.equals("action") && !clave.equals("creadoPor") && !CAMPOS_NC_TEXTO.containsKey(clave)
+                    && !CAMPOS_NC_MULTILINEA.contains(clave) && !CAMPOS_NC_NUMERO.contains(clave)
+                    && !CAMPOS_NC_FECHA.contains(clave) && !CAMPOS_NC_CABECERA.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        Map<String, String> textos = new java.util.HashMap<>();
+        for (String campo : CAMPOS_NC_TEXTO.keySet().stream().sorted().toList()) {
+            JsonNode n = payload.get(campo);
+            if (n != null && !n.isNull() && !n.isString()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+            String valor = textoPlano(n);
+            int max = CAMPOS_NC_TEXTO.get(campo);
+            if (valor.length() > max) {
+                return BridgeResult.error("El campo " + campo + " supera el máximo de " + max + " caracteres.");
+            }
+            if (CONTROL_UNA_LINEA.matcher(valor).find() || tieneSustitutoSuelto(valor)) {
+                return BridgeResult.error(MENSAJE_TEXTO_CARACTERES);
+            }
+            if (MARCADO_HTML.matcher(valor).find()) {
+                return BridgeResult.error(MENSAJE_TEXTO_HTML);
+            }
+            textos.put(campo, valor);
+        }
+        for (String campo : CAMPOS_NC_MULTILINEA) {
+            JsonNode n = payload.get(campo);
+            if (n != null && !n.isNull() && !n.isString()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+            String valor = textoPlano(n);
+            String error = validarTextoAnalisis(campo, valor, true);
+            if (error == null && tieneSustitutoSuelto(valor)) {
+                error = MENSAJE_TEXTO_CARACTERES;
+            }
+            if (error != null) {
+                return BridgeResult.error(error);
+            }
+            textos.put(campo, valor);
+        }
+        if (!TIPOS_PNC.contains(textos.get("tipoPnc"))) {
+            return BridgeResult.error("Tipo PNC inválido.");
+        }
+        if (!DISPOSICIONES.contains(textos.get("disposicion"))) {
+            return BridgeResult.error("Disposición inválida.");
+        }
+        Map<String, JsonNode> numeros = new java.util.HashMap<>();
+        for (String campo : CAMPOS_NC_NUMERO) {
+            JsonNode n = payload.get(campo);
+            if (n == null || n.isNull()) {
+                continue;
+            }
+            if (!n.isNumber()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+            java.math.BigDecimal v = n.decimalValue();
+            if (v.signum() < 0 || v.compareTo(MAX_CANTIDAD) > 0) {
+                return BridgeResult.error("La cantidad " + campo + " no es válida (0 a 9.999.999.999,99).");
+            }
+            numeros.put(campo, n); // se reenvía el número tal como lo manda Photino
+        }
+        Map<String, String> fechas = new java.util.HashMap<>();
+        for (String campo : CAMPOS_NC_FECHA) {
+            JsonNode n = payload.get(campo);
+            if (n != null && !n.isNull() && !n.isString()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+            String valor = textoPlano(n);
+            if (valor.isEmpty()) {
+                continue;
+            }
+            if (!FECHA_ISO.matcher(valor).matches()) {
+                return BridgeResult.error("La fecha " + campo + " no es válida (formato AAAA-MM-DD).");
+            }
+            try {
+                java.time.LocalDate.parse(valor);
+            } catch (java.time.format.DateTimeParseException e) {
+                return BridgeResult.error("La fecha " + campo + " no es válida (formato AAAA-MM-DD).");
+            }
+            fechas.put(campo, valor);
+        }
+        for (String obligatorio : List.of("npNv", "cliente", "codigoProducto", "producto", "categoriaDefecto", "nivel",
+                "descripcionDefecto")) {
+            if (textos.get(obligatorio).isEmpty()) {
+                return BridgeResult.error(MENSAJE_NC_OBLIGATORIOS);
+            }
+        }
+        if (!numeros.containsKey("cantRequerida") || !numeros.containsKey("cantRechazada")) {
+            return BridgeResult.error(MENSAJE_NC_OBLIGATORIOS);
+        }
+        // Cabecera: misma lógica que _guardarForm de Photino, calculada con los valores ya validados.
+        String fechaIngreso = fechas.getOrDefault("fechaIngreso", java.time.LocalDate.now(ZONA_PLANTA).toString());
+        String producto = textos.get("producto");
+        String titulo = ("PNC " + textos.get("npNv") + " - " + (producto.isEmpty() ? textos.get("cliente") : producto)).strip();
+        if (titulo.length() > 255) {
+            return BridgeResult.error("El título de la no conformidad (PNC + NP/NV + producto) supera el máximo de 255 caracteres.");
+        }
+        String descripcion = java.util.stream.Stream.of(textos.get("categoriaDefecto"), textos.get("descripcionDefecto"))
+                .filter(s -> !s.isEmpty()).collect(java.util.stream.Collectors.joining(" - "));
+        String proceso = !textos.get("tipoPnc").isEmpty() ? textos.get("tipoPnc")
+                : !textos.get("area").isEmpty() ? textos.get("area") : "PNC Nueva";
+        // Mismo orden de claves que Photino ({creadoPor, ...campos, fechaIngreso, ...cabecera}).
+        cuerpo.put("creadoPor", autorDeSesion(usuario));
+        for (String campo : List.of("fechaIngreso", "npNv", "cliente", "codigoProducto", "producto", "familiaProducto", "tipoPnc",
+                "nivel", "categoriaDefecto", "tipoFalla", "impacto", "cantRequerida", "cantRechazada", "cantRecuperada", "pncReal",
+                "disposicion", "cantDestruida", "cantRepuesta", "area", "maquina", "operador", "supervisor", "revisadoPor",
+                "fechaSalida", "fechaFabricacion", "descripcionDefecto", "observacion", "causaRaiz", "accionesCorrectivas",
+                "verificacionSeguimiento")) {
+            if (campo.equals("fechaIngreso")) {
+                cuerpo.put(campo, fechaIngreso);
+            } else if (CAMPOS_NC_NUMERO.contains(campo)) {
+                if (numeros.containsKey(campo)) {
+                    cuerpo.set(campo, numeros.get(campo));
+                } else {
+                    cuerpo.putNull(campo);
+                }
+            } else if (CAMPOS_NC_FECHA.contains(campo)) {
+                if (fechas.containsKey(campo)) {
+                    cuerpo.put(campo, fechas.get(campo));
+                } else {
+                    cuerpo.putNull(campo);
+                }
+            } else {
+                cuerpo.put(campo, textos.get(campo));
+            }
+        }
+        cuerpo.put("tipo", "INTERNA");
+        cuerpo.put("origen", "AUDITORIA_INTERNA");
+        cuerpo.put("titulo", titulo);
+        cuerpo.put("descripcion", descripcion);
+        cuerpo.put("severidad", severidadDeNivel(textos.get("nivel")));
+        cuerpo.put("proceso", proceso);
+        cuerpo.put("fechaDeteccion", fechaIngreso);
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE, cuerpo), mapper);
+    }
+
+    /** _mapNivelASeveridad de Photino: CRIT → ALTA, MAYOR → MEDIA, MENOR → BAJA, otro → MEDIA. */
+    public static String severidadDeNivel(String nivel) {
+        String n = nivel == null ? "" : nivel.toUpperCase(java.util.Locale.ROOT);
+        if (n.contains("CRIT")) {
+            return "ALTA";
+        }
+        if (n.contains("MAYOR")) {
+            return "MEDIA";
+        }
+        if (n.contains("MENOR")) {
+            return "BAJA";
+        }
+        return "MEDIA";
+    }
+
+    /** Recurso auditado de create: "nc:<id>" con el id que devuelve la API ("nc:nueva" si no lo trae, p. ej. error). */
+    public static String recursoNcCreada(ObjectNode payload, Object dataRespuesta) {
+        if (dataRespuesta instanceof JsonNode d && d.isObject() && d.get("id") != null && d.get("id").canConvertToLong()) {
+            return "nc:" + d.get("id").asLong();
+        }
+        return "nc:nueva";
+    }
+
     /** Recurso auditado de acciones.crear: "nc:<id>" y, si la API devuelve el id creado, ":accion:<id>" (el log solo admite [letras números . _ @ : -]). */
     public static String recursoAccion(ObjectNode payload, Object dataRespuesta) {
         String recurso = recursoNc(payload);

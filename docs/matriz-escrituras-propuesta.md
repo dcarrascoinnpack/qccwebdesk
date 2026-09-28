@@ -4,10 +4,10 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **12** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
-`noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,categoriasDefecto,tiposFalla,supervisores,
-revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA; `niveles` solo `admin_ti`, restricción
-inicial). Las otras 69 siguen denegadas por `ActionPolicy`
+Escrituras habilitadas en la web: **13** (`noConformidades.create`, `noConformidades.seguimiento.crear`,
+`noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
+categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
+`niveles` solo `admin_ti`, restricción inicial). Las otras 68 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -46,11 +46,11 @@ contract check C#/JS + gate de release).
 | | Cantidad |
 |---|---|
 | Escrituras INNPACK pendientes | **81** |
-| Riesgo BAJO / MEDIO / ALTO | **35 / 27 / 19** (niveles.crear pasó de BAJO a MEDIO en 3i) |
+| Riesgo BAJO / MEDIO / ALTO | **34 / 28 / 19** (niveles.crear en 3i y create en 3j pasaron de BAJO a MEDIO) |
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 69 APROBADA · 12 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 68 APROBADA · 13 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -130,7 +130,7 @@ justificación · estado.
 | `noConformidades.catalogos.revisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
 | `noConformidades.catalogos.supervisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
 | `noConformidades.catalogos.tiposFalla.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
-| `noConformidades.create` | POST `api/no-conformidades` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | crea una No Conformidad | sí: editar / eliminar (admin) | **BAJO** | registro operativo; creadoPor desde sesión | APROBADA |
+| `noConformidades.create` | POST `api/no-conformidades` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | crea una No Conformidad | sí: editar / eliminar (admin) | **MEDIO** | registro principal del módulo: lista blanca de claves de Photino, cabecera recalculada, largos del esquema | VALIDADA (Fase 3j, gateway 0.4.0) |
 | `noConformidades.seguimiento.crear` | POST `api/no-conformidades/{id}/seguimiento` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `autor` | `autor` ← nombreCompleto | agrega un comentario de seguimiento (append-only) | no se borra; se corrige con otro comentario | **BAJO** | aditivo, sin cambio de estado; autor desde sesión | VALIDADA (Fase 3a, gateway 0.4.0) |
 | `noConformidades.acciones.actualizar` | PUT `api/no-conformidades/acciones/{accionId}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | cambia estado/datos de una acción correctiva | sí: volver a editar | **MEDIO** | puede cerrar acciones; actualizadoPor desde sesión | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
 | `noConformidades.cerrar` | POST `api/no-conformidades/{id}/cerrar` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `cerradoPor` | `cerradoPor` ← nombreCompleto | cierra la NC (CERRADA) | no hay 'reabrir' en la UI | **MEDIO** | cambio de estado final; cerradoPor desde sesión | APROBADA |
@@ -340,6 +340,29 @@ Mismo patrón, con **separación explícita identidad / negocio**:
    Photino (backlog, sin tocar `main`) o del shim web, a decidir.
 3. Con 1 y 2 resueltos y validados con negocio: pasar `niveles` a la política operativa (operador, admin, admin_ti),
    quitar la entrada de `ROLES_CATALOGO_CREAR_RESTRINGIDOS` y ajustar `BridgeFase3iNivelesTest` a los roles por defecto.
+
+### Decimotercera escritura — `noConformidades.create` ("Nueva NC") — VALIDADA (Fase 3j)
+
+- Photino (`_guardarForm`): 30 campos de `_camposMap` + cabecera armada en el navegador (tipo INTERNA, origen
+  AUDITORIA_INTERNA, título `PNC <np> - <producto|cliente>`, descripción `<categoría> - <descripción defecto>`,
+  severidad por `_mapNivelASeveridad`, proceso `tipoPnc || area || "PNC Nueva"`, fechaDeteccion = fechaIngreso) +
+  `creadoPor`. C# reenvía todo; la API (`POST api/no-conformidades`, `JsonElement`) acepta además `empresa`, `ambito`,
+  `reportadoPor`, `norma`, `areasSecundarias`, `tiempoPerdidoHoras` y NO valida largos (exceso → 500 de SQL).
+- **Web (más estricta):** lista blanca EXACTA de las 38 claves de Photino (cualquier otra → error sin llamar a la API;
+  sin `ambito` no se puede crear una NC INTERNA desde DevTools); `creadoPor` ← sesión; **cabecera recalculada en el
+  gateway** (lo recibido se descarta: no se puede mandar severidad BAJA con nivel Crítico); largos de columna de
+  `no_conformidades` (título compuesto ≤ 255), textareas ≤ 65.535 bytes, sin controles ni HTML, `tipoPnc`/`disposicion`
+  con las opciones exactas de los `<select>`, fechas AAAA-MM-DD, cantidades ≥ 0 dentro de DECIMAL(12,2).
+- **Empresa (decisión 1a):** no se envía `empresa` (queda NULL/PRODUCTO como en Photino; el listado INNPACK incluye
+  `empresa IS NULL`) y el navegador no puede mandarla. Auditoría `recurso=nc:<id creado>` (`nc:nueva` si falla).
+- **Adjuntos (decisión 2a):** Photino sube PDF/fotos DESPUÉS del alta con `adjuntos.subir`, que sigue denegada: la NC
+  se crea y la vista informa "hubo un problema subiendo adjuntos" (Photino no revierte la NC). Pendiente Fase 3k.
+- **Hallazgo de paridad (no corregido):** `_mapNivelASeveridad("Crítico")` → `"CRÍTICO".includes("CRIT")` es falso por
+  la tilde → severidad **MEDIA**, no ALTA. El gateway replica exactamente a Photino; corregirlo es un cambio funcional a
+  decidir (backlog Photino + web a la vez).
+- Contract check: el literal está en `const action = this._editingId ? "…update" : "…create"`; la huella ahora cubre
+  el método hasta el `send` que usa esa variable y los métodos que llama (`_camposMap`, `_leerCampo`,
+  `_mapNivelASeveridad`, `_usuarioActual`, `_validarAdjuntosNuevaNc`): un cambio en el armado del payload → REVISAR.
 
 Diseño aprobado de la primera escritura (referencia):
 
