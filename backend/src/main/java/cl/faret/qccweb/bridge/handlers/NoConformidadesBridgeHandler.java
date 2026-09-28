@@ -633,8 +633,7 @@ public class NoConformidadesBridgeHandler {
         if (!vigente.ok()) {
             return vigente;
         }
-        JsonNode nc = vigente.data() instanceof JsonNode n ? n : null;
-        if ("CERRADA".equalsIgnoreCase(textoDe(nc, "estadoGestion")) || "CERRADA".equalsIgnoreCase(textoDe(nc, "estado"))) {
+        if (estaCerrada(vigente.data())) {
             return BridgeResult.error(MENSAJE_NC_CERRADA);
         }
         if (!huellaNc(vigente.data()).equals(leida)) {
@@ -646,6 +645,175 @@ public class NoConformidadesBridgeHandler {
             LecturasDeSesion.olvidar(recursoLecturaNc(id));
         }
         return resultado;
+    }
+
+    private static final Set<String> CAMPOS_GESTION = Set.of("action", "id", "responsable", "estadoGestion", "fechaCompromiso",
+            "actualizadoPor");
+    /** Opciones del <select id="ncq-gestion-estado"> SIN "CERRADA": en la web se cierra solo con noConformidades.cerrar. */
+    private static final List<String> ESTADOS_GESTION_WEB = List.of("PENDIENTE", "ASIGNADA", "EN_GESTION");
+    static final String MENSAJE_GESTION_SIN_LEER = "Abre la gestión de la no conformidad antes de guardarla.";
+    static final String MENSAJE_GESTION_CERRAR = "Para cerrar la no conformidad usa \"Cerrar NC\" (registra quién la cierra, cuándo y el comentario).";
+    static final String MENSAJE_GESTION_NC_CERRADA = "La no conformidad está cerrada; no se puede modificar su gestión.";
+    static final String MENSAJE_YA_CERRADA = "La no conformidad ya está cerrada.";
+    private static final Set<String> CAMPOS_CERRAR = Set.of("action", "id", "cerradoPor", "comentarioCierre");
+
+    /**
+     * noConformidades.gestion.actualizar → PATCH api/no-conformidades/{id}/gestion {responsable, estadoGestion,
+     * fechaCompromiso, actualizadoPor}. Modal "Gestionar" de Photino (abre con noConformidades.get y queda abierto).
+     *
+     * La API actualiza sin verificar existencia ni estado, acepta CERRADA (cierre sin cerradoPor/fecha/comentario) y
+     * permite reabrir una NC cerrada. La web (Fase 3m): `actualizadoPor` ← sesión; lista blanca; responsable una línea
+     * ≤ 150 sin HTML; estado obligatorio entre PENDIENTE/ASIGNADA/EN_GESTION (CERRADA → usar cerrar, decisión 3m-1a);
+     * fecha AAAA-MM-DD o vacía; exige la NC abierta en la sesión, la relee (404 → error), NO modifica una NC CERRADA
+     * (decisión 3m-2a) y rechaza si cambió desde que se abrió. Tras guardar vuelve a registrar la huella (el modal sigue
+     * abierto y se puede volver a guardar).
+     */
+    public BridgeResult gestionActualizar(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CAMPOS_GESTION.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(payload.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_ID_NC);
+        }
+        for (String campo : new String[] {"responsable", "estadoGestion", "fechaCompromiso"}) {
+            JsonNode n = payload.get(campo);
+            if (n != null && !n.isNull() && !n.isString()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+        }
+        String responsable = textoPlano(payload.get("responsable"));
+        if (responsable.length() > MAX_RESPONSABLE) {
+            return BridgeResult.error("El responsable supera el máximo de 150 caracteres.");
+        }
+        if (CONTROL_UNA_LINEA.matcher(responsable).find() || tieneSustitutoSuelto(responsable)) {
+            return BridgeResult.error(MENSAJE_TEXTO_CARACTERES);
+        }
+        if (MARCADO_HTML.matcher(responsable).find()) {
+            return BridgeResult.error(MENSAJE_TEXTO_HTML);
+        }
+        String estado = textoPlano(payload.get("estadoGestion"));
+        if (estado.isEmpty()) {
+            return BridgeResult.error("Falta el estado de gestión");
+        }
+        if (estado.equals("CERRADA")) {
+            return BridgeResult.error(MENSAJE_GESTION_CERRAR);
+        }
+        if (!ESTADOS_GESTION_WEB.contains(estado)) {
+            return BridgeResult.error("Estado de gestión inválido (PENDIENTE, ASIGNADA o EN_GESTION).");
+        }
+        String fecha = textoPlano(payload.get("fechaCompromiso"));
+        if (!fecha.isEmpty()) {
+            if (!FECHA_ISO.matcher(fecha).matches()) {
+                return BridgeResult.error("La fecha compromiso no es válida (formato AAAA-MM-DD).");
+            }
+            try {
+                java.time.LocalDate.parse(fecha);
+            } catch (java.time.format.DateTimeParseException e) {
+                return BridgeResult.error("La fecha compromiso no es válida (formato AAAA-MM-DD).");
+            }
+        }
+        String leida = LecturasDeSesion.huella(recursoLecturaNc(id));
+        if (leida == null) {
+            return BridgeResult.error(MENSAJE_GESTION_SIN_LEER);
+        }
+        BridgeResult vigente = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+        if (!vigente.ok()) {
+            return vigente;
+        }
+        if (estaCerrada(vigente.data())) {
+            return BridgeResult.error(MENSAJE_GESTION_NC_CERRADA);
+        }
+        if (!huellaNc(vigente.data()).equals(leida)) {
+            return BridgeResult.error(MENSAJE_NC_CONFLICTO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("responsable", responsable);
+        cuerpo.put("estadoGestion", estado);
+        if (fecha.isEmpty()) {
+            cuerpo.putNull("fechaCompromiso");
+        } else {
+            cuerpo.put("fechaCompromiso", fecha);
+        }
+        cuerpo.put("actualizadoPor", autorDeSesion(usuario));
+        BridgeResult resultado = InnpackRespuestas.reenviar(api.patchJson(usuario, BASE + "/" + id + "/gestion", cuerpo), mapper);
+        if (resultado.ok()) {
+            BridgeResult releida = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+            if (releida.ok()) {
+                LecturasDeSesion.registrar(recursoLecturaNc(id), huellaNc(releida.data()));
+            } else {
+                LecturasDeSesion.olvidar(recursoLecturaNc(id));
+            }
+        }
+        return resultado;
+    }
+
+    /** Recurso auditado de gestion.actualizar: "nc:<id>:gestion:<ESTADO>" (solo estados válidos; si no, sin estado). */
+    public static String recursoGestion(ObjectNode payload, Object dataRespuesta) {
+        JsonNode e = payload.get("estadoGestion");
+        String estado = e != null && e.isString() ? e.asString().strip() : "";
+        return recursoNc(payload) + ":gestion" + (ESTADOS_GESTION_WEB.contains(estado) ? ":" + estado : "");
+    }
+
+    /**
+     * noConformidades.cerrar → POST api/no-conformidades/{id}/cerrar {cerradoPor, comentarioCierre}. La API exige
+     * cerradoPor y cierra sin verificar estado (cerrar dos veces sobrescribe quién y cuándo). La web (Fase 3m):
+     * `cerradoPor` ← sesión; lista blanca; comentario opcional (textarea: multilínea, ≤ 65.535 bytes, sin controles ni
+     * HTML); relee la NC (404 → error) y rechaza si YA está cerrada. Tras cerrar la huella de lectura deja de valer.
+     */
+    public BridgeResult cerrar(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CAMPOS_CERRAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(payload.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_ID_NC);
+        }
+        JsonNode n = payload.get("comentarioCierre");
+        if (n != null && !n.isNull() && !n.isString()) {
+            return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+        }
+        String comentario = textoPlano(n);
+        String error = validarTextoAnalisis("comentarioCierre", comentario, true);
+        if (error == null && tieneSustitutoSuelto(comentario)) {
+            error = MENSAJE_TEXTO_CARACTERES;
+        }
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        BridgeResult vigente = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+        if (!vigente.ok()) {
+            return vigente;
+        }
+        if (estaCerrada(vigente.data())) {
+            return BridgeResult.error(MENSAJE_YA_CERRADA);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("cerradoPor", autorDeSesion(usuario));
+        if (comentario.isEmpty()) {
+            cuerpo.putNull("comentarioCierre");
+        } else {
+            cuerpo.put("comentarioCierre", comentario);
+        }
+        BridgeResult resultado = InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + id + "/cerrar", cuerpo), mapper);
+        if (resultado.ok()) {
+            LecturasDeSesion.olvidar(recursoLecturaNc(id));
+        }
+        return resultado;
+    }
+
+    /** Recurso auditado de cerrar: "nc:<id>:cierre". */
+    public static String recursoCierre(ObjectNode payload, Object dataRespuesta) {
+        return recursoNc(payload) + ":cierre";
+    }
+
+    private static boolean estaCerrada(Object data) {
+        JsonNode nc = data instanceof JsonNode d ? d : null;
+        return "CERRADA".equalsIgnoreCase(textoDe(nc, "estadoGestion")) || "CERRADA".equalsIgnoreCase(textoDe(nc, "estado"));
     }
 
     private record CuerpoNc(ObjectNode cuerpo, BridgeResult error) {

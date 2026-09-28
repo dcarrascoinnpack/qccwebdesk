@@ -107,6 +107,9 @@ public final class FakeInnpackApi implements AutoCloseable {
         adjuntosRecibidos.clear();
         ncActualizadasRecibidas.clear();
         versionNc.clear();
+        gestionesRecibidas.clear();
+        cierresRecibidos.clear();
+        ncCerradas.clear();
         creadosPorCatalogo.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
@@ -691,6 +694,19 @@ public final class FakeInnpackApi implements AutoCloseable {
         return java.util.List.copyOf(ncActualizadasRecibidas);
     }
 
+    /** Cuerpos EXACTOS de PATCH api/no-conformidades/{id}/gestion y POST .../cerrar; NC cerradas por la simulación. */
+    private final java.util.List<SeguimientoRecibido> gestionesRecibidas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.List<SeguimientoRecibido> cierresRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.Set<Integer> ncCerradas = ConcurrentHashMap.newKeySet();
+
+    public java.util.List<SeguimientoRecibido> gestionesRecibidas() {
+        return java.util.List.copyOf(gestionesRecibidas);
+    }
+
+    public java.util.List<SeguimientoRecibido> cierresRecibidos() {
+        return java.util.List.copyOf(cierresRecibidos);
+    }
+
     /** Simula que otra persona (Photino u otra sesión) modificó la NC: cambia lo que devuelve GET api/no-conformidades/{id}. */
     public void modificarNcPorOtro(int id) {
         versionNc.merge(id, 1, Integer::sum);
@@ -898,6 +914,26 @@ public final class FakeInnpackApi implements AutoCloseable {
             responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + ncId + "},\"errors\":null}");
             return;
         }
+        java.util.regex.Matcher gesCer = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/(gestion|cerrar)$").matcher(path);
+        if (gesCer.matches() && (ex.getRequestMethod().equals("PATCH") && gesCer.group(2).equals("gestion")
+                || ex.getRequestMethod().equals("POST") && gesCer.group(2).equals("cerrar"))) {
+            // Como NoConformidadesController.GestionActualizar / Cerrar: {id}; responsable ERROR_API → 400 de negocio.
+            String cuerpoGc = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            int ncId = Integer.parseInt(gesCer.group(1));
+            boolean esCierre = gesCer.group(2).equals("cerrar");
+            (esCierre ? cierresRecibidos : gestionesRecibidas).add(new SeguimientoRecibido(ncId, sub, cuerpoGc,
+                    ex.getRequestHeaders().getFirst("Content-Type")));
+            if ("ERROR_API".equals(mapper.readTree(cuerpoGc).path(esCierre ? "comentarioCierre" : "responsable").asString(""))) {
+                responder(ex, 400, fallo("Error de negocio simulado"));
+                return;
+            }
+            versionNc.merge(ncId, 1, Integer::sum);
+            if (esCierre) {
+                ncCerradas.add(ncId);
+            }
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + ncId + "},\"errors\":null}");
+            return;
+        }
         java.util.regex.Matcher adjPost = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/adjuntos$").matcher(path);
         if (ex.getRequestMethod().equals("POST") && adjPost.matches()) {
             // Como NoConformidadesController.AdjuntosSubir: {id}; NC 404 no existe, 777 cerrada (400 de negocio).
@@ -1023,7 +1059,7 @@ public final class FakeInnpackApi implements AutoCloseable {
             }
             switch (rama) {
                 case "" -> responder(ex, 200, ok + "{\"id\":" + id + ",\"codigo\":\"NC-0001\",\"descripcion\":\"=HYPERLINK(1)\","
-                        + "\"estadoGestion\":\"" + (id == 503 ? "CERRADA" : "ASIGNADA") + "\",\"version\":" + versionNc.getOrDefault(id, 0)
+                        + "\"estadoGestion\":\"" + (id == 503 || ncCerradas.contains(id) ? "CERRADA" : "ASIGNADA") + "\",\"version\":" + versionNc.getOrDefault(id, 0)
                         + ",\"usuarioDelToken\":" + sub + "}" + fin);
                 case "/seguimiento" -> responder(ex, 200, ok + (id == 901
                         // Comentario malicioso guardado desde Photino (que no valida): la web debe mostrarlo sin ejecutarlo.

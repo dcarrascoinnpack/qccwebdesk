@@ -4,10 +4,11 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **15** (`noConformidades.create`, `noConformidades.update`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
+Escrituras habilitadas en la web: **17** (`noConformidades.create`, `noConformidades.update`, `noConformidades.gestion.actualizar`,
+`noConformidades.cerrar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-`niveles` solo `admin_ti`, restricción inicial). Las otras 66 siguen denegadas por `ActionPolicy`
+`niveles` solo `admin_ti`, restricción inicial). Las otras 64 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -50,7 +51,7 @@ contract check C#/JS + gate de release).
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 66 APROBADA · 15 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 64 APROBADA · 17 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -133,8 +134,8 @@ justificación · estado.
 | `noConformidades.create` | POST `api/no-conformidades` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | crea una No Conformidad | sí: editar / eliminar (admin) | **MEDIO** | registro principal del módulo: lista blanca de claves de Photino, cabecera recalculada, largos del esquema | VALIDADA (Fase 3j, gateway 0.4.0) |
 | `noConformidades.seguimiento.crear` | POST `api/no-conformidades/{id}/seguimiento` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `autor` | `autor` ← nombreCompleto | agrega un comentario de seguimiento (append-only) | no se borra; se corrige con otro comentario | **BAJO** | aditivo, sin cambio de estado; autor desde sesión | VALIDADA (Fase 3a, gateway 0.4.0) |
 | `noConformidades.acciones.actualizar` | PUT `api/no-conformidades/acciones/{accionId}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | cambia estado/datos de una acción correctiva | sí: volver a editar | **MEDIO** | puede cerrar acciones; actualizadoPor desde sesión | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
-| `noConformidades.cerrar` | POST `api/no-conformidades/{id}/cerrar` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `cerradoPor` | `cerradoPor` ← nombreCompleto | cierra la NC (CERRADA) | no hay 'reabrir' en la UI | **MEDIO** | cambio de estado final; cerradoPor desde sesión | APROBADA |
-| `noConformidades.gestion.actualizar` | PATCH `api/no-conformidades/{id}/gestion` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | asigna responsable, estado de gestión y fecha compromiso | sí: volver a editar | **MEDIO** | decisión de gestión | APROBADA (al implementarla: detección de lost update con `LecturasDeSesion`, SEC-28) |
+| `noConformidades.cerrar` | POST `api/no-conformidades/{id}/cerrar` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `cerradoPor` | `cerradoPor` ← nombreCompleto | cierra la NC (CERRADA) | no hay 'reabrir' en la UI | **MEDIO** | no repetible (rechaza NC ya cerrada), cerradoPor de sesión | VALIDADA (Fase 3m, gateway 0.4.0) |
+| `noConformidades.gestion.actualizar` | PATCH `api/no-conformidades/{id}/gestion` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | asigna responsable, estado de gestión y fecha compromiso | sí: volver a editar | **MEDIO** | sin CERRADA (se cierra con cerrar), nunca sobre NC cerrada, lost update | VALIDADA (Fase 3m, gateway 0.4.0) |
 | `noConformidades.update` | PUT `api/no-conformidades/{id}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | edita campos de la NC (actualización parcial) | sí: volver a editar | **MEDIO** | sobrescribe sin historial: lista blanca, cabecera recalculada, lost update y NC cerrada no editable | VALIDADA (Fase 3l, gateway 0.4.0) |
 | `noConformidades.adjuntos.eliminar` | DELETE `api/no-conformidades/{id}/adjuntos/{adjuntoId}` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un adjunto | no desde la UI | **ALTO** | destructivo; sin autor | APROBADA |
 | `noConformidades.eliminar` | DELETE `api/no-conformidades/{id}` | INNPACK (sin parámetro) | **admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto | borrado lógico de la NC | no desde la UI | **ALTO** | destructivo | APROBADA |
@@ -397,6 +398,22 @@ Mismo patrón, con **separación explícita identidad / negocio**:
   "La no conformidad está cerrada; no se puede editar." Auditoría `recurso=nc:<id>`.
 - Tests: `BridgeFase3lTest` (9: cuerpo exacto, identidad, sin abrir / otra sesión / otra NC, conflicto entre dos
   sesiones, reapertura tras guardar, cerrada/inexistente, lista blanca y validación común, roles, auditoría), E2E CDP.
+
+### Escrituras 16 y 17 — `noConformidades.gestion.actualizar` y `noConformidades.cerrar` (modal "Gestionar") — VALIDADAS (Fase 3m)
+
+- Photino: "Gestionar" abre con `noConformidades.get`; `_guardarGestion` → `{id, responsable, estadoGestion,
+  fechaCompromiso, actualizadoPor}` (el `<select>` incluye CERRADA; el modal queda abierto); `_cerrarNc` (confirm) →
+  `{id, cerradoPor, comentarioCierre}`. Roles web según la matriz: admin, admin_ti (operador ve el botón y recibe
+  "no disponible").
+- API: `PATCH …/gestion` actualiza sin verificar existencia ni estado, acepta CERRADA (cierre sin cerradoPor/fecha/
+  comentario), permite reabrir una NC cerrada y con estado nulo intenta NULL en columna NOT NULL (500); `POST …/cerrar`
+  exige cerradoPor y cierra sin verificar estado (cerrar dos veces sobrescribe quién/cuándo).
+- **Web:** identidad de sesión (`actualizadoPor`/`cerradoPor`); listas blancas; gestión: responsable una línea ≤ 150 sin
+  HTML, fecha AAAA-MM-DD o vacía, estado obligatorio **sin CERRADA** (decisión 3m-1a: "usa Cerrar NC"), **nunca sobre una
+  NC cerrada** (decisión 3m-2a: no se reabre), lost update con la huella de `get` y huella RENOVADA tras guardar (el modal
+  sigue abierto); cierre: comentario opcional multilínea ≤ 65.535 bytes sin HTML, relee la NC (404 → error) y rechaza
+  si ya está cerrada. `InnpackApiClient.patchJson` (sin reintentos). Auditoría `nc:<id>:gestion:<ESTADO>` / `nc:<id>:cierre`.
+- Tests: `BridgeFase3mTest` (7), E2E CDP.
 
 Diseño aprobado de la primera escritura (referencia):
 

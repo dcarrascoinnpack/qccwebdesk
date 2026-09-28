@@ -82,6 +82,11 @@ public class InnpackApiClient {
         return enviarJson(HttpMethod.PUT, usuario, path, cuerpo);
     }
 
+    /** PATCH JSON autenticado (actualizaciones parciales, p. ej. gestión de NC). Mismas garantías: sin reintentos. */
+    public Respuesta patchJson(SessionUser usuario, String path, JsonNode cuerpo) {
+        return enviarJson(HttpMethod.PATCH, usuario, path, cuerpo);
+    }
+
     private Respuesta enviarJson(HttpMethod metodo, SessionUser usuario, String path, JsonNode cuerpo) {
         ResponseEntity<String> r;
         try {

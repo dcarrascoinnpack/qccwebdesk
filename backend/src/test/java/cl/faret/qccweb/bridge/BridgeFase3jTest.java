@@ -333,7 +333,7 @@ class BridgeFase3jTest {
         MockHttpSession s = login("operador1");
         crear(s, "{\"action\":\"noConformidades.adjuntos.subir\",\"id\":951,\"tipo\":\"EVIDENCIA_FOTO\",\"nombreArchivo\":\"a.png\","
                 + "\"tipoMime\":\"image/png\",\"contenidoBase64\":\"AA==\"}").andExpect(status().isForbidden());
-        for (String otra : List.of("noConformidades.eliminar", "noConformidades.cerrar")) {
+        for (String otra : List.of("noConformidades.eliminar", "noConformidades.adjuntos.eliminar")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);
         }
         assertThat(API.peticionesNoConformidades()).isEmpty();

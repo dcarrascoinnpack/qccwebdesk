@@ -273,7 +273,7 @@ class BridgeFase3lTest {
         Map<String, Object> d = policy.describir().stream().filter(x -> x.get("accion").equals(EDITAR)).findFirst().orElseThrow();
         assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti", "operador"));
         assertThat(d.get("identidad")).isEqualTo(Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO));
-        assertThat(policy.accionesRegistradas()).doesNotContain("noConformidades.eliminar", "noConformidades.cerrar", "noConformidades.gestion.actualizar");
+        assertThat(policy.accionesRegistradas()).doesNotContain("noConformidades.eliminar", "noConformidades.adjuntos.eliminar");
     }
 
     @Test

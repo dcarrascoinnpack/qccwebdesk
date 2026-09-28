@@ -322,7 +322,17 @@ public class BridgeConfig {
                         "noConformidades.update", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
-                        noConformidades::ncActualizar, (p, data) -> NoConformidadesBridgeHandler.recursoNc(p))));
+                        noConformidades::ncActualizar, (p, data) -> NoConformidadesBridgeHandler.recursoNc(p)),
+                // Fase 3m — modal "Gestionar" (admin/admin_ti según la matriz): gestión sin CERRADA (se cierra solo con
+                // cerrar), nunca sobre una NC cerrada, con lost update; cerrar rechaza una NC ya cerrada. Identidad de sesión.
+                new ActionPolicy.Regla(
+                        "noConformidades.gestion.actualizar", Set.of("INNPACK"), ROLES_ADMIN_INNPACK,
+                        Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::gestionActualizar, NoConformidadesBridgeHandler::recursoGestion),
+                new ActionPolicy.Regla(
+                        "noConformidades.cerrar", Set.of("INNPACK"), ROLES_ADMIN_INNPACK,
+                        Map.of("cerradoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::cerrar, NoConformidadesBridgeHandler::recursoCierre)));
         // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas), 3h
         // (familiasProducto, impactos; largo 50) y 3i (niveles; largo 20, solo admin_ti) — escrituras del combo de
         // catálogos (acción dinámica, mismo contrato): identidad "creadoPor" = sesión; `nombre` con el contrato real
