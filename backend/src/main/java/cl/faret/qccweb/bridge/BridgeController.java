@@ -6,9 +6,12 @@ import cl.faret.qccweb.upstream.UpstreamNoAutorizadoException;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpSession;
 import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.Semaphore;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
@@ -28,6 +31,10 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * ESCRITURAS (reglas con recurso): antes del handler, límite por usuario (429 sin tocar la API);
  * después, auditoría evento=ESCRITURA con el usuario real de la sesión y el recurso afectado.
+ *
+ * ARCHIVOS (Fase 3k): POST /api/v1/bridge/archivo tiene tope de cuerpo propio (RequestSizeLimitFilter) y acepta
+ * SOLO las acciones de ACCIONES_ARCHIVO, con un máximo de subidas simultáneas (memoria acotada); esas acciones no
+ * se aceptan por /api/v1/bridge (tope general de 256 KB). El shim elige la ruta por acción.
  */
 @RestController
 public class BridgeController {
@@ -36,22 +43,38 @@ public class BridgeController {
     static final String MENSAJE_SESION_EXPIRADA = "Sesión expirada. Inicia sesión nuevamente.";
     static final String MENSAJE_ERROR_INTERNO = "Error interno al procesar la acción.";
     static final String MENSAJE_LIMITE_ESCRITURAS = "Demasiadas operaciones seguidas. Espera un momento e inténtalo de nuevo.";
+    static final String MENSAJE_SUBIDAS_OCUPADAS = "Hay otras subidas de archivos en curso. Inténtalo de nuevo en unos segundos.";
+    /** Acciones con archivo en base64: solo por /api/v1/bridge/archivo. */
+    public static final Set<String> ACCIONES_ARCHIVO = Set.of("noConformidades.adjuntos.subir");
     private static final Pattern FORMATO_ACCION = Pattern.compile("[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z0-9]+){1,4}");
     private static final Logger LOGGER = LoggerFactory.getLogger(BridgeController.class);
 
     private final ActionPolicy policy;
     private final AuditLogger audit;
     private final EscrituraRateLimiter limiteEscrituras;
+    private final Semaphore subidas;
 
-    public BridgeController(ActionPolicy policy, AuditLogger audit, EscrituraRateLimiter limiteEscrituras) {
+    public BridgeController(ActionPolicy policy, AuditLogger audit, EscrituraRateLimiter limiteEscrituras,
+            @Value("${qcc.web.bridge.subidas-simultaneas:2}") int subidasSimultaneas) {
         this.policy = policy;
         this.audit = audit;
         this.limiteEscrituras = limiteEscrituras;
+        this.subidas = new Semaphore(subidasSimultaneas);
     }
 
     @PostMapping("/api/v1/bridge")
     public ResponseEntity<Map<String, Object>> ejecutar(
             @RequestBody(required = false) JsonNode cuerpo, HttpServletRequest request) {
+        return procesar(cuerpo, request, false);
+    }
+
+    @PostMapping("/api/v1/bridge/archivo")
+    public ResponseEntity<Map<String, Object>> ejecutarArchivo(
+            @RequestBody(required = false) JsonNode cuerpo, HttpServletRequest request) {
+        return procesar(cuerpo, request, true);
+    }
+
+    private ResponseEntity<Map<String, Object>> procesar(JsonNode cuerpo, HttpServletRequest request, boolean rutaArchivo) {
         SessionUser usuario = usuarioActual();
         if (usuario == null) {
             return respuesta(HttpStatus.UNAUTHORIZED, BridgeResult.error(MENSAJE_SESION_EXPIRADA));
@@ -65,6 +88,10 @@ public class BridgeController {
             return respuesta(HttpStatus.BAD_REQUEST, BridgeResult.error("Solicitud inválida."));
         }
 
+        if (ACCIONES_ARCHIVO.contains(accion) != rutaArchivo) {
+            audit.accionDenegada(usuario.codigoUsuario(), usuario.empresa(), accion, "RUTA_NO_PERMITIDA");
+            return respuesta(HttpStatus.FORBIDDEN, BridgeResult.error(MENSAJE_NO_DISPONIBLE));
+        }
         ActionPolicy.Decision decision = policy.evaluar(accion, usuario);
         if (decision instanceof ActionPolicy.Decision.Denegada denegada) {
             audit.accionDenegada(usuario.codigoUsuario(), usuario.empresa(), accion, denegada.motivo());
@@ -76,6 +103,21 @@ public class BridgeController {
             return respuesta(HttpStatus.TOO_MANY_REQUESTS, BridgeResult.error(MENSAJE_LIMITE_ESCRITURAS));
         }
 
+        if (rutaArchivo && !subidas.tryAcquire()) {
+            audit.accionDenegada(usuario.codigoUsuario(), usuario.empresa(), accion, "SUBIDAS_OCUPADAS");
+            return respuesta(HttpStatus.SERVICE_UNAVAILABLE, BridgeResult.error(MENSAJE_SUBIDAS_OCUPADAS));
+        }
+        try {
+            return ejecutarRegla(usuario, accion, regla, payload, request);
+        } finally {
+            if (rutaArchivo) {
+                subidas.release();
+            }
+        }
+    }
+
+    private ResponseEntity<Map<String, Object>> ejecutarRegla(SessionUser usuario, String accion, ActionPolicy.Regla regla,
+            ObjectNode payload, HttpServletRequest request) {
         long inicio = System.nanoTime();
         ObjectNode saneado = IdentityOverride.aplicar(payload.deepCopy(), regla.identidad(), usuario);
         try {

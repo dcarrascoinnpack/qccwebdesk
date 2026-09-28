@@ -306,7 +306,15 @@ public class BridgeConfig {
                         "noConformidades.create", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
-                        noConformidades::ncCrear, NoConformidadesBridgeHandler::recursoNcCreada)));
+                        noConformidades::ncCrear, NoConformidadesBridgeHandler::recursoNcCreada),
+                // Fase 3k — subida de adjuntos (alta de NC y modal de análisis): SOLO por /api/v1/bridge/archivo;
+                // identidad "subidoPor" = sesión; firma real y tamaño decodificado; nombre saneado al subir;
+                // recurso "nc:<id>:adjunto:<id>". Reemplazar el PDF lo resuelve la API (oculta el anterior).
+                new ActionPolicy.Regla(
+                        "noConformidades.adjuntos.subir", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("subidoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::adjuntosSubir, NoConformidadesBridgeHandler::recursoAdjunto)));
         // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas), 3h
         // (familiasProducto, impactos; largo 50) y 3i (niveles; largo 20, solo admin_ti) — escrituras del combo de
         // catálogos (acción dinámica, mismo contrato): identidad "creadoPor" = sesión; `nombre` con el contrato real

@@ -17,13 +17,24 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * - Cuerpo sin Content-Length (Transfer-Encoding: chunked) → 411: el navegador (fetch con cuerpo
  *   string) siempre envía Content-Length, así el límite no se puede esquivar con chunked.
  * Se ejecuta antes de Spring Security: un cuerpo excesivo se descarta sin procesar sesión ni CSRF.
+ * Ruta de archivos (/api/v1/bridge/archivo, Fase 3k): tope propio más alto y, antes de aceptar un cuerpo grande,
+ * exige que la petición traiga una cookie de sesión (sin ella → 401 sin leer el cuerpo; la validez de la sesión
+ * la verifica después Spring Security).
  */
 public final class RequestSizeLimitFilter extends OncePerRequestFilter {
 
+    public static final String RUTA_ARCHIVO = "/api/v1/bridge/archivo";
+
     private final long maxBytes;
+    private final long maxBytesArchivo;
 
     public RequestSizeLimitFilter(long maxBytes) {
+        this(maxBytes, maxBytes);
+    }
+
+    public RequestSizeLimitFilter(long maxBytes, long maxBytesArchivo) {
         this.maxBytes = maxBytes;
+        this.maxBytesArchivo = maxBytesArchivo;
     }
 
     @Override
@@ -43,7 +54,12 @@ public final class RequestSizeLimitFilter extends OncePerRequestFilter {
             rechazar(response, HttpServletResponse.SC_LENGTH_REQUIRED, "Solicitud inválida.");
             return;
         }
-        if (largo > maxBytes) {
+        boolean archivo = request.getRequestURI().equals(request.getContextPath() + RUTA_ARCHIVO);
+        if (archivo && largo > maxBytes && request.getRequestedSessionId() == null) {
+            rechazar(response, HttpServletResponse.SC_UNAUTHORIZED, "Sesión expirada. Inicia sesión nuevamente.");
+            return;
+        }
+        if (largo > (archivo ? maxBytesArchivo : maxBytes)) {
             rechazar(response, HttpServletResponse.SC_REQUEST_ENTITY_TOO_LARGE, "La solicitud excede el tamaño máximo permitido.");
             return;
         }

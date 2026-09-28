@@ -37,6 +37,8 @@ qcc:
       # Tamaño máximo del cuerpo en /api/** (bridge y login). Se ampliará acción por acción si una
       # escritura futura lo necesita (p. ej. adjuntos), nunca de forma global sin revisar.
       max-body-bytes: ${QCC_WEB_API_MAX_BODY:262144}
+      # SOLO /api/v1/bridge/archivo (adjuntos en base64; Fase 3k): PDF 10 MB → ~13,4 MB en base64 + JSON.
+      max-body-bytes-archivo: ${QCC_WEB_API_MAX_BODY_ARCHIVO:14680064}
     auth:
       # Misma API y endpoint de login que usa Photino (config.json → QualityControlInnpackApi).
       innpack-api-base-url: ${QCC_INNPACK_API_BASE_URL:https://api.faret.cl/innpack}

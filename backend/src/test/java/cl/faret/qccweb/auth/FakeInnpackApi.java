@@ -104,6 +104,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         analisisPorNc.clear();
         catalogosRecibidos.clear();
         ncCreadasRecibidas.clear();
+        adjuntosRecibidos.clear();
         creadosPorCatalogo.clear();
         peticionesRecepcion.clear();
         peticionesUsuarios.clear();
@@ -680,6 +681,13 @@ public final class FakeInnpackApi implements AutoCloseable {
         return java.util.List.copyOf(ncCreadasRecibidas);
     }
 
+    /** Cuerpos EXACTOS recibidos en POST api/no-conformidades/{id}/adjuntos (ncId = id de la URL). */
+    private final java.util.List<SeguimientoRecibido> adjuntosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    public java.util.List<SeguimientoRecibido> adjuntosRecibidos() {
+        return java.util.List.copyOf(adjuntosRecibidos);
+    }
+
     private final java.util.List<CatalogoRecibido> catalogosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     /** Valores creados por catálogo (estado simulado): {id, nombre, activo, creadoPor}. id 1 = semilla fija. */
     private final Map<String, java.util.List<tools.jackson.databind.node.ObjectNode>> creadosPorCatalogo = new ConcurrentHashMap<>();
@@ -858,6 +866,22 @@ public final class FakeInnpackApi implements AutoCloseable {
             } else {
                 // La API real responde Ok(new { }): no devuelve el id de la acción creada.
                 responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{},\"errors\":null}");
+            }
+            return;
+        }
+        java.util.regex.Matcher adjPost = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/adjuntos$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && adjPost.matches()) {
+            // Como NoConformidadesController.AdjuntosSubir: {id}; NC 404 no existe, 777 cerrada (400 de negocio).
+            String cuerpoAdj = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            int ncId = Integer.parseInt(adjPost.group(1));
+            adjuntosRecibidos.add(new SeguimientoRecibido(ncId, sub, cuerpoAdj, ex.getRequestHeaders().getFirst("Content-Type")));
+            if (ncId == 404) {
+                responder(ex, 400, fallo("No conformidad no encontrada"));
+            } else if (ncId == 777) {
+                responder(ex, 400, fallo("La no conformidad está cerrada, no se pueden agregar adjuntos"));
+            } else {
+                responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + (700 + adjuntosRecibidos.size())
+                        + "},\"errors\":null}");
             }
             return;
         }

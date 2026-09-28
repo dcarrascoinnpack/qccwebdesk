@@ -139,6 +139,18 @@ test("las demás acciones siguen yendo al gateway con CSRF", async () => {
     assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
 });
 
+test("adjuntos.subir va por la ruta de archivos (con CSRF) y el resto por el bridge normal", async () => {
+    const shim = cargarShim();
+    const payload = { action: "noConformidades.adjuntos.subir", id: 7, tipo: "EVIDENCIA_FOTO", nombreArchivo: "a.png",
+        tipoMime: "image/png", contenidoBase64: "iVBORw0KGgo=", subidoPor: "x" };
+    const res = await shim.ctx.PhotinoBridge.send(payload);
+    assert.equal(res.data.via, "gateway");
+    await shim.ctx.PhotinoBridge.send({ action: "noConformidades.adjuntos.list", id: 7 });
+    assert.deepEqual(shim.registro.fetch.map(f => f.url), ["api/v1/bridge/archivo", "api/v1/bridge"]);
+    assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
+    assert.deepEqual(JSON.parse(shim.registro.fetch[0].opciones.body), payload);
+});
+
 test("un 403 del bridge muestra el aviso 'no disponible' sin bloquear", async () => {
     const shim = cargarShim();
     const elementos = [];

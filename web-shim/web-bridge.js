@@ -23,6 +23,9 @@
     }
 
     var BRIDGE_URL = "api/v1/bridge";
+    // Acciones con archivo en base64 (Fase 3k): ruta propia con tope de cuerpo mayor en el gateway.
+    var BRIDGE_ARCHIVO_URL = "api/v1/bridge/archivo";
+    var ACCIONES_ARCHIVO = { "noConformidades.adjuntos.subir": true };
     var AUTH_URL = "api/v1/auth/";
     var TIMEOUT_MS = 30000;
     var EMPRESA_WEB = "INNPACK"; // Fase 1b: solo login INNPACK
@@ -444,7 +447,8 @@
                 });
 
             default:
-                return peticion("POST", BRIDGE_URL, payload).then(function (r) {
+                var url = Object.prototype.hasOwnProperty.call(ACCIONES_ARCHIVO, payload.action) ? BRIDGE_ARCHIVO_URL : BRIDGE_URL;
+                return peticion("POST", url, payload).then(function (r) {
                     if (r.status === 401) {
                         sesionPerdida();
                     }

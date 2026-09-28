@@ -727,6 +727,110 @@ public class NoConformidadesBridgeHandler {
         return InnpackRespuestas.reenviar(api.postJson(usuario, BASE, cuerpo), mapper);
     }
 
+    private static final Set<String> CAMPOS_ADJUNTO_SUBIR = Set.of("action", "id", "tipo", "nombreArchivo", "tipoMime",
+            "contenidoBase64", "subidoPor");
+    static final int MAX_FOTO_BYTES = 5 * 1024 * 1024;
+
+    /**
+     * noConformidades.adjuntos.subir → POST api/no-conformidades/{id}/adjuntos {tipo, nombreArchivo, tipoMime,
+     * contenidoBase64, subidoPor}. Photino sube desde el alta de NC y desde el modal de análisis (Adjuntar/Reemplazar
+     * PDF, Fotos). Llega SOLO por /api/v1/bridge/archivo (tope de cuerpo propio; ver BridgeController).
+     *
+     * IDENTIDAD — `subidoPor`: SIEMPRE la sesión. Lista blanca de claves. La API valida MIME DECLARADO, tamaño, NC
+     * cerrada y máx. 10 fotos; la web además: tipo CAUSA_RAIZ_PDF (application/pdf) o EVIDENCIA_FOTO (image/jpeg,
+     * image/png), base64 estricto, tamaño DECODIFICADO (PDF 10 MB, foto 5 MB), FIRMA REAL coherente con el MIME
+     * (%PDF-, PNG, JPEG). NOMBRE: Photino lo pinta con innerHTML y Photino escritorio lee directo de la API, así que se
+     * SANEA al subir (decisión 3k-a): nombre base, sin controles/bidi/reservados, `< > " ' ` & : | ? *` → "_", ≤ 150.
+     * Reemplazar el PDF lo hace la API (marca eliminado el anterior).
+     */
+    public BridgeResult adjuntosSubir(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CAMPOS_ADJUNTO_SUBIR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(payload.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_ID_NC);
+        }
+        for (String campo : new String[] {"tipo", "nombreArchivo", "tipoMime", "contenidoBase64"}) {
+            JsonNode n = payload.get(campo);
+            if (n != null && !n.isNull() && !n.isString()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+        }
+        String tipo = textoPlano(payload.get("tipo"));
+        boolean esPdf = tipo.equals("CAUSA_RAIZ_PDF");
+        if (!esPdf && !tipo.equals("EVIDENCIA_FOTO")) {
+            return BridgeResult.error("Tipo de adjunto inválido (CAUSA_RAIZ_PDF o EVIDENCIA_FOTO).");
+        }
+        String tipoMime = textoPlano(payload.get("tipoMime"));
+        if (esPdf ? !tipoMime.equals("application/pdf") : !(tipoMime.equals("image/jpeg") || tipoMime.equals("image/png"))) {
+            return BridgeResult.error(esPdf ? "Solo se permite un archivo PDF" : "Solo se permiten fotografías JPG o PNG");
+        }
+        String nombreCrudo = textoPlano(payload.get("nombreArchivo"));
+        if (nombreCrudo.isEmpty()) {
+            return BridgeResult.error("Falta el nombre del archivo");
+        }
+        String base64 = payload.get("contenidoBase64") == null || payload.get("contenidoBase64").isNull()
+                ? "" : payload.get("contenidoBase64").asString();
+        if (base64.isEmpty()) {
+            return BridgeResult.error("Falta el contenido del archivo");
+        }
+        int maxBytes = esPdf ? MAX_ADJUNTO_BYTES : MAX_FOTO_BYTES;
+        if (base64.length() > ((maxBytes + 2) / 3) * 4) {
+            return BridgeResult.error(esPdf ? "El PDF excede el tamaño máximo de 10 MB" : "La fotografía excede el tamaño máximo de 5 MB");
+        }
+        byte[] contenido;
+        try {
+            contenido = java.util.Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            return BridgeResult.error(MENSAJE_ADJUNTO_INVALIDO);
+        }
+        if (contenido.length == 0) {
+            return BridgeResult.error("El archivo está vacío");
+        }
+        if (contenido.length > maxBytes) {
+            return BridgeResult.error(esPdf ? "El PDF excede el tamaño máximo de 10 MB" : "La fotografía excede el tamaño máximo de 5 MB");
+        }
+        if (!ControlDocumentalBridgeHandler.firmaCoincide(tipoMime, contenido)) {
+            return BridgeResult.error("El contenido del archivo no corresponde a un " + (esPdf ? "PDF" : "JPG/PNG") + " válido.");
+        }
+        String nombre = nombreAdjuntoSeguro(nombreCrudo, esPdf ? "adjunto.pdf" : ("image/png".equals(tipoMime) ? "foto.png" : "foto.jpg"));
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("tipo", tipo);
+        cuerpo.put("nombreArchivo", nombre);
+        cuerpo.put("tipoMime", tipoMime);
+        cuerpo.put("contenidoBase64", base64);
+        cuerpo.put("subidoPor", autorDeSesion(usuario));
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + id + "/adjuntos", cuerpo), mapper);
+    }
+
+    /** nombreArchivoSeguro de Control Documental + comillas simples, backtick, & y sustitutos sueltos → "_" (innerHTML/atributos). */
+    static String nombreAdjuntoSeguro(String nombre, String porDefecto) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < nombre.length(); i++) {
+            char c = nombre.charAt(i);
+            if (Character.isHighSurrogate(c) && i + 1 < nombre.length() && Character.isLowSurrogate(nombre.charAt(i + 1))) {
+                sb.append(c).append(nombre.charAt(++i));
+            } else {
+                sb.append(Character.isSurrogate(c) ? '_' : c);
+            }
+        }
+        String n = ControlDocumentalBridgeHandler.nombreArchivoSeguro(sb.toString().replaceAll("['`&]", "_"), porDefecto);
+        // El corte a 150 puede partir un par sustituto al final.
+        return n.isEmpty() || !Character.isHighSurrogate(n.charAt(n.length() - 1)) ? n : n.substring(0, n.length() - 1);
+    }
+
+    /** Recurso auditado de adjuntos.subir: "nc:<id>" y ":adjunto:<id>" si la API devuelve el id creado. */
+    public static String recursoAdjunto(ObjectNode payload, Object dataRespuesta) {
+        String recurso = recursoNc(payload);
+        if (dataRespuesta instanceof JsonNode d && d.isObject() && d.get("id") != null && d.get("id").canConvertToLong()) {
+            recurso += ":adjunto:" + d.get("id").asLong();
+        }
+        return recurso;
+    }
+
     /** _mapNivelASeveridad de Photino: CRIT → ALTA, MAYOR → MEDIA, MENOR → BAJA, otro → MEDIA. */
     public static String severidadDeNivel(String nivel) {
         String n = nivel == null ? "" : nivel.toUpperCase(java.util.Locale.ROOT);

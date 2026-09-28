@@ -4,10 +4,10 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **13** (`noConformidades.create`, `noConformidades.seguimiento.crear`,
+Escrituras habilitadas en la web: **14** (`noConformidades.create`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-`niveles` solo `admin_ti`, restricción inicial). Las otras 68 siguen denegadas por `ActionPolicy`
+`niveles` solo `admin_ti`, restricción inicial). Las otras 67 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -46,11 +46,11 @@ contract check C#/JS + gate de release).
 | | Cantidad |
 |---|---|
 | Escrituras INNPACK pendientes | **81** |
-| Riesgo BAJO / MEDIO / ALTO | **34 / 28 / 19** (niveles.crear en 3i y create en 3j pasaron de BAJO a MEDIO) |
+| Riesgo BAJO / MEDIO / ALTO | **33 / 29 / 19** (niveles.crear 3i, create 3j y adjuntos.subir 3k pasaron de BAJO a MEDIO) |
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 68 APROBADA · 13 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 67 APROBADA · 14 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -119,7 +119,7 @@ justificación · estado.
 | action | método · endpoint | empresa | roles Web | Photino hoy | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `noConformidades.acciones.crear` | POST `api/no-conformidades/{id}/acciones` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | crea una acción correctiva | sí: actualizar estado | **BAJO** | aditivo; responsable = dato de negocio | VALIDADA (Fase 3b, gateway 0.4.0) |
-| `noConformidades.adjuntos.subir` | POST `api/no-conformidades/{id}/adjuntos` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `subidoPor` | `subidoPor` ← nombreCompleto | adjunta PDF de causa raíz / fotos (API valida MIME y tamaño) | sí: eliminar adjunto (admin) | **BAJO** | evidencia aditiva | APROBADA |
+| `noConformidades.adjuntos.subir` | POST `api/no-conformidades/{id}/adjuntos` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `subidoPor` | `subidoPor` ← nombreCompleto | adjunta PDF de causa raíz / fotos (API valida MIME y tamaño) | sí: eliminar adjunto (admin) | **MEDIO** | reemplazar el PDF oculta el anterior; archivo y nombre llegan a Photino escritorio | VALIDADA (Fase 3k, gateway 0.4.0) |
 | `noConformidades.analisis.guardar` | PUT `api/no-conformidades/{id}/analisis` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `usuario` | `usuario` ← nombreCompleto | guarda el análisis de causa raíz (5 por qué) | NO recuperable: la API sobrescribe en sitio sin historial (SEC-28); se corrige volviendo a guardar | **BAJO** | no cambia estado | VALIDADA (Fase 3c, gateway 0.4.0) |
 | `noConformidades.catalogos.areas.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3g, gateway 0.4.0) |
 | `noConformidades.catalogos.categoriasDefecto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3e, gateway 0.4.0) |
@@ -363,6 +363,24 @@ Mismo patrón, con **separación explícita identidad / negocio**:
 - Contract check: el literal está en `const action = this._editingId ? "…update" : "…create"`; la huella ahora cubre
   el método hasta el `send` que usa esa variable y los métodos que llama (`_camposMap`, `_leerCampo`,
   `_mapNivelASeveridad`, `_usuarioActual`, `_validarAdjuntosNuevaNc`): un cambio en el armado del payload → REVISAR.
+
+### Decimocuarta escritura — `noConformidades.adjuntos.subir` — VALIDADA (Fase 3k)
+
+- Photino sube desde 4 envíos: alta de NC (PDF + fotos) y modal de análisis (Adjuntar/Reemplazar PDF, Fotos), con
+  `{id, tipo, nombreArchivo, tipoMime, contenidoBase64, subidoPor}`. C# reenvía; la API valida NC existente/no cerrada,
+  tipo, MIME DECLARADO, base64, tamaño (PDF 10 MB, foto 5 MB) y máx. 10 fotos; reemplazar el PDF marca `eliminado=1`
+  el anterior (sin UI para recuperarlo).
+- **Tope de cuerpo (decisión 3k):** ruta dedicada `POST /api/v1/bridge/archivo` con `qcc.web.api.max-body-bytes-archivo`
+  (14 MB por defecto) que acepta SOLO `ACCIONES_ARCHIVO`; esas acciones se rechazan por `/api/v1/bridge` (256 KB) y el
+  shim elige la ruta por acción. Sin cookie de sesión, un cuerpo sobre 256 KB en la ruta de archivos → 401 sin leerlo.
+  Máximo `qcc.web.bridge.subidas-simultaneas` (2) subidas en curso → 503 "Hay otras subidas…" (memoria acotada).
+- **Web (más estricta):** lista blanca de claves; `subidoPor` ← sesión; tipo/MIME coherentes (PDF → application/pdf;
+  foto → image/jpeg|png); base64 estricto; tamaño DECODIFICADO; **firma real** (%PDF-, PNG, JPEG) coherente con el MIME.
+- **Nombre (decisión 3k-a, saneo):** Photino lo pinta con innerHTML y Photino escritorio lo lee directo de la API → se
+  sanea al SUBIR: nombre base, sin controles/bidi/reservados de Windows, `< > " ' ` & : | ? *` → `_`, ≤ 150 (la lectura
+  web ya lo saneaba en adjuntos.list/abrir).
+- Auditoría `recurso=nc:<id>:adjunto:<id>` sin nombre ni contenido. `adjuntos.eliminar` sigue denegada (ALTO).
+- Tests: `BridgeFase3kTest` (9) + `BridgeFase3kSubidasOcupadasTest` (1), Node (ruta del shim), E2E CDP.
 
 Diseño aprobado de la primera escritura (referencia):
 

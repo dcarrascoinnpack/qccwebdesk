@@ -328,7 +328,8 @@ class BridgeFase3jTest {
         assertThat(d.get("escritura")).isEqualTo(true);
         assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti", "operador"));
         assertThat(d.get("identidad")).isEqualTo(Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO));
-        // El flujo de Photino sube adjuntos después del alta: sigue denegado (Fase 3k), la NC no se revierte.
+        // El flujo de Photino sube adjuntos después del alta con adjuntos.subir: solo por /api/v1/bridge/archivo (Fase 3k);
+        // por el bridge normal se rechaza por ruta.
         MockHttpSession s = login("operador1");
         crear(s, "{\"action\":\"noConformidades.adjuntos.subir\",\"id\":951,\"tipo\":\"EVIDENCIA_FOTO\",\"nombreArchivo\":\"a.png\","
                 + "\"tipoMime\":\"image/png\",\"contenidoBase64\":\"AA==\"}").andExpect(status().isForbidden());

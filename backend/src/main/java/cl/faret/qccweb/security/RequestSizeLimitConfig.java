@@ -12,8 +12,10 @@ public class RequestSizeLimitConfig {
 
     @Bean
     public FilterRegistrationBean<RequestSizeLimitFilter> requestSizeLimitFilter(
-            @Value("${qcc.web.api.max-body-bytes:262144}") long maxBytes) {
-        FilterRegistrationBean<RequestSizeLimitFilter> registro = new FilterRegistrationBean<>(new RequestSizeLimitFilter(maxBytes));
+            @Value("${qcc.web.api.max-body-bytes:262144}") long maxBytes,
+            @Value("${qcc.web.api.max-body-bytes-archivo:14680064}") long maxBytesArchivo) {
+        FilterRegistrationBean<RequestSizeLimitFilter> registro = new FilterRegistrationBean<>(
+                new RequestSizeLimitFilter(maxBytes, maxBytesArchivo));
         registro.addUrlPatterns("/api/*");
         registro.setOrder(Ordered.HIGHEST_PRECEDENCE);
         return registro;
