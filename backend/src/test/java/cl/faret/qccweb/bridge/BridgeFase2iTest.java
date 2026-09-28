@@ -317,7 +317,7 @@ class BridgeFase2iTest {
     @Test
     void escriturasDelModuloSiguenBloqueadas() throws Exception {
         MockHttpSession admin = login("admin1");
-        assertThat(ESCRITURAS).hasSize(18); // 3a-3c + catalogos clientes (3d), categoriasDefecto (3e), tiposFalla/supervisores/revisores (3f), areas (3g) y familiasProducto/impactos (3h) ya habilitadas
+        assertThat(ESCRITURAS).hasSize(17); // 3a-3c + crear en los 9 catalogos (3d-3i; niveles solo admin_ti) ya habilitadas
         for (String escritura : ESCRITURAS) {
             accion(admin, "{\"action\":\"" + escritura + "\",\"id\":501,\"adjuntoId\":1,\"accionId\":3,\"nombre\":\"x\"}")
                     .andExpect(status().isForbidden())
@@ -350,7 +350,8 @@ class BridgeFase2iTest {
                         && !a.equals("noConformidades.catalogos.revisores.crear")
                         && !a.equals("noConformidades.catalogos.areas.crear")
                         && !a.equals("noConformidades.catalogos.familiasProducto.crear")
-                        && !a.equals("noConformidades.catalogos.impactos.crear")).toList();
+                        && !a.equals("noConformidades.catalogos.impactos.crear")
+                        && !a.equals("noConformidades.catalogos.niveles.crear")).toList();
         assertThat(lecturas).hasSize(18);
         for (String a : lecturas) {
             assertThat(policy.evaluar(a, usuario("INNPACK", "operador"))).isInstanceOf(ActionPolicy.Decision.Permitida.class);
@@ -420,7 +421,7 @@ class BridgeFase2iTest {
                 "noConformidades.adjuntos.subir", "noConformidades.adjuntos.eliminar"));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             if (!List.of("clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas", "familiasProducto",
-                    "impactos").contains(catalogo)) { // habilitadas en 3d-3h
+                    "impactos", "niveles").contains(catalogo)) { // habilitadas en 3d-3i
                 e.add("noConformidades.catalogos." + catalogo + ".crear");
             }
             e.add("noConformidades.catalogos." + catalogo + ".desactivar");

@@ -45,7 +45,14 @@ public class BridgeConfig {
     /** Catálogos de NC con `crear` habilitado en la web (por fase, cada uno auditado y validado). */
     static final List<String> CATALOGOS_CREAR_HABILITADOS = List.of(
             "clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas", "familiasProducto",
-            "impactos");
+            "impactos", "niveles");
+    /**
+     * Roles de `crear` por catálogo cuando la web es MÁS estricta que Photino (por defecto: escritura operativa).
+     * `niveles` (Fase 3i): solo admin_ti de forma INICIAL — el nivel define la severidad (CRIT/MAYOR/MENOR; otro →
+     * MEDIA) y el filtro Nivel tiene opciones fijas. Pendiente alinear con Photino (operador/admin) cuando el nivel
+     * quede acotado a la severidad de forma segura (ver docs/matriz-escrituras-propuesta.md, Fase 3i).
+     */
+    static final Map<String, Set<String>> ROLES_CATALOGO_CREAR_RESTRINGIDOS = Map.of("niveles", Set.of("admin_ti"));
 
     @Bean
     public InnpackApiClient innpackApiClient(AuthProperties properties) {
@@ -292,16 +299,17 @@ public class BridgeConfig {
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("usuario", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                         noConformidades::analisisGuardar, NoConformidadesBridgeHandler::recursoAnalisis)));
-        // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas) y 3h
-        // (familiasProducto, impactos; largo 50) — escrituras del combo de catálogos (acción dinámica, mismo
-        // contrato): identidad "creadoPor" = sesión;
-        // `nombre` con el contrato real de la API (trim/colapso, ≤ largo de la columna, sin HTML ni controles);
-        // duplicados resueltos por la API; recurso "catalogo:<cat>:<id>".
+        // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas), 3h
+        // (familiasProducto, impactos; largo 50) y 3i (niveles; largo 20, solo admin_ti) — escrituras del combo de
+        // catálogos (acción dinámica, mismo contrato): identidad "creadoPor" = sesión; `nombre` con el contrato real
+        // de la API (trim/colapso, ≤ largo de la columna, sin HTML ni controles); duplicados resueltos por la API;
+        // recurso "catalogo:<cat>:<id>".
         // SOLO los catálogos listados: crear en los demás, desactivar/editar/eliminar siguen denegados.
         for (String catalogo : CATALOGOS_CREAR_HABILITADOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".crear", Set.of("INNPACK"),
-                    ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                    ROLES_CATALOGO_CREAR_RESTRINGIDOS.getOrDefault(catalogo,
+                            ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO),
                     Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                     noConformidades.catalogoCrear(catalogo),
                     (p, data) -> NoConformidadesBridgeHandler.recursoCatalogo(catalogo, data)));

@@ -4,9 +4,10 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **11** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
+Escrituras habilitadas en la web: **12** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
 `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,categoriasDefecto,tiposFalla,supervisores,
-revisores,areas,familiasProducto,impactos}.crear`, estado VALIDADA). Las otras 70 siguen denegadas por `ActionPolicy`
+revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA; `niveles` solo `admin_ti`, restricción
+inicial). Las otras 69 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -45,11 +46,11 @@ contract check C#/JS + gate de release).
 | | Cantidad |
 |---|---|
 | Escrituras INNPACK pendientes | **81** |
-| Riesgo BAJO / MEDIO / ALTO | **36 / 26 / 19** |
-| Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` | 39 / 38 / 4 |
+| Riesgo BAJO / MEDIO / ALTO | **35 / 27 / 19** (niveles.crear pasó de BAJO a MEDIO en 3i) |
+| Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 70 APROBADA · 11 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 69 APROBADA · 12 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -125,7 +126,7 @@ justificación · estado.
 | `noConformidades.catalogos.clientes.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3d, gateway 0.4.0) |
 | `noConformidades.catalogos.familiasProducto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3h, gateway 0.4.0) |
 | `noConformidades.catalogos.impactos.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3h, gateway 0.4.0) |
-| `noConformidades.catalogos.niveles.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
+| `noConformidades.catalogos.niveles.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **admin_ti** (inicial; objetivo: operador, admin, admin_ti) | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un nivel (define la severidad de la NC) | desactivar (API; no usado por la UI) | **MEDIO** | el nivel pilota severidad/color y el filtro fijo Crítico/Mayor/Menor | VALIDADA (Fase 3i, gateway 0.4.0; restringida a admin_ti) |
 | `noConformidades.catalogos.revisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
 | `noConformidades.catalogos.supervisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
 | `noConformidades.catalogos.tiposFalla.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
@@ -318,10 +319,27 @@ Mismo patrón, con **separación explícita identidad / negocio**:
   textos de prueba que caben en 20) y el `FakeInnpackApi` aplica el largo de la API por catálogo.
   `BridgeFase3hFamiliasProductoTest` / `BridgeFase3hImpactosTest` (15 c/u). Huella propia por acción.
 
-### Catálogos restantes (propuesta, no implementada)
-- `niveles` (20): define la severidad (CRIT/MAYOR/MENOR, otro → MEDIA gris) y el filtro Nivel tiene opciones fijas
-  (Crítico/Mayor/Menor): un nivel nuevo queda MEDIA y no se puede filtrar. Decisión del usuario (2026-09-28): habilitar
-  inicialmente solo para `admin_ti` (Fase 3i).
+### Duodécima escritura — `noConformidades.catalogos.niveles.crear` — VALIDADA con restricción (Fase 3i)
+
+- **Decisión del usuario (2026-09-28): habilitar inicialmente SOLO para `admin_ti`** (Photino: cualquier sesión INNPACK).
+  Implementación: `BridgeConfig.ROLES_CATALOGO_CREAR_RESTRINGIDOS = {niveles: [admin_ti]}`; operador/admin reciben
+  403 "no disponible" (el combo sigue mostrando "+ Crear" como en Photino y muestra ese mensaje).
+- Motivo: el nivel no es texto libre de negocio. `_mapNivelASeveridad` lo convierte en severidad por substring
+  (CRIT→ALTA, MAYOR→MEDIA, MENOR→BAJA, **otro→MEDIA**), `_colorSeveridad` pinta gris lo no reconocido y el filtro
+  Nivel de la lista tiene opciones FIJAS (Crítico/Mayor/Menor): un nivel nuevo ("Urgente") queda con severidad MEDIA y
+  no se puede filtrar. El valor inicial "Mayor" del formulario no crea valores de catálogo.
+- Contrato idéntico a 3d–3h, largo **20** (`cat_nc_niveles.nombre` y `no_conformidades.nivel` NVARCHAR(20)).
+  Tests: `BridgeFase3iNivelesTest` (15 casos de `CatalogoCrearBase` con roles por catálogo: escritores adminti1/adminti2,
+  operador1/admin1/consulta1 → 403).
+
+**Pendiente — alinear con Photino de forma limpia y segura (no implementado):**
+1. Acotar el valor a una severidad conocida antes de abrir el rol: validar en el gateway que el nombre normalizado
+   mapee a CRIT/MAYOR/MENOR (o exigir la severidad explícita si la API/BD la incorpora en `cat_nc_niveles`), con
+   mensaje claro; sin eso un nivel nuevo degrada silenciosamente a MEDIA.
+2. Filtro Nivel de la lista alimentado por el catálogo (o por `filtrosOpciones`) en vez de opciones fijas — cambio de
+   Photino (backlog, sin tocar `main`) o del shim web, a decidir.
+3. Con 1 y 2 resueltos y validados con negocio: pasar `niveles` a la política operativa (operador, admin, admin_ti),
+   quitar la entrada de `ROLES_CATALOGO_CREAR_RESTRINGIDOS` y ajustar `BridgeFase3iNivelesTest` a los roles por defecto.
 
 Diseño aprobado de la primera escritura (referencia):
 

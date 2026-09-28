@@ -712,7 +712,7 @@ class PhotinoRealTest(unittest.TestCase):
         fuente = pc.GitSource(PHOTINO_REAL, "6c42e05")
         js = fuente.read(pc.WWW + "modules/no-conformidades/no-conformidades.controller.js")
         habilitados = ["clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas",
-                       "familiasProducto", "impactos"]
+                       "familiasProducto", "impactos", "niveles"]
         for cat in habilitados:
             with self.subTest(cat=cat):
                 cb = set()
