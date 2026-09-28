@@ -317,7 +317,7 @@ class BridgeFase2iTest {
     @Test
     void escriturasDelModuloSiguenBloqueadas() throws Exception {
         MockHttpSession admin = login("admin1");
-        assertThat(ESCRITURAS).hasSize(21); // 3a-3c + catalogos clientes (3d), categoriasDefecto (3e) y tiposFalla/supervisores/revisores (3f) ya habilitadas
+        assertThat(ESCRITURAS).hasSize(20); // 3a-3c + catalogos clientes (3d), categoriasDefecto (3e), tiposFalla/supervisores/revisores (3f) y areas (3g) ya habilitadas
         for (String escritura : ESCRITURAS) {
             accion(admin, "{\"action\":\"" + escritura + "\",\"id\":501,\"adjuntoId\":1,\"accionId\":3,\"nombre\":\"x\"}")
                     .andExpect(status().isForbidden())
@@ -347,7 +347,8 @@ class BridgeFase2iTest {
                         && !a.equals("noConformidades.catalogos.categoriasDefecto.crear")
                         && !a.equals("noConformidades.catalogos.tiposFalla.crear")
                         && !a.equals("noConformidades.catalogos.supervisores.crear")
-                        && !a.equals("noConformidades.catalogos.revisores.crear")).toList();
+                        && !a.equals("noConformidades.catalogos.revisores.crear")
+                        && !a.equals("noConformidades.catalogos.areas.crear")).toList();
         assertThat(lecturas).hasSize(18);
         for (String a : lecturas) {
             assertThat(policy.evaluar(a, usuario("INNPACK", "operador"))).isInstanceOf(ActionPolicy.Decision.Permitida.class);
@@ -416,7 +417,7 @@ class BridgeFase2iTest {
                 "noConformidades.acciones.actualizar",
                 "noConformidades.adjuntos.subir", "noConformidades.adjuntos.eliminar"));
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
-            if (!List.of("clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores").contains(catalogo)) { // habilitadas en 3d/3e/3f
+            if (!List.of("clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas").contains(catalogo)) { // habilitadas en 3d-3g
                 e.add("noConformidades.catalogos." + catalogo + ".crear");
             }
             e.add("noConformidades.catalogos." + catalogo + ".desactivar");

@@ -4,9 +4,9 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **8** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
+Escrituras habilitadas en la web: **9** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
 `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,categoriasDefecto,tiposFalla,supervisores,
-revisores}.crear`, estado VALIDADA). Las otras 73 siguen denegadas por `ActionPolicy`
+revisores,areas}.crear`, estado VALIDADA). Las otras 72 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -49,7 +49,7 @@ contract check C#/JS + gate de release).
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` | 39 / 38 / 4 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 73 APROBADA · 8 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 72 APROBADA · 9 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -120,7 +120,7 @@ justificación · estado.
 | `noConformidades.acciones.crear` | POST `api/no-conformidades/{id}/acciones` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | crea una acción correctiva | sí: actualizar estado | **BAJO** | aditivo; responsable = dato de negocio | VALIDADA (Fase 3b, gateway 0.4.0) |
 | `noConformidades.adjuntos.subir` | POST `api/no-conformidades/{id}/adjuntos` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `subidoPor` | `subidoPor` ← nombreCompleto | adjunta PDF de causa raíz / fotos (API valida MIME y tamaño) | sí: eliminar adjunto (admin) | **BAJO** | evidencia aditiva | APROBADA |
 | `noConformidades.analisis.guardar` | PUT `api/no-conformidades/{id}/analisis` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `usuario` | `usuario` ← nombreCompleto | guarda el análisis de causa raíz (5 por qué) | NO recuperable: la API sobrescribe en sitio sin historial (SEC-28); se corrige volviendo a guardar | **BAJO** | no cambia estado | VALIDADA (Fase 3c, gateway 0.4.0) |
-| `noConformidades.catalogos.areas.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
+| `noConformidades.catalogos.areas.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3g, gateway 0.4.0) |
 | `noConformidades.catalogos.categoriasDefecto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3e, gateway 0.4.0) |
 | `noConformidades.catalogos.clientes.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3d, gateway 0.4.0) |
 | `noConformidades.catalogos.familiasProducto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
@@ -298,9 +298,18 @@ Mismo patrón, con **separación explícita identidad / negocio**:
   (`BridgeFase3fTiposFallaTest`, `…SupervisoresTest`, `…RevisoresTest`, 15 casos c/u). Huella propia por acción; el
   test real en 6c42e05 verifica que el fragmento de cada catálogo no incluye la entrada de los otros habilitados.
 
+### Novena escritura — `noConformidades.catalogos.areas.crear` — VALIDADA (Fase 3g)
+
+- **Sospecha de alcance descartada:** el combo `area` no tiene `onSeleccionar` (no filtra ni recarga otros combos);
+  `#ncq-f-area` es texto libre sin `maxlength` ni valor por defecto. El valor solo se usa al guardar la NC (columna
+  `area` y respaldo de `proceso` en `noConformidades.create`, que sigue denegada), en el filtro Área
+  (`filtrosOpciones` = DISTINCT sobre NC) y en el indicador "por área" (filas de NC). Sin tablas dependientes de
+  `cat_nc_areas` (`nombre` 150 `UNIQUE`, `creado_por` 150).
+- Contrato idéntico a 3d–3f: `CATALOGOS_CREAR_HABILITADOS` + `BridgeFase3gAreasTest` (15 casos de `CatalogoCrearBase`);
+  el caso "otro catálogo denegado" de la base pasa a `niveles`. Huella propia.
+
 ### Catálogos restantes (propuesta, no implementada)
-- Revisar aparte: `areas` (150; posible uso como alcance de otros combos), `familiasProducto`/`impactos` (50) y
-  `niveles` (20) — límites distintos (el fake de tests usa 150 y debe tomar el límite por catálogo) y valores por
+- Revisar aparte: `familiasProducto`/`impactos` (50) y `niveles` (20) — límites distintos (el fake de tests usa 150 y debe tomar el límite por catálogo) y valores por
   defecto en el formulario ("Mayor", "Calidad") que pilotan indicadores.
 
 Diseño aprobado de la primera escritura (referencia):
