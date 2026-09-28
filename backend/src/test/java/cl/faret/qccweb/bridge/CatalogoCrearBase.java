@@ -46,9 +46,10 @@ import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Contrato común de noConformidades.catalogos.{catalogo}.crear (acción dinámica del combo de catálogos; mismo
- * handler `catalogoCrear`). Cada catálogo habilitado lo hereda con su propia clase (3d clientes, 3e categoriasDefecto, 3f tiposFalla/supervisores/revisores, 3g areas).
- * Foco: identidad (creadoPor → siempre la sesión), `nombre` con el contrato real de la API (trim/colapso, ≤ 150
- * UTF-16, sin controles ni HTML), duplicados resueltos por la API, refresco inmediato.
+ * handler `catalogoCrear`). Cada catálogo habilitado lo hereda con su propia clase (3d clientes, 3e categoriasDefecto, 3f tiposFalla/supervisores/revisores, 3g areas, 3h familiasProducto/impactos).
+ * Foco: identidad (creadoPor → siempre la sesión), `nombre` con el contrato real de la API (trim/colapso, ≤ largo
+ * de la columna en UTF-16 — 150 por defecto, 50/20 según catálogo —, sin controles ni HTML), duplicados resueltos por
+ * la API, refresco inmediato. Los textos de prueba caben en el largo más corto (20).
  */
 @SpringBootTest(properties = {
     "spring.config.name=" + QccWebGatewayApplication.CONFIG_NAME,
@@ -63,10 +64,10 @@ abstract class CatalogoCrearBase {
     static final java.util.Set<String> HABILITADAS = java.util.Set.of(
             "noConformidades.catalogos.clientes.crear", "noConformidades.catalogos.categoriasDefecto.crear",
             "noConformidades.catalogos.tiposFalla.crear", "noConformidades.catalogos.supervisores.crear",
-            "noConformidades.catalogos.revisores.crear", "noConformidades.catalogos.areas.crear");
+            "noConformidades.catalogos.revisores.crear", "noConformidades.catalogos.areas.crear",
+            "noConformidades.catalogos.familiasProducto.crear", "noConformidades.catalogos.impactos.crear");
     private static final String MSG_HTML = "El texto no puede contener etiquetas HTML (por ejemplo \"<b>\" o \"<script>\").";
     private static final String MSG_CARACTERES = "El texto contiene caracteres no permitidos.";
-    private static final String MSG_LARGO = "El valor no puede superar los 150 caracteres.";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
     private static final String PASS = "ClaveCatalogos#2026";
@@ -105,9 +106,18 @@ abstract class CatalogoCrearBase {
     private final String CREAR;
     private final String LISTAR;
     private final String POST_CATALOGO;
+    private final int limite;
+    private final String MSG_LARGO;
 
     protected CatalogoCrearBase(String catalogo) {
+        this(catalogo, 150);
+    }
+
+    /** limite = largo de la columna `nombre` del catálogo en la API (par, para el caso de emojis). */
+    protected CatalogoCrearBase(String catalogo, int limite) {
         this.catalogo = catalogo;
+        this.limite = limite;
+        this.MSG_LARGO = "El valor no puede superar los " + limite + " caracteres.";
         this.CREAR = "noConformidades.catalogos." + catalogo + ".crear";
         this.LISTAR = "noConformidades.catalogos." + catalogo + ".list";
         this.POST_CATALOGO = "POST /api/nc-catalogos/" + catalogo;
@@ -207,20 +217,22 @@ abstract class CatalogoCrearBase {
     @Test
     void maximoPermitidoYExcesoEnUnidadesUtf16ComoLaApi() throws Exception {
         MockHttpSession s = login("operador1");
-        String justo = "Ñ".repeat(149) + "a";
-        String emojis = "😀".repeat(75);                        // 150 unidades UTF-16 (75 code points)
-        crear(s, payload(Map.of("nombre", "x".repeat(151)))).andExpect(jsonPath("$.error").value(MSG_LARGO));
+        String justo = "Ñ".repeat(limite - 1) + "a";
+        String emojis = "😀".repeat(limite / 2);                // `limite` unidades UTF-16 (limite/2 code points)
+        crear(s, payload(Map.of("nombre", "x".repeat(limite + 1)))).andExpect(jsonPath("$.error").value(MSG_LARGO));
         crear(s, payload(Map.of("nombre", emojis + "a"))).andExpect(jsonPath("$.error").value(MSG_LARGO));
         assertThat(API.peticionesNoConformidades()).isEmpty();
         crear(s, payload(Map.of("nombre", justo))).andExpect(jsonPath("$.ok").value(true));
         crear(s, payload(Map.of("nombre", emojis))).andExpect(jsonPath("$.ok").value(true));
-        // 150 tras colapsar espacios (el largo se mide sobre el valor normalizado, como la API).
-        crear(s, payload(Map.of("nombre", "   " + "b".repeat(75) + "      " + "c".repeat(74) + "   "))).andExpect(jsonPath("$.ok").value(true));
+        // `limite` tras colapsar espacios (el largo se mide sobre el valor normalizado, como la API).
+        String b = "b".repeat(limite / 2);
+        String c = "c".repeat(limite / 2 - 1);
+        crear(s, payload(Map.of("nombre", "   " + b + "      " + c + "   "))).andExpect(jsonPath("$.ok").value(true));
         List<CatalogoRecibido> r = API.catalogosRecibidos();
         assertThat(r).hasSize(3);
         assertThat(mapper.readTree(r.get(0).cuerpo()).get("nombre").asString()).isEqualTo(justo);
         assertThat(mapper.readTree(r.get(1).cuerpo()).get("nombre").asString()).isEqualTo(emojis);
-        assertThat(mapper.readTree(r.get(2).cuerpo()).get("nombre").asString()).isEqualTo("b".repeat(75) + " " + "c".repeat(74));
+        assertThat(mapper.readTree(r.get(2).cuerpo()).get("nombre").asString()).isEqualTo(b + " " + c);
     }
 
     @Test
@@ -234,7 +246,8 @@ abstract class CatalogoCrearBase {
     @Test
     void utf8SeConservaExacto() throws Exception {
         MockHttpSession s = login("operador1");
-        String utf8 = "Industrias «Ñuñoa» — R&D 5<6 a < b ✓ 😀 &lt;b&gt; O'Higgins \"Sur\"";
+        String utf8 = limite >= 62 ? "Industrias «Ñuñoa» — R&D 5<6 a < b ✓ 😀 &lt;b&gt; O'Higgins \"Sur\""
+                : "«Ñ» R&D 5<6 ✓😀&lt;\"";                   // 20 unidades UTF-16
         crear(s, payload(Map.of("nombre", utf8))).andExpect(jsonPath("$.ok").value(true)).andExpect(jsonPath("$.data.nombre").value(utf8));
         assertThat(mapper.readTree(unica().cuerpo()).get("nombre").asString()).isEqualTo(utf8);
     }
@@ -370,14 +383,14 @@ abstract class CatalogoCrearBase {
     @Test
     void auditoriaConCatalogoEIdCreadoSinElNombre(CapturedOutput salida) throws Exception {
         MockHttpSession s = login("operador1");
-        crear(s, payload(Map.of("nombre", "Cliente Sensible 12.345.678-9"))).andExpect(jsonPath("$.ok").value(true));
+        crear(s, payload(Map.of("nombre", "Sens 12.345.678-9"))).andExpect(jsonPath("$.ok").value(true));
         crear(s, payload(Map.of("nombre", "ERROR_API"))).andExpect(jsonPath("$.ok").value(false));
         crear(s, payload(Map.of("nombre", "<b>x</b>"))).andExpect(jsonPath("$.ok").value(false));
         String log = salida.getAll();
         assertThat(log).containsPattern("evento=ESCRITURA usuario=operador1 empresa=INNPACK accion=noConformidades\\.catalogos\\." + catalogo + "\\.crear "
                 + "recurso=catalogo:" + catalogo + ":901 resultado=OK ms=\\d+");
         assertThat(log).contains("recurso=catalogo:" + catalogo + " resultado=ERROR");
-        assertThat(log).doesNotContain("Cliente Sensible", "12.345.678-9", "<b>x</b>", FakeInnpackApi.firmaDeToken(10), PASS);
+        assertThat(log).doesNotContain("Sens 12.345.678-9", "12.345.678-9", "<b>x</b>", FakeInnpackApi.firmaDeToken(10), PASS);
     }
 
     // ------------------------------------------------------------------ helpers

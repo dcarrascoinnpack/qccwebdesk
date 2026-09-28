@@ -691,6 +691,11 @@ public final class FakeInnpackApi implements AutoCloseable {
         });
     }
 
+    /** Largo máximo por catálogo del diccionario de NoConformidadesCatalogosService (API real, columna `nombre`). */
+    private static final Map<String, Integer> LARGO_CATALOGO_API = Map.of(
+            "clientes", 150, "categoriasDefecto", 150, "tiposFalla", 150, "supervisores", 150, "revisores", 150,
+            "areas", 150, "familiasProducto", 50, "niveles", 20, "impactos", 50);
+
     /** Como NoConformidadesCatalogosService.CrearAsync + repositorio (UNIQUE(nombre) con collation CI). */
     private synchronized void crearCatalogo(HttpExchange ex, String catalogo, int sub) throws IOException {
         String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
@@ -702,8 +707,9 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         String nombre = raw.strip().replaceAll("\\s+", " ");
-        if (nombre.length() > 150) {
-            responder(ex, 400, fallo("El valor no puede superar los 150 caracteres."));
+        int max = LARGO_CATALOGO_API.getOrDefault(catalogo, 150);
+        if (nombre.length() > max) {
+            responder(ex, 400, fallo("El valor no puede superar los " + max + " caracteres."));
             return;
         }
         if (nombre.equals("ERROR_API")) {

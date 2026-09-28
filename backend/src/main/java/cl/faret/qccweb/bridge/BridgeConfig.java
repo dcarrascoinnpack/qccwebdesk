@@ -44,7 +44,8 @@ public class BridgeConfig {
     static final Set<String> ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO = Set.of("operador", "admin", "admin_ti");
     /** Catálogos de NC con `crear` habilitado en la web (por fase, cada uno auditado y validado). */
     static final List<String> CATALOGOS_CREAR_HABILITADOS = List.of(
-            "clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas");
+            "clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas", "familiasProducto",
+            "impactos");
 
     @Bean
     public InnpackApiClient innpackApiClient(AuthProperties properties) {
@@ -291,8 +292,9 @@ public class BridgeConfig {
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("usuario", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                         noConformidades::analisisGuardar, NoConformidadesBridgeHandler::recursoAnalisis)));
-        // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores) y 3g (areas) —
-        // escrituras del combo de catálogos (acción dinámica, mismo contrato): identidad "creadoPor" = sesión;
+        // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas) y 3h
+        // (familiasProducto, impactos; largo 50) — escrituras del combo de catálogos (acción dinámica, mismo
+        // contrato): identidad "creadoPor" = sesión;
         // `nombre` con el contrato real de la API (trim/colapso, ≤ largo de la columna, sin HTML ni controles);
         // duplicados resueltos por la API; recurso "catalogo:<cat>:<id>".
         // SOLO los catálogos listados: crear en los demás, desactivar/editar/eliminar siguen denegados.

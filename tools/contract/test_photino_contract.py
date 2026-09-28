@@ -711,7 +711,8 @@ class PhotinoRealTest(unittest.TestCase):
     def test_accion_dinamica_de_catalogo_cubre_metodo_generador_y_transformacion(self):
         fuente = pc.GitSource(PHOTINO_REAL, "6c42e05")
         js = fuente.read(pc.WWW + "modules/no-conformidades/no-conformidades.controller.js")
-        habilitados = ["clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas"]
+        habilitados = ["clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas",
+                       "familiasProducto", "impactos"]
         for cat in habilitados:
             with self.subTest(cat=cat):
                 cb = set()

@@ -4,9 +4,9 @@
 **Validación funcional de roles: `PENDIENTE_VALIDACION_NEGOCIO`** (aplica a TODAS las filas, incluida la ya
 implementada): los roles pueden cambiar cuando el negocio confirme los permisos definitivos.
 
-Escrituras habilitadas en la web: **9** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
+Escrituras habilitadas en la web: **11** (`noConformidades.seguimiento.crear`, `noConformidades.acciones.crear`,
 `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,categoriasDefecto,tiposFalla,supervisores,
-revisores,areas}.crear`, estado VALIDADA). Las otras 72 siguen denegadas por `ActionPolicy`
+revisores,areas,familiasProducto,impactos}.crear`, estado VALIDADA). Las otras 70 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -49,7 +49,7 @@ contract check C#/JS + gate de release).
 | Roles web `operador, admin, admin_ti` / `admin, admin_ti` / `admin` | 39 / 38 / 4 |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 72 APROBADA · 9 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 70 APROBADA · 11 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -123,8 +123,8 @@ justificación · estado.
 | `noConformidades.catalogos.areas.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3g, gateway 0.4.0) |
 | `noConformidades.catalogos.categoriasDefecto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3e, gateway 0.4.0) |
 | `noConformidades.catalogos.clientes.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3d, gateway 0.4.0) |
-| `noConformidades.catalogos.familiasProducto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
-| `noConformidades.catalogos.impactos.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
+| `noConformidades.catalogos.familiasProducto.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3h, gateway 0.4.0) |
+| `noConformidades.catalogos.impactos.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3h, gateway 0.4.0) |
 | `noConformidades.catalogos.niveles.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | APROBADA |
 | `noConformidades.catalogos.revisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
 | `noConformidades.catalogos.supervisores.crear` | POST `api/nc-catalogos/{catalogo}` | INNPACK (sin parámetro) | **operador, admin, admin_ti** | cualquier sesión INNPACK (sin gating de rol) | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | agrega un valor a un catálogo de NC | desactivar (API; no usado por la UI) | **BAJO** | aditivo, inline desde el formulario | VALIDADA (Fase 3f, gateway 0.4.0) |
@@ -308,9 +308,20 @@ Mismo patrón, con **separación explícita identidad / negocio**:
 - Contrato idéntico a 3d–3f: `CATALOGOS_CREAR_HABILITADOS` + `BridgeFase3gAreasTest` (15 casos de `CatalogoCrearBase`);
   el caso "otro catálogo denegado" de la base pasa a `niveles`. Huella propia.
 
+### Décima y undécima escrituras — `noConformidades.catalogos.{familiasProducto,impactos}.crear` — VALIDADAS (Fase 3h)
+
+- Contrato idéntico a 3d–3g salvo el **largo: 50** (API `NoConformidadesCatalogosService`, `cat_nc_*.nombre`
+  NVARCHAR(50) y columnas `no_conformidades.familia_producto`/`impacto` NVARCHAR(50)); el gateway ya lo aplicaba.
+  Familia alimenta el indicador "por familia" (filas de NC); impacto es texto libre (columna opcional). El valor inicial
+  "Calidad" de impacto solo se escribe en el formulario: no crea valores de catálogo.
+- Tests: `CatalogoCrearBase` recibe el límite por catálogo (150 por defecto; casos límite, emojis y colapso calculados;
+  textos de prueba que caben en 20) y el `FakeInnpackApi` aplica el largo de la API por catálogo.
+  `BridgeFase3hFamiliasProductoTest` / `BridgeFase3hImpactosTest` (15 c/u). Huella propia por acción.
+
 ### Catálogos restantes (propuesta, no implementada)
-- Revisar aparte: `familiasProducto`/`impactos` (50) y `niveles` (20) — límites distintos (el fake de tests usa 150 y debe tomar el límite por catálogo) y valores por
-  defecto en el formulario ("Mayor", "Calidad") que pilotan indicadores.
+- `niveles` (20): define la severidad (CRIT/MAYOR/MENOR, otro → MEDIA gris) y el filtro Nivel tiene opciones fijas
+  (Crítico/Mayor/Menor): un nivel nuevo queda MEDIA y no se puede filtrar. Decisión del usuario (2026-09-28): habilitar
+  inicialmente solo para `admin_ti` (Fase 3i).
 
 Diseño aprobado de la primera escritura (referencia):
 
