@@ -39,9 +39,9 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Fase 3m — modal "Gestionar": noConformidades.gestion.actualizar y noConformidades.cerrar (admin/admin_ti).
- * Decisiones del usuario: 3m-1a (gestión no acepta CERRADA: se cierra solo con cerrar) y 3m-2a (una NC cerrada no se
- * reabre ni se modifica). Identidad de sesión, lost update en gestión, cierre no repetible. API SIMULADA.
+ * Fase 3m/3o — modal "Gestionar": noConformidades.gestion.actualizar y noConformidades.cerrar con las MISMAS reglas y
+ * roles que Photino (cualquier usuario INNPACK; gestión acepta CERRADA y reabre; cerrar otra vez vuelve a registrar
+ * quién/cuándo). Seguridad transparente: identidad de sesión, listas blancas, lost update en gestión. API SIMULADA.
  */
 @SpringBootTest(properties = {
     "spring.config.name=" + QccWebGatewayApplication.CONFIG_NAME,
@@ -57,9 +57,6 @@ class BridgeFase3mTest {
     private static final String MSG_SIN_LEER = "Abre la gestión de la no conformidad antes de guardarla.";
     private static final String MSG_CONFLICTO = "La no conformidad fue modificada por otra persona desde que la abriste. "
             + "Ciérrala y vuelve a abrirla para ver los cambios antes de editar.";
-    private static final String MSG_USAR_CERRAR = "Para cerrar la no conformidad usa \"Cerrar NC\" (registra quién la cierra, cuándo y el comentario).";
-    private static final String MSG_GESTION_CERRADA = "La no conformidad está cerrada; no se puede modificar su gestión.";
-    private static final String MSG_YA_CERRADA = "La no conformidad ya está cerrada.";
     private static final String MSG_HTML = "El texto no puede contener etiquetas HTML (por ejemplo \"<b>\" o \"<script>\").";
     private static final String MSG_CARACTERES = "El texto contiene caracteres no permitidos.";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
@@ -151,11 +148,13 @@ class BridgeFase3mTest {
     }
 
     @Test
-    void gestionNoAceptaCerradaNiValoresInvalidos() throws Exception {
+    void gestionAceptaCerradaComoPhotinoYValidaValores() throws Exception {
         MockHttpSession s = login("admin1");
         abrir(s, 501);
-        enviar(s, gestion(Map.of("estadoGestion", "CERRADA"))).andExpect(jsonPath("$.error").value(MSG_USAR_CERRAR));
-        enviar(s, gestion(Map.of("estadoGestion", "cerrada"))).andExpect(jsonPath("$.error").value("Estado de gestión inválido (PENDIENTE, ASIGNADA o EN_GESTION)."));
+        enviar(s, gestion(Map.of("estadoGestion", "CERRADA"))).andExpect(jsonPath("$.ok").value(true));
+        assertThat(mapper.readTree(API.gestionesRecibidas().get(0).cuerpo()).get("estadoGestion").asString()).isEqualTo("CERRADA");
+        String invalido = "Estado de gestión inválido. Valores permitidos: PENDIENTE, ASIGNADA, EN_GESTION, CERRADA";
+        enviar(s, gestion(Map.of("estadoGestion", "cerrada"))).andExpect(jsonPath("$.error").value(invalido));
         enviar(s, gestion(Map.of("estadoGestion", ""))).andExpect(jsonPath("$.error").value("Falta el estado de gestión"));
         enviar(s, gestion(Map.of("estadoGestion", Borrar.CAMPO))).andExpect(jsonPath("$.error").value("Falta el estado de gestión"));
         enviar(s, gestion(Map.of("responsable", "R".repeat(151)))).andExpect(jsonPath("$.error").value("El responsable supera el máximo de 150 caracteres."));
@@ -167,25 +166,27 @@ class BridgeFase3mTest {
             enviar(s, gestion(Map.of(extra, "x"))).andExpect(jsonPath("$.error").value("Campo no permitido: " + extra));
         }
         enviar(s, gestion(Map.of("id", Borrar.CAMPO))).andExpect(jsonPath("$.error").value("Falta el id de la no conformidad"));
-        assertThat(API.gestionesRecibidas()).isEmpty();
+        assertThat(API.gestionesRecibidas()).hasSize(1);
     }
 
     @Test
-    void gestionExigeNcAbiertaSinCambiosYNoCerrada() throws Exception {
+    void gestionExigeNcAbiertaSinCambiosYReabreComoPhotino() throws Exception {
         MockHttpSession s = login("admin1");
         enviar(s, gestion(Map.of())).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
         abrir(s, 501);
         API.modificarNcPorOtro(501);
         enviar(s, gestion(Map.of())).andExpect(jsonPath("$.error").value(MSG_CONFLICTO));
-        abrir(s, 503);
-        enviar(s, gestion(Map.of("id", 503, "estadoGestion", "PENDIENTE"))).andExpect(jsonPath("$.error").value(MSG_GESTION_CERRADA));
         assertThat(API.gestionesRecibidas()).isEmpty();
+        abrir(s, 503); // CERRADA: Photino permite reabrirla desde Gestión
+        enviar(s, gestion(Map.of("id", 503, "estadoGestion", "PENDIENTE"))).andExpect(jsonPath("$.ok").value(true));
+        assertThat(API.gestionesRecibidas()).hasSize(1);
+        assertThat(mapper.readTree(API.gestionesRecibidas().get(0).cuerpo()).get("estadoGestion").asString()).isEqualTo("PENDIENTE");
     }
 
     // ------------------------------------------------------------------ cierre
 
     @Test
-    void cierreExitosoConCerradoPorDeSesionYNoRepetible() throws Exception {
+    void cierreConCerradoPorDeSesionYCerrarOtraVezComoPhotino() throws Exception {
         MockHttpSession s = login("adminti1");
         enviar(s, cierre(502, "Se reprocesó el lote\ny se liberó")).andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(true));
         assertThat(API.peticionesNoConformidades()).containsExactly("GET /api/no-conformidades/502", "POST /api/no-conformidades/502/cerrar");
@@ -193,14 +194,16 @@ class BridgeFase3mTest {
         assertThat(r.sub()).isEqualTo(25);
         assertThat(mapper.readTree(r.cuerpo())).isEqualTo(mapper.readTree(
                 "{\"cerradoPor\":\"Admin TI\",\"comentarioCierre\":\"Se reprocesó el lote\\ny se liberó\"}"));
-        enviar(s, cierre(502, null)).andExpect(jsonPath("$.error").value(MSG_YA_CERRADA));
-        // Una NC cerrada no se reabre por gestión ni se edita (3l).
+        // Cerrar una NC ya cerrada: la API vuelve a registrar quién/cuándo/comentario (igual que Photino).
+        MockHttpSession otro = login("operador1");
+        enviar(otro, cierre(502, null)).andExpect(jsonPath("$.ok").value(true));
+        assertThat(mapper.readTree(API.cierresRecibidos().get(1).cuerpo())).isEqualTo(mapper.readTree(
+                "{\"cerradoPor\":\"Operador Uno\",\"comentarioCierre\":null}"));
+        // Y se puede reabrir desde Gestión.
         abrir(s, 502);
-        enviar(s, gestion(Map.of("id", 502, "estadoGestion", "PENDIENTE"))).andExpect(jsonPath("$.error").value(MSG_GESTION_CERRADA));
-        assertThat(API.cierresRecibidos()).hasSize(1);
-        assertThat(API.gestionesRecibidas()).isEmpty();
+        enviar(s, gestion(Map.of("id", 502, "estadoGestion", "EN_GESTION"))).andExpect(jsonPath("$.ok").value(true));
         enviar(s, cierre(501, "")).andExpect(jsonPath("$.ok").value(true));
-        assertThat(mapper.readTree(API.cierresRecibidos().get(1).cuerpo()).get("comentarioCierre").isNull()).isTrue();
+        assertThat(mapper.readTree(API.cierresRecibidos().get(2).cuerpo()).get("comentarioCierre").isNull()).isTrue();
     }
 
     @Test
@@ -216,32 +219,29 @@ class BridgeFase3mTest {
             enviar(s, p.toString()).andExpect(jsonPath("$.error").value("Campo no permitido: " + extra));
         }
         enviar(s, cierre(404, "ok")).andExpect(jsonPath("$.error").value("No conformidad no encontrada"));
-        enviar(s, cierre(503, "ok")).andExpect(jsonPath("$.error").value(MSG_YA_CERRADA));
         assertThat(API.cierresRecibidos()).isEmpty();
     }
 
     // ------------------------------------------------------------------ autorización y auditoría
 
     @Test
-    void soloAdminYAdminTi() throws Exception {
-        for (String u : List.of("operador1", "consulta1")) {
-            MockHttpSession s = login(u);
-            if (u.equals("operador1")) {
-                abrir(s, 501); // el operador SÍ puede ver la NC; consulta ni siquiera la lee
-            }
-            enviar(s, gestion(Map.of())).andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
-            enviar(s, cierre(501, "x")).andExpect(status().isForbidden());
-        }
+    void mismosRolesQuePhotinoCualquierUsuarioInnpack() throws Exception {
+        MockHttpSession op = login("operador1");
+        abrir(op, 501);
+        enviar(op, gestion(Map.of("actualizadoPor", "Admin Uno"))).andExpect(jsonPath("$.ok").value(true));
+        enviar(op, cierre(501, "x")).andExpect(jsonPath("$.ok").value(true));
+        assertThat(mapper.readTree(API.gestionesRecibidas().get(0).cuerpo()).get("actualizadoPor").asString()).isEqualTo("Operador Uno");
+        assertThat(mapper.readTree(API.cierresRecibidos().get(0).cuerpo()).get("cerradoPor").asString()).isEqualTo("Operador Uno");
+        MockHttpSession c = login("consulta1"); // rol inexistente en la BD real: sin acceso a nada del módulo
+        enviar(c, gestion(Map.of())).andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
+        enviar(c, cierre(501, "x")).andExpect(status().isForbidden());
         for (String accion : List.of(GESTION, CERRAR)) {
-            assertThat(policy.evaluar(accion, usuario("INNPACK", "operador"))).isEqualTo(new ActionPolicy.Decision.Denegada("ROL_NO_PERMITIDO"));
             assertThat(policy.evaluar(accion, usuario("FARET", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
             Map<String, Object> d = policy.describir().stream().filter(x -> x.get("accion").equals(accion)).findFirst().orElseThrow();
-            assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti"));
+            assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti", "operador"));
         }
         assertThat(policy.describir().stream().filter(x -> x.get("accion").equals(CERRAR)).findFirst().orElseThrow().get("identidad"))
                 .isEqualTo(Map.of("cerradoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO));
-        assertThat(API.gestionesRecibidas()).isEmpty();
-        assertThat(API.cierresRecibidos()).isEmpty();
     }
 
     @Test
@@ -250,12 +250,12 @@ class BridgeFase3mTest {
         abrir(s, 501);
         enviar(s, gestion(Map.of("responsable", "Responsable Sensible 12.345.678-9"))).andExpect(jsonPath("$.ok").value(true));
         enviar(s, cierre(502, "Comentario Sensible")).andExpect(jsonPath("$.ok").value(true));
-        enviar(s, cierre(502, "otra vez")).andExpect(jsonPath("$.ok").value(false));
+        enviar(s, cierre(404, "otra vez")).andExpect(jsonPath("$.ok").value(false));
         String log = salida.getAll();
         assertThat(log).containsPattern("evento=ESCRITURA usuario=admin1 empresa=INNPACK accion=noConformidades\\.gestion\\.actualizar "
                 + "recurso=nc:501:gestion:EN_GESTION resultado=OK ms=\\d+");
         assertThat(log).containsPattern("accion=noConformidades\\.cerrar recurso=nc:502:cierre resultado=OK");
-        assertThat(log).containsPattern("accion=noConformidades\\.cerrar recurso=nc:502:cierre resultado=ERROR");
+        assertThat(log).containsPattern("accion=noConformidades\\.cerrar recurso=nc:404:cierre resultado=ERROR");
         assertThat(log).doesNotContain("Responsable Sensible", "12.345.678-9", "Comentario Sensible", FakeInnpackApi.firmaDeToken(20), PASS);
     }
 

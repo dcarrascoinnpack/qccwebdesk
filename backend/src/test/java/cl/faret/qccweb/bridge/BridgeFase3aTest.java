@@ -219,14 +219,14 @@ class BridgeFase3aTest {
     }
 
     @Test
-    void longitudMaximaEnCaracteresNoEnBytes() throws Exception {
+    void longitudMaximaRealEnBytesSinLimiteInventado() throws Exception {
         MockHttpSession s = login("operador1");
-        String justo = "😀".repeat(1000) + "ñ".repeat(1000); // 2000 caracteres (6000 bytes UTF-8)
-        crear(s, cuerpo(501, justo)).andExpect(jsonPath("$.ok").value(true));
-        assertThat(mapper.readTree(unico().cuerpo()).get("comentario").asString()).isEqualTo(justo);
-        crear(s, cuerpo(501, justo + "x"))
+        String largo = "😀".repeat(1000) + "ñ".repeat(1500); // 2500 caracteres: antes (3a) se rechazaba; Photino lo acepta
+        crear(s, cuerpo(501, largo)).andExpect(jsonPath("$.ok").value(true));
+        assertThat(mapper.readTree(unico().cuerpo()).get("comentario").asString()).isEqualTo(largo);
+        crear(s, cuerpo(501, "ñ".repeat(32_768))) // 65.536 bytes: tope anti-abuso de textos largos
                 .andExpect(jsonPath("$.ok").value(false))
-                .andExpect(jsonPath("$.error").value("El comentario supera el máximo de 2000 caracteres."));
+                .andExpect(jsonPath("$.error").value("El comentario supera el máximo permitido (65.535 bytes)."));
         assertThat(API.seguimientosRecibidos()).hasSize(1);
     }
 

@@ -46,10 +46,9 @@ public class NoConformidadesBridgeHandler {
     static final String MENSAJE_ADJUNTO_INVALIDO = "El adjunto no es válido.";
     static final String MENSAJE_PARAMETRO_INVALIDO = "Parámetro inválido.";
     static final String MENSAJE_FALTA_COMENTARIO = "Falta el comentario de seguimiento";
-    static final String MENSAJE_COMENTARIO_LARGO = "El comentario supera el máximo de 2000 caracteres.";
+    static final String MENSAJE_COMENTARIO_LARGO = "El comentario supera el máximo permitido (65.535 bytes).";
     static final String MENSAJE_COMENTARIO_CARACTERES = "El comentario contiene caracteres no permitidos.";
     static final String MENSAJE_COMENTARIO_HTML = "El comentario no puede contener etiquetas HTML (por ejemplo \"<b>\" o \"<script>\").";
-    static final int MAX_COMENTARIO = 2000;
     /**
      * Apertura de etiqueta/comentario/declaración según el parser HTML: "<" seguido INMEDIATAMENTE de
      * letra ASCII, "/", "!" o "?". "a < b", "5<6", "->" o "<3" no abren etiqueta y se aceptan.
@@ -107,7 +106,6 @@ public class NoConformidadesBridgeHandler {
     private static final Pattern ESPACIOS = Pattern.compile("\\s+", Pattern.UNICODE_CHARACTER_CLASS);
 
     /** MIME que NoConformidadesService acepta al subir (CAUSA_RAIZ_PDF / EVIDENCIA_FOTO). */
-    private static final Set<String> MIME_ADJUNTO = Set.of("application/pdf", "image/png", "image/jpeg");
     private static final String[] FILTROS_TEXTO = {"cliente", "tipoPnc", "nivel", "estadoGestion", "area", "fechaDesde", "fechaHasta"};
     private static final String BASE = "/api/no-conformidades";
     private static final String BASE_CATALOGOS = "/api/nc-catalogos";
@@ -516,8 +514,11 @@ public class NoConformidadesBridgeHandler {
             return BridgeResult.error(MENSAJE_TAMANO);
         }
         byte[] inicio = ControlDocumentalBridgeHandler.inicioDecodificado(base64);
-        String tipoMime = textoDe(adjunto, "tipoMime").trim().toLowerCase();
-        if (inicio == null || !MIME_ADJUNTO.contains(tipoMime) || !ControlDocumentalBridgeHandler.firmaCoincide(tipoMime, inicio)) {
+        // Paridad (Fase 3o): Photino muestra el adjunto aunque la extensión/MIME no coincida con el contenido (p. ej. PNG
+        // guardado como .jpg). La web lo muestra igual, pero con el tipo REAL detectado por la firma; lo que no sea
+        // PDF/imagen segura (p. ej. HTML disfrazado) se sigue rechazando.
+        String tipoMime = ControlDocumentalBridgeHandler.mimePorFirma(inicio);
+        if (tipoMime == null) {
             return BridgeResult.error(MENSAJE_ADJUNTO_INVALIDO);
         }
         ObjectNode salida = mapper.createObjectNode();
@@ -534,8 +535,9 @@ public class NoConformidadesBridgeHandler {
      *  - autor = SIEMPRE el nombre del usuario de la sesión (Photino lo toma de sessionStorage del
      *    navegador y la API lo acepta del body, SEC-12). Nada más del payload viaja a la API: solo el
      *    comentario validado; autor/usuario/usuarioId/creadoPor/rol/empresa del navegador se ignoran.
-     *  - comentario: string, sin espacios en los extremos, no vacío, ≤ 2000 caracteres (la columna es
-     *    TEXT; 2000 deja margen en bytes UTF-8), sin caracteres de control y SIN marcado HTML
+     *  - comentario: string, sin espacios en los extremos, no vacío, ≤ 65.535 bytes UTF-8 (la columna es
+     *    NVARCHAR(MAX)/TEXT: tope anti-abuso, igual que los demás textos largos; Fase 3o quitó el límite
+     *    inventado de 2000), sin caracteres de control y SIN marcado HTML
      *    ("<" seguido de letra ASCII, "/", "!" o "?"): la vista de Photino pinta el comentario con innerHTML
      *    sin escapar (SEC-27). Texto normal con acentos, emojis, "a < b", "5<6" o "->" pasa intacto.
      *    Se RECHAZA (no se neutraliza con entidades) para no guardar texto alterado que Photino u otros
@@ -555,7 +557,7 @@ public class NoConformidadesBridgeHandler {
         if (comentario.isEmpty()) {
             return BridgeResult.error(MENSAJE_FALTA_COMENTARIO);
         }
-        if (comentario.codePointCount(0, comentario.length()) > MAX_COMENTARIO) {
+        if (comentario.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > MAX_TEXT_BYTES) {
             return BridgeResult.error(MENSAJE_COMENTARIO_LARGO);
         }
         if (CONTROL.matcher(comentario).find()) {
@@ -709,7 +711,7 @@ public class NoConformidadesBridgeHandler {
      * Photino (severidad desde el nivel, título, descripción, proceso, fechaDeteccion = fechaIngreso); lo que mande el
      * navegador se descarta. Validación (la API no valida largos: el exceso sería un 500 de SQL): obligatorios de
      * Photino, largo de cada columna, sin controles ni HTML, selects con sus opciones exactas, fechas AAAA-MM-DD,
-     * cantidades ≥ 0 dentro de DECIMAL(12,2). Los adjuntos elegidos se suben después con adjuntos.subir (otra acción).
+     * cantidades dentro del rango de DECIMAL(12,2) (negativas permitidas como en Photino). Los adjuntos elegidos se suben después con adjuntos.subir (otra acción).
      */
     public BridgeResult ncCrear(ObjectNode payload, SessionUser usuario) {
         CuerpoNc c = cuerpoNc(payload, "creadoPor", false, usuario);
@@ -719,7 +721,6 @@ public class NoConformidadesBridgeHandler {
     static final String MENSAJE_NC_SIN_LEER = "Abre la no conformidad antes de editarla.";
     static final String MENSAJE_NC_CONFLICTO = "La no conformidad fue modificada por otra persona desde que la abriste. "
             + "Ciérrala y vuelve a abrirla para ver los cambios antes de editar.";
-    static final String MENSAJE_NC_CERRADA = "La no conformidad está cerrada; no se puede editar.";
 
     /**
      * noConformidades.update → PUT api/no-conformidades/{id}. Mismo formulario y payload que create (Photino
@@ -728,8 +729,8 @@ public class NoConformidadesBridgeHandler {
      *
      * La API actualiza sin verificar existencia, borrado ni cierre (UPDATE ... WHERE id) y sobrescribe sin historial.
      * La web (Fase 3l): exige haber abierto la NC en esta sesión (huella registrada por noConformidades.get), la
-     * relee antes del PUT (404/eliminada → error sin escribir), NO permite editar una NC CERRADA (decisión 3l-a, más
-     * estricta que Photino) y rechaza si la NC cambió desde que se abrió (lost update).
+     * relee antes del PUT (404/eliminada → error sin escribir) y rechaza si la NC cambió desde que se abrió (lost update).
+     * Una NC CERRADA se puede editar, igual que en Photino (Fase 3o revirtió la restricción 3l-a).
      */
     public BridgeResult ncActualizar(ObjectNode payload, SessionUser usuario) {
         Integer id = entero(payload.get("id"));
@@ -748,9 +749,6 @@ public class NoConformidadesBridgeHandler {
         if (!vigente.ok()) {
             return vigente;
         }
-        if (estaCerrada(vigente.data())) {
-            return BridgeResult.error(MENSAJE_NC_CERRADA);
-        }
         if (!huellaNc(vigente.data()).equals(leida)) {
             return BridgeResult.error(MENSAJE_NC_CONFLICTO);
         }
@@ -764,24 +762,20 @@ public class NoConformidadesBridgeHandler {
 
     private static final Set<String> CAMPOS_GESTION = Set.of("action", "id", "responsable", "estadoGestion", "fechaCompromiso",
             "actualizadoPor");
-    /** Opciones del <select id="ncq-gestion-estado"> SIN "CERRADA": en la web se cierra solo con noConformidades.cerrar. */
-    private static final List<String> ESTADOS_GESTION_WEB = List.of("PENDIENTE", "ASIGNADA", "EN_GESTION");
+    /** Opciones exactas del <select id="ncq-gestion-estado"> de Photino (= EstadosGestionValidos de la API). */
+    private static final List<String> ESTADOS_GESTION_WEB = List.of("PENDIENTE", "ASIGNADA", "EN_GESTION", "CERRADA");
     static final String MENSAJE_GESTION_SIN_LEER = "Abre la gestión de la no conformidad antes de guardarla.";
-    static final String MENSAJE_GESTION_CERRAR = "Para cerrar la no conformidad usa \"Cerrar NC\" (registra quién la cierra, cuándo y el comentario).";
-    static final String MENSAJE_GESTION_NC_CERRADA = "La no conformidad está cerrada; no se puede modificar su gestión.";
-    static final String MENSAJE_YA_CERRADA = "La no conformidad ya está cerrada.";
     private static final Set<String> CAMPOS_CERRAR = Set.of("action", "id", "cerradoPor", "comentarioCierre");
 
     /**
      * noConformidades.gestion.actualizar → PATCH api/no-conformidades/{id}/gestion {responsable, estadoGestion,
      * fechaCompromiso, actualizadoPor}. Modal "Gestionar" de Photino (abre con noConformidades.get y queda abierto).
      *
-     * La API actualiza sin verificar existencia ni estado, acepta CERRADA (cierre sin cerradoPor/fecha/comentario) y
-     * permite reabrir una NC cerrada. La web (Fase 3m): `actualizadoPor` ← sesión; lista blanca; responsable una línea
-     * ≤ 150 sin HTML; estado obligatorio entre PENDIENTE/ASIGNADA/EN_GESTION (CERRADA → usar cerrar, decisión 3m-1a);
-     * fecha AAAA-MM-DD o vacía; exige la NC abierta en la sesión, la relee (404 → error), NO modifica una NC CERRADA
-     * (decisión 3m-2a) y rechaza si cambió desde que se abrió. Tras guardar vuelve a registrar la huella (el modal sigue
-     * abierto y se puede volver a guardar).
+     * La API actualiza sin verificar existencia ni estado, acepta CERRADA y permite reabrir una NC cerrada: la web lo
+     * replica igual que Photino (Fase 3o revirtió 3m-1a/3m-2a; reglas de negocio anotadas en la matriz). Seguridad
+     * transparente: `actualizadoPor` ← sesión; lista blanca; responsable ≤ 150 (columna) sin HTML ni controles; estado
+     * entre las opciones del select; fecha AAAA-MM-DD o vacía; exige la NC abierta en la sesión, la relee (404 → error) y
+     * rechaza si cambió desde que se abrió. Tras guardar vuelve a registrar la huella (el modal sigue abierto).
      */
     public BridgeResult gestionActualizar(ObjectNode payload, SessionUser usuario) {
         for (String clave : payload.propertyNames()) {
@@ -813,11 +807,8 @@ public class NoConformidadesBridgeHandler {
         if (estado.isEmpty()) {
             return BridgeResult.error("Falta el estado de gestión");
         }
-        if (estado.equals("CERRADA")) {
-            return BridgeResult.error(MENSAJE_GESTION_CERRAR);
-        }
         if (!ESTADOS_GESTION_WEB.contains(estado)) {
-            return BridgeResult.error("Estado de gestión inválido (PENDIENTE, ASIGNADA o EN_GESTION).");
+            return BridgeResult.error("Estado de gestión inválido. Valores permitidos: PENDIENTE, ASIGNADA, EN_GESTION, CERRADA");
         }
         String fecha = textoPlano(payload.get("fechaCompromiso"));
         if (!fecha.isEmpty()) {
@@ -837,9 +828,6 @@ public class NoConformidadesBridgeHandler {
         BridgeResult vigente = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
         if (!vigente.ok()) {
             return vigente;
-        }
-        if (estaCerrada(vigente.data())) {
-            return BridgeResult.error(MENSAJE_GESTION_NC_CERRADA);
         }
         if (!huellaNc(vigente.data()).equals(leida)) {
             return BridgeResult.error(MENSAJE_NC_CONFLICTO);
@@ -874,9 +862,10 @@ public class NoConformidadesBridgeHandler {
 
     /**
      * noConformidades.cerrar → POST api/no-conformidades/{id}/cerrar {cerradoPor, comentarioCierre}. La API exige
-     * cerradoPor y cierra sin verificar estado (cerrar dos veces sobrescribe quién y cuándo). La web (Fase 3m):
-     * `cerradoPor` ← sesión; lista blanca; comentario opcional (textarea: multilínea, ≤ 65.535 bytes, sin controles ni
-     * HTML); relee la NC (404 → error) y rechaza si YA está cerrada. Tras cerrar la huella de lectura deja de valer.
+     * cerradoPor y cierra sin verificar estado: cerrar una NC ya cerrada vuelve a registrar quién, cuándo y el comentario;
+     * la web lo replica igual que Photino (Fase 3o). Seguridad transparente: `cerradoPor` ← sesión; lista blanca;
+     * comentario opcional (textarea: multilínea, ≤ 65.535 bytes, sin controles ni HTML); relee la NC (404 → error, la
+     * API respondería OK sin cerrar nada). Tras cerrar la huella de lectura deja de valer.
      */
     public BridgeResult cerrar(ObjectNode payload, SessionUser usuario) {
         for (String clave : payload.propertyNames()) {
@@ -904,9 +893,6 @@ public class NoConformidadesBridgeHandler {
         if (!vigente.ok()) {
             return vigente;
         }
-        if (estaCerrada(vigente.data())) {
-            return BridgeResult.error(MENSAJE_YA_CERRADA);
-        }
         ObjectNode cuerpo = mapper.createObjectNode();
         cuerpo.put("cerradoPor", autorDeSesion(usuario));
         if (comentario.isEmpty()) {
@@ -924,11 +910,6 @@ public class NoConformidadesBridgeHandler {
     /** Recurso auditado de cerrar: "nc:<id>:cierre". */
     public static String recursoCierre(ObjectNode payload, Object dataRespuesta) {
         return recursoNc(payload) + ":cierre";
-    }
-
-    private static boolean estaCerrada(Object data) {
-        JsonNode nc = data instanceof JsonNode d ? d : null;
-        return "CERRADA".equalsIgnoreCase(textoDe(nc, "estadoGestion")) || "CERRADA".equalsIgnoreCase(textoDe(nc, "estado"));
     }
 
     private record CuerpoNc(ObjectNode cuerpo, BridgeResult error) {
@@ -1018,8 +999,8 @@ public class NoConformidadesBridgeHandler {
                 return CuerpoNc.error(MENSAJE_PARAMETRO_INVALIDO);
             }
             java.math.BigDecimal v = n.decimalValue();
-            if (v.signum() < 0 || v.compareTo(MAX_CANTIDAD) > 0) {
-                return CuerpoNc.error("La cantidad " + campo + " no es válida (0 a 9.999.999.999,99).");
+            if (v.abs().compareTo(MAX_CANTIDAD) > 0) {
+                return CuerpoNc.error("La cantidad " + campo + " supera el máximo permitido (9.999.999.999,99).");
             }
             numeros.put(campo, n); // se reenvía el número tal como lo manda Photino
         }

@@ -301,17 +301,18 @@ class BridgeFase3jTest {
             crear(s, payload(Map.of("cliente", malo))).andExpect(jsonPath("$.error").value("Parámetro inválido."));
         }
         crear(s, payload(Map.of("cantRequerida", "1000"))).andExpect(jsonPath("$.error").value("Parámetro inválido."));
-        crear(s, payload(Map.of("cantRechazada", -1))).andExpect(jsonPath("$.error").value("La cantidad cantRechazada no es válida (0 a 9.999.999.999,99)."));
-        crear(s, payload(Map.of("cantRequerida", 1e11))).andExpect(jsonPath("$.error").value("La cantidad cantRequerida no es válida (0 a 9.999.999.999,99)."));
+        crear(s, payload(Map.of("cantRechazada", -1e11))).andExpect(jsonPath("$.error").value("La cantidad cantRechazada supera el máximo permitido (9.999.999.999,99)."));
+        crear(s, payload(Map.of("cantRequerida", 1e11))).andExpect(jsonPath("$.error").value("La cantidad cantRequerida supera el máximo permitido (9.999.999.999,99)."));
         crear(s, payload(Map.of("fechaSalida", "2026-13-01"))).andExpect(jsonPath("$.error").value("La fecha fechaSalida no es válida (formato AAAA-MM-DD)."));
         crear(s, payload(Map.of("fechaIngreso", "28-09-2026"))).andExpect(jsonPath("$.error").value("La fecha fechaIngreso no es válida (formato AAAA-MM-DD)."));
         crear(s, payload(Map.of("fechaFabricacion", 20260928))).andExpect(jsonPath("$.error").value("Parámetro inválido."));
         assertThat(API.peticionesNoConformidades()).isEmpty();
         crear(s, payload(Map.of("tipoPnc", "Rechazo Cliente", "disposicion", "Reposición y destrucción", "cantDestruida", 0,
-                "cantRepuesta", 9999999999.99, "fechaSalida", "2026-02-28"))).andExpect(jsonPath("$.ok").value(true));
+                "cantRepuesta", 9999999999.99, "fechaSalida", "2026-02-28", "cantRecuperada", -5))).andExpect(jsonPath("$.ok").value(true));
         JsonNode c = mapper.readTree(unica().cuerpo());
         assertThat(c.get("disposicion").asString()).isEqualTo("Reposición y destrucción");
         assertThat(c.get("cantRepuesta").decimalValue()).isEqualByComparingTo("9999999999.99");
+        assertThat(c.get("cantRecuperada").intValue()).isEqualTo(-5); // Photino/API aceptan negativas (min=0 no se valida)
         assertThat(c.get("proceso").asString()).isEqualTo("Rechazo Cliente");
     }
 

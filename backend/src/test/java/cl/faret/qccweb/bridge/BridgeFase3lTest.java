@@ -44,7 +44,7 @@ import tools.jackson.databind.node.ObjectNode;
 /**
  * Fase 3l — noConformidades.update (editar NC). Mismo contrato que create (validación común, probada en 3j) +
  * IDENTIDAD (actualizadoPor → sesión), LOST UPDATE (huella del detalle abierto en la sesión, relectura antes del PUT),
- * NC CERRADA no editable (decisión 3l-a). API SIMULADA: se verifica el cuerpo EXACTO que recibe upstream.
+ * NC CERRADA editable igual que Photino (Fase 3o). API SIMULADA: se verifica el cuerpo EXACTO que recibe upstream.
  */
 @SpringBootTest(properties = {
     "spring.config.name=" + QccWebGatewayApplication.CONFIG_NAME,
@@ -59,7 +59,6 @@ class BridgeFase3lTest {
     private static final String MSG_SIN_LEER = "Abre la no conformidad antes de editarla.";
     private static final String MSG_CONFLICTO = "La no conformidad fue modificada por otra persona desde que la abriste. "
             + "Ciérrala y vuelve a abrirla para ver los cambios antes de editar.";
-    private static final String MSG_CERRADA = "La no conformidad está cerrada; no se puede editar.";
     private static final String MSG_HTML = "El texto no puede contener etiquetas HTML (por ejemplo \"<b>\" o \"<script>\").";
     private static final String MSG_CARACTERES = "El texto contiene caracteres no permitidos.";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
@@ -236,13 +235,14 @@ class BridgeFase3lTest {
     }
 
     @Test
-    void ncCerradaOInexistenteNoSeEdita() throws Exception {
+    void ncCerradaSeEditaComoEnPhotinoEInexistenteNo() throws Exception {
         MockHttpSession s = login("admin1");
-        abrir(s, 503);
-        editar(s, payload(Map.of("id", 503))).andExpect(jsonPath("$.error").value(MSG_CERRADA));
+        abrir(s, 503); // CERRADA en el fake
+        editar(s, payload(Map.of("id", 503))).andExpect(jsonPath("$.ok").value(true));
         crear(s, "{\"action\":\"noConformidades.get\",\"id\":404}").andExpect(jsonPath("$.ok").value(false));
         editar(s, payload(Map.of("id", 404))).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
-        assertThat(API.ncActualizadasRecibidas()).isEmpty();
+        assertThat(API.ncActualizadasRecibidas()).hasSize(1);
+        assertThat(API.ncActualizadasRecibidas().get(0).ncId()).isEqualTo(503);
     }
 
     // ------------------------------------------------------------------ lista blanca y validación común

@@ -27,7 +27,7 @@
     var BRIDGE_ARCHIVO_URL = "api/v1/bridge/archivo";
     var ACCIONES_ARCHIVO = { "noConformidades.adjuntos.subir": true };
     var AUTH_URL = "api/v1/auth/";
-    var TIMEOUT_MS = 30000;
+    var TIMEOUT_MS = 35000; // > read-timeout del gateway (30 s, = Photino): el gateway responde primero
     var EMPRESA_WEB = "INNPACK"; // Fase 1b: solo login INNPACK
 
     // Claves de "Recordar usuario" de Photino que en web NUNCA se guardan: contraseñas, rol,

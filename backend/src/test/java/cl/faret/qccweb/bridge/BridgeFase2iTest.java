@@ -282,10 +282,12 @@ class BridgeFase2iTest {
     @Test
     void adjuntoFueraDeListaFalsoVacioCorruptoOExcesivoSeRechaza() throws Exception {
         MockHttpSession sesion = login("operador1");
+        // Paridad (Fase 3o): una imagen real (GIF) se muestra como en Photino, con el tipo detectado por la firma.
+        accion(sesion, "{\"action\":\"" + ABRIR + "\",\"id\":501,\"adjuntoId\":5}")
+                .andExpect(jsonPath("$.ok").value(true)).andExpect(jsonPath("$.data.tipoMime").value("image/gif"));
         String[][] casos = {
             {"404", "Adjunto no encontrado"},
             {"4", "El adjunto no es válido."},
-            {"5", "El adjunto no es válido."},
             {"6", "El adjunto no es válido."},
             {"600", "El adjunto no trae contenido"},
             {"800", "El adjunto no es válido."},
@@ -298,7 +300,7 @@ class BridgeFase2iTest {
                     .andExpect(jsonPath("$.data").value((Object) null))
                     .andExpect(jsonPath("$.error").value(caso[1]));
         }
-        assertThat(API.peticionesNoConformidades()).hasSize(casos.length);
+        assertThat(API.peticionesNoConformidades()).hasSize(casos.length + 1); // + el GIF abierto al inicio
         for (String data : List.of(",\"adjuntoId\":1", ",\"id\":\"abc\",\"adjuntoId\":1", ",\"data\":{\"id\":501,\"adjuntoId\":1}")) {
             accion(sesion, "{\"action\":\"" + ABRIR + "\"" + data + "}")
                     .andExpect(jsonPath("$.ok").value(false))
@@ -309,7 +311,7 @@ class BridgeFase2iTest {
                     .andExpect(jsonPath("$.ok").value(false))
                     .andExpect(jsonPath("$.error").value("Falta el id del adjunto"));
         }
-        assertThat(API.peticionesNoConformidades()).hasSize(casos.length);
+        assertThat(API.peticionesNoConformidades()).hasSize(casos.length + 1); // + el GIF abierto al inicio
     }
 
     // ------------------------------------------------------------- escrituras / roles / empresa

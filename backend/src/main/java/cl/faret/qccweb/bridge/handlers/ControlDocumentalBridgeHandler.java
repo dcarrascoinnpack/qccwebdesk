@@ -6,6 +6,7 @@ import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.InnpackRespuestas;
 import cl.faret.qccweb.upstream.UriEscape;
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import tools.jackson.databind.JsonNode;
@@ -124,9 +125,11 @@ public class ControlDocumentalBridgeHandler {
     }
 
     /**
-     * Valida un adjunto {nombreArchivo, tipoMime, contenidoBase64} de la API (contenido, tamaño,
-     * base64, firma real vs. MIME, nombre) y arma el contrato {previsualizable, nombreArchivo, tipoMime,
-     * contenidoBase64} que web-bridge.js previsualiza o descarga. Compartido con Laboratorio (2l).
+     * Valida un adjunto {nombreArchivo, tipoMime, contenidoBase64} de la API (contenido, tamaño, base64, nombre) y
+     * arma el contrato {previsualizable, nombreArchivo, tipoMime, contenidoBase64} que web-bridge.js previsualiza o
+     * descarga. Compartido con Laboratorio (2l). Paridad (Fase 3o): se previsualiza en los MISMOS casos que Photino
+     * (MIME declarado image/* o application/pdf, que la API asigna por extensión), pero se sirve con el tipo REAL
+     * detectado por la firma (PDF/PNG/JPEG/GIF/BMP/WEBP); si la firma no es de un tipo seguro se descarga.
      */
     public static BridgeResult adjuntoParaNavegador(BridgeResult upstream, String nombrePorDefecto, int maxBase64Chars, ObjectMapper mapper) {
         if (!upstream.ok()) {
@@ -146,14 +149,29 @@ public class ControlDocumentalBridgeHandler {
         }
         String tipoMime = textoDe(adjunto, "tipoMime").trim().toLowerCase();
         String nombre = nombreArchivoSeguro(textoDe(adjunto, "nombreArchivo"), nombrePorDefecto);
-        boolean previsualizable = firmaCoincide(tipoMime, inicio);
+        String real = mimePorFirma(inicio);
+        boolean previsualizable = real != null && (tipoMime.startsWith("image/") || tipoMime.equals("application/pdf"));
 
         ObjectNode salida = mapper.createObjectNode();
         salida.put("previsualizable", previsualizable);
         salida.put("nombreArchivo", nombre);
-        salida.put("tipoMime", previsualizable || MIME_DESCARGA.contains(tipoMime) ? tipoMime : "application/octet-stream");
+        salida.put("tipoMime", previsualizable ? real : MIME_DESCARGA.contains(tipoMime) ? tipoMime : "application/octet-stream");
         salida.put("contenidoBase64", base64);
         return BridgeResult.ok(salida);
+    }
+
+    /** Tipos previsualizables en orden de detección (sin el alias image/jpg). */
+    private static final List<String> MIME_DETECTABLES = List.of("application/pdf", "image/png", "image/jpeg", "image/gif",
+            "image/webp", "image/bmp");
+
+    /** Tipo REAL según la firma de los primeros bytes (PDF o imagen segura); null si no es ninguno. */
+    public static String mimePorFirma(byte[] inicio) {
+        for (String mime : MIME_DETECTABLES) {
+            if (inicio != null && firmaCoincide(mime, inicio)) {
+                return mime;
+            }
+        }
+        return null;
     }
 
     /** Primeros 12 bytes del contenido (16 chars base64); null si el base64 es inválido. */

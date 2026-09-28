@@ -46,13 +46,6 @@ public class BridgeConfig {
     static final List<String> CATALOGOS_CREAR_HABILITADOS = List.of(
             "clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas", "familiasProducto",
             "impactos", "niveles");
-    /**
-     * Roles de `crear` por catálogo cuando la web es MÁS estricta que Photino (por defecto: escritura operativa).
-     * `niveles` (Fase 3i): solo admin_ti de forma INICIAL — el nivel define la severidad (CRIT/MAYOR/MENOR; otro →
-     * MEDIA) y el filtro Nivel tiene opciones fijas. Pendiente alinear con Photino (operador/admin) cuando el nivel
-     * quede acotado a la severidad de forma segura (ver docs/matriz-escrituras-propuesta.md, Fase 3i).
-     */
-    static final Map<String, Set<String>> ROLES_CATALOGO_CREAR_RESTRINGIDOS = Map.of("niveles", Set.of("admin_ti"));
 
     @Bean
     public InnpackApiClient innpackApiClient(AuthProperties properties) {
@@ -315,22 +308,22 @@ public class BridgeConfig {
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("subidoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                         noConformidades::adjuntosSubir, NoConformidadesBridgeHandler::recursoAdjunto),
-                // Fase 3l — editar NC: mismo contrato que create; identidad "actualizadoPor" = sesión; exige haber
-                // abierto la NC (huella de noConformidades.get) y rechaza si cambió (lost update), si no existe o si está
-                // CERRADA (más estricto que Photino); recurso "nc:<id>".
+                // Fase 3l/3o — editar NC: mismo contrato que create; identidad "actualizadoPor" = sesión; exige haber
+                // abierto la NC (huella de noConformidades.get) y rechaza si cambió (lost update) o no existe; una NC
+                // cerrada se edita igual que en Photino; recurso "nc:<id>".
                 new ActionPolicy.Regla(
                         "noConformidades.update", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                         noConformidades::ncActualizar, (p, data) -> NoConformidadesBridgeHandler.recursoNc(p)),
-                // Fase 3m — modal "Gestionar" (admin/admin_ti según la matriz): gestión sin CERRADA (se cierra solo con
-                // cerrar), nunca sobre una NC cerrada, con lost update; cerrar rechaza una NC ya cerrada. Identidad de sesión.
+                // Fase 3m/3o — modal "Gestionar": mismas reglas y roles que Photino (cualquier usuario INNPACK; la matriz de
+                // negocio más restrictiva queda como propuesta para TODO el sistema); identidad de sesión y lost update.
                 new ActionPolicy.Regla(
-                        "noConformidades.gestion.actualizar", Set.of("INNPACK"), ROLES_ADMIN_INNPACK,
+                        "noConformidades.gestion.actualizar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                         noConformidades::gestionActualizar, NoConformidadesBridgeHandler::recursoGestion),
                 new ActionPolicy.Regla(
-                        "noConformidades.cerrar", Set.of("INNPACK"), ROLES_ADMIN_INNPACK,
+                        "noConformidades.cerrar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("cerradoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                         noConformidades::cerrar, NoConformidadesBridgeHandler::recursoCierre),
                 // Fase 3n — estado de una acción correctiva (modal de análisis): solo `estado` viene del navegador; el
@@ -342,7 +335,7 @@ public class BridgeConfig {
                         Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                         noConformidades::accionesActualizar, NoConformidadesBridgeHandler::recursoAccionActualizada)));
         // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas), 3h
-        // (familiasProducto, impactos; largo 50) y 3i (niveles; largo 20, solo admin_ti) — escrituras del combo de
+        // (familiasProducto, impactos; largo 50) y 3i (niveles; largo 20) — escrituras del combo de
         // catálogos (acción dinámica, mismo contrato): identidad "creadoPor" = sesión; `nombre` con el contrato real
         // de la API (trim/colapso, ≤ largo de la columna, sin HTML ni controles); duplicados resueltos por la API;
         // recurso "catalogo:<cat>:<id>".
@@ -350,8 +343,7 @@ public class BridgeConfig {
         for (String catalogo : CATALOGOS_CREAR_HABILITADOS) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".crear", Set.of("INNPACK"),
-                    ROLES_CATALOGO_CREAR_RESTRINGIDOS.getOrDefault(catalogo,
-                            ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO),
+                    ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                     Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                     noConformidades.catalogoCrear(catalogo),
                     (p, data) -> NoConformidadesBridgeHandler.recursoCatalogo(catalogo, data)));

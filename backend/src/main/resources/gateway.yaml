@@ -43,7 +43,7 @@ qcc:
       # Misma API y endpoint de login que usa Photino (config.json → QualityControlInnpackApi).
       innpack-api-base-url: ${QCC_INNPACK_API_BASE_URL:https://api.faret.cl/innpack}
       connect-timeout: 5s
-      read-timeout: 15s
+      read-timeout: 30s   # = HttpClient.Timeout de Photino (InnpackApiClient.cs); el shim espera 35 s
       session-idle-timeout: ${QCC_WEB_SESSION_IDLE:30m}
       session-max-duration: ${QCC_WEB_SESSION_MAX:8h}   # además se respeta el exp del JWT upstream
       login-min-duration: 500ms
