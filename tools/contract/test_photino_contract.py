@@ -753,28 +753,30 @@ class LimpiezaCsTest(unittest.TestCase):
 
 
 PHOTINO_REAL = os.path.join(os.path.dirname(__file__), "..", "..", "..", "qualitycontrol_desktop_faret")
+# Commit de Photino que la web reproduce (Fase 3r: 6c42e05 → dd147ad, NC Internas). El módulo PNC es idéntico en ambos.
+REFERENCIA = "dd147ad"
 
 
 @unittest.skipUnless(os.path.isdir(os.path.join(PHOTINO_REAL, ".git")), "repo Photino no disponible")
 class PhotinoRealTest(unittest.TestCase):
-    """Contra el commit real de Photino 1.8.12 (solo lectura vía git)."""
+    """Contra el commit real de Photino que la web reproduce (solo lectura vía git)."""
 
-    def test_commit_6c42e05_con_baseline_versionada(self):
-        fuente = pc.GitSource(PHOTINO_REAL, "6c42e05")
+    def test_referencia_web_con_baseline_versionada(self):
+        fuente = pc.GitSource(PHOTINO_REAL, REFERENCIA)
         inv = pc.Inventario(fuente)
         raiz = os.path.join(os.path.dirname(__file__), "..", "..")
         baseline = pc.leer_json(os.path.join(raiz, "contract", "baseline.json"))
         web = {"acciones": [{"accion": a} for a in baseline["acciones"]]}
         rep = pc.construir_reporte(fuente, inv, pc.comparar(inv, web, baseline), web, baseline)
-        self.assertEqual(rep["resumen"]["accionesFrontend"], 236)
-        self.assertEqual(rep["resumen"]["noUsadas"], 29)
+        self.assertEqual(rep["resumen"]["accionesFrontend"], 238)
+        self.assertEqual(rep["resumen"]["noUsadas"], 33)
         self.assertEqual(rep["resumen"]["photinoSinHandler"], 0)
         self.assertEqual(rep["resumen"]["dinamicasSinResolver"], 0)
         self.assertEqual(rep["resumen"]["compatibles"], len(baseline["acciones"]))
         self.assertFalse(rep["bloqueante"])
 
     def test_accion_dinamica_de_catalogo_cubre_metodo_generador_y_transformacion(self):
-        fuente = pc.GitSource(PHOTINO_REAL, "6c42e05")
+        fuente = pc.GitSource(PHOTINO_REAL, REFERENCIA)
         js = fuente.read(pc.WWW + "modules/no-conformidades/no-conformidades.controller.js")
         habilitados = ["clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas",
                        "familiasProducto", "impactos", "niveles"]
@@ -796,7 +798,7 @@ class PhotinoRealTest(unittest.TestCase):
     def test_alta_de_nc_cubre_armado_de_payload_y_cabecera(self):
         # noConformidades.create: literal en `const action = ... ? update : create`; el gateway recalcula la cabecera
         # con la lógica de _guardarForm/_mapNivelASeveridad, así que un cambio ahí debe llevar a REVISAR.
-        js = pc.GitSource(PHOTINO_REAL, "6c42e05").read(pc.WWW + "modules/no-conformidades/no-conformidades.controller.js")
+        js = pc.GitSource(PHOTINO_REAL, REFERENCIA).read(pc.WWW + "modules/no-conformidades/no-conformidades.controller.js")
         fr = pc.fragmentos_llamado_js(js, "noConformidades.create")
         self.assertEqual(len(fr), 1)
         for pieza in ("metodo_hasta_send: async _guardarForm()", "metodo: _camposMap()", "metodo: _leerCampo(campo, tipo)",

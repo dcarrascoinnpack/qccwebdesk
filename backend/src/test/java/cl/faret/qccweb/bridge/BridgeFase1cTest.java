@@ -142,7 +142,7 @@ class BridgeFase1cTest {
         MockHttpSession sesion = login("admin1");
         int antes = API.llamadasDashboard();
         for (String accion : List.of("usuarios.create", "inicio.frecuencias.actualizar", "excel.guardar",
-                "noConformidades.eliminar", "accion.inventada", "Inicio.getDashboard", "inicio.getdashboard")) {
+                "noConformidades.catalogos.clientes.desactivar", "accion.inventada", "Inicio.getDashboard", "inicio.getdashboard")) {
             bridge(sesion, "{\"action\":\"" + accion + "\"}")
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.ok").value(false))
@@ -176,7 +176,7 @@ class BridgeFase1cTest {
     }
 
     @Test
-    void soloAccionesHabilitadasHastaFase3q() {
+    void soloAccionesHabilitadasHastaFase3r() {
         assertThat(policy.accionesRegistradas()).containsExactlyInAnyOrder(
                 "inicio.getDashboard", "maquinasSeguimiento.obtenerResumen",
                 "dashboard.obtenerFiltros", "dashboard.obtenerResumen",
@@ -207,7 +207,9 @@ class BridgeFase1cTest {
                 "noConformidades.catalogos.familiasProducto.crear", "noConformidades.catalogos.impactos.crear",
                 "noConformidades.catalogos.niveles.crear", "noConformidades.create", "noConformidades.adjuntos.subir",
                 "noConformidades.update", "noConformidades.gestion.actualizar", "noConformidades.cerrar",
-                "noConformidades.acciones.actualizar", "recepcion.bobinas.muestrear");
+                "noConformidades.acciones.actualizar", "recepcion.bobinas.muestrear",
+                "noConformidades.eliminar", "noConformidades.adjuntos.eliminar",
+                "noConformidades.catalogos.nciAreas.list", "noConformidades.catalogos.nciTiposDesviacion.list");
     }
 
     // ------------------------------------------------------ manipulación desde DevTools

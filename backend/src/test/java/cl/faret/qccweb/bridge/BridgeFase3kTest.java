@@ -265,7 +265,7 @@ class BridgeFase3kTest {
         Map<String, Object> d = policy.describir().stream().filter(x -> x.get("accion").equals(SUBIR)).findFirst().orElseThrow();
         assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti", "operador"));
         assertThat(d.get("identidad")).isEqualTo(Map.of("subidoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO));
-        assertThat(policy.accionesRegistradas()).doesNotContain("noConformidades.adjuntos.eliminar");
+        assertThat(policy.accionesRegistradas()).doesNotContain("noConformidades.catalogos.nciAreas.crear");
         MockHttpSession s = login("operador1");
         subir(s, payload(Map.of("id", 777))).andExpect(jsonPath("$.error").value("La no conformidad está cerrada, no se pueden agregar adjuntos"));
         subir(s, payload(Map.of("id", 404))).andExpect(jsonPath("$.error").value("No conformidad no encontrada"));

@@ -1023,6 +1023,24 @@ public final class FakeInnpackApi implements AutoCloseable {
             }
             return;
         }
+        java.util.regex.Matcher ncDel = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && ncDel.matches()) {
+            // Como NoConformidadesController.Eliminar: borrado lógico, siempre OK (la API no verifica existencia).
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + ncDel.group(1) + "},\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher adjDel = java.util.regex.Pattern.compile("^/api/no-conformidades/(\\d+)/adjuntos/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && adjDel.matches()) {
+            // Como AdjuntosEliminar: NC cerrada (777) o adjunto inexistente (404) → 400 de negocio.
+            if (adjDel.group(1).equals("777")) {
+                responder(ex, 400, fallo("La no conformidad está cerrada, no se pueden eliminar adjuntos"));
+            } else if (adjDel.group(2).equals("404")) {
+                responder(ex, 400, fallo("Adjunto no encontrado"));
+            } else {
+                responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"mensaje\":\"Adjunto eliminado correctamente\"},\"errors\":null}");
+            }
+            return;
+        }
         if (!ex.getRequestMethod().equals("GET")) {
             responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
             return;
@@ -1035,7 +1053,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         String fin = ",\"errors\":null}";
         java.util.regex.Matcher cat = java.util.regex.Pattern.compile("^/api/nc-catalogos/([A-Za-z]+)$").matcher(path);
         if (cat.matches()) {
-            if (!java.util.List.of(cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler.CATALOGOS).contains(cat.group(1))) {
+            if (!java.util.List.of(cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler.CATALOGOS).contains(cat.group(1))
+                    && !java.util.List.of(cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler.CATALOGOS_NCI).contains(cat.group(1))) {
                 responder(ex, 404, fallo("Catálogo no reconocido"));
                 return;
             }
@@ -1101,6 +1120,9 @@ public final class FakeInnpackApi implements AutoCloseable {
                 case "/seguimiento" -> responder(ex, 200, ok + (id == 901
                         // Comentario malicioso guardado desde Photino (que no valida): la web debe mostrarlo sin ejecutarlo.
                         ? "[{\"id\":9,\"comentario\":\"<img src=x onerror=alert(1)> & 'x' \\\"y\\\" ñ\",\"autor\":\"<b>Mallory</b>\",\"creadoEn\":\"2026-09-20T10:00:00\"}]"
+                        : id == 902
+                        // Texto normal con & < comillas (sin marcado): la web NO lo escapa (Fase 3r; NC Internas escapa en la vista).
+                        ? "[{\"id\":2,\"comentario\":\"R&D 5<6 'x' \\\"y\\\"\",\"autor\":\"Ana & Co\"}]"
                         : "[{\"id\":1,\"comentario\":\"Revisión ñ\",\"autor\":\"María\",\"usuarioDelToken\":" + sub + "}]") + fin);
                 case "/analisis" -> {
                     JsonNode a = analisisDe(id);

@@ -167,8 +167,9 @@ class BridgeFase2iTest {
             }
         }
         assertThat(API.peticionesNoConformidades()).isEmpty();
+        // Photino dd147ad reenvía empresa (NC Internas): la web la toma SIEMPRE de la sesión, nunca del navegador.
         accion(sesion, "{\"action\":\"" + LIST + "\",\"empresa\":\"FARET\"}").andExpect(status().isOk());
-        assertThat(API.peticionesNoConformidades()).containsExactly(BASE + "?page=1&pageSize=50");
+        assertThat(API.peticionesNoConformidades()).containsExactly(BASE + "?page=1&pageSize=50&empresa=INNPACK");
     }
 
     @Test
@@ -319,7 +320,7 @@ class BridgeFase2iTest {
     @Test
     void escriturasDelModuloSiguenBloqueadas() throws Exception {
         MockHttpSession admin = login("admin1");
-        assertThat(ESCRITURAS).hasSize(11); // 3a-3c, crear en los 9 catalogos (3d-3i; niveles solo admin_ti), create (3j), adjuntos.subir (3k), update (3l), gestion/cerrar (3m), acciones.actualizar (3n) ya habilitadas
+        assertThat(ESCRITURAS).hasSize(9); // solo quedan los desactivar de catálogos; eliminar y adjuntos.eliminar habilitados en 3r
         for (String escritura : ESCRITURAS) {
             accion(admin, "{\"action\":\"" + escritura + "\",\"id\":501,\"adjuntoId\":1,\"accionId\":3,\"nombre\":\"x\"}")
                     .andExpect(status().isForbidden())
@@ -359,8 +360,10 @@ class BridgeFase2iTest {
                         && !a.equals("noConformidades.update")
                         && !a.equals("noConformidades.gestion.actualizar")
                         && !a.equals("noConformidades.cerrar")
-                        && !a.equals("noConformidades.acciones.actualizar")).toList();
-        assertThat(lecturas).hasSize(18);
+                        && !a.equals("noConformidades.acciones.actualizar")
+                        && !a.equals("noConformidades.eliminar")
+                        && !a.equals("noConformidades.adjuntos.eliminar")).toList();
+        assertThat(lecturas).hasSize(20); // 18 + catálogos de NC Internas nciAreas/nciTiposDesviacion (3r)
         for (String a : lecturas) {
             assertThat(policy.evaluar(a, usuario("INNPACK", "operador"))).isInstanceOf(ActionPolicy.Decision.Permitida.class);
             assertThat(policy.evaluar(a, usuario("FARET", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
@@ -423,8 +426,7 @@ class BridgeFase2iTest {
     // ------------------------------------------------------------------------- helpers
 
     private static List<String> escrituras() {
-        List<String> e = new ArrayList<>(List.of("noConformidades.eliminar",
-                "noConformidades.adjuntos.eliminar"));
+        List<String> e = new ArrayList<>();
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
             if (!List.of("clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas", "familiasProducto",
                     "impactos", "niveles").contains(catalogo)) { // habilitadas en 3d-3i

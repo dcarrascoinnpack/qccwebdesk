@@ -82,6 +82,26 @@ public class InnpackApiClient {
         return enviarJson(HttpMethod.PUT, usuario, path, cuerpo);
     }
 
+    /** DELETE autenticado (borrados lógicos de la API). Sin reintentos, como las demás escrituras. */
+    public Respuesta delete(SessionUser usuario, String path) {
+        ResponseEntity<String> r;
+        try {
+            r = restClient.delete()
+                    .uri(URI.create(baseUrl + path))
+                    .accept(MediaType.APPLICATION_JSON)
+                    .headers(h -> h.setBearerAuth(usuario.upstreamToken()))
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {})
+                    .toEntity(String.class);
+        } catch (RestClientException e) {
+            return new Respuesta(0, null);
+        }
+        if (r.getStatusCode().value() == 401) {
+            throw new UpstreamNoAutorizadoException();
+        }
+        return new Respuesta(r.getStatusCode().value(), r.getBody());
+    }
+
     /** PATCH JSON autenticado (actualizaciones parciales, p. ej. gestión de NC). Mismas garantías: sin reintentos. */
     public Respuesta patchJson(SessionUser usuario, String path, JsonNode cuerpo) {
         return enviarJson(HttpMethod.PATCH, usuario, path, cuerpo);

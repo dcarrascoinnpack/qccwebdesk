@@ -14,14 +14,15 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **19** (`recepcion.bobinas.muestrear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.gestion.actualizar`,
+Escrituras habilitadas en la web: **21** (`recepcion.bobinas.muestrear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+`noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-mismos roles que Photino). Las otras 62 siguen denegadas por `ActionPolicy`
+mismos roles que Photino). Las otras 60 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
-- Evidencia: Photino `6c42e05` (v1.8.12) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
+- Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
   API INNPACK `qualitycontrolinnpack_sqlserver_port` (atributos `[Authorize]`, servicios). Extraída con el
   inventario del contract check y revisada a mano en los casos dudosos.
 - Generada el 2026-09-25. Toda modificación posterior se hace editando este archivo (y el estado de cada fila).
@@ -63,7 +64,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 62 APROBADA · 19 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 60 APROBADA · 21 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -149,8 +150,8 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | `noConformidades.cerrar` | POST `api/no-conformidades/{id}/cerrar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `cerradoPor` | `cerradoPor` ← nombreCompleto | cierra la NC (CERRADA) | no hay 'reabrir' en la UI | **MEDIO** | igual que Photino (cerrar otra vez vuelve a registrar quién/cuándo); cerradoPor de sesión | VALIDADA (Fase 3m/3o, gateway 0.4.0) |
 | `noConformidades.gestion.actualizar` | PATCH `api/no-conformidades/{id}/gestion` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; NO tocar: responsable (dato de negocio) | asigna responsable, estado de gestión y fecha compromiso | sí: volver a editar | **MEDIO** | igual que Photino (acepta CERRADA y reabre); seguridad: lost update, identidad | VALIDADA (Fase 3m/3o, gateway 0.4.0) |
 | `noConformidades.update` | PUT `api/no-conformidades/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | edita campos de la NC (actualización parcial) | sí: volver a editar | **MEDIO** | sobrescribe sin historial: lista blanca, cabecera recalculada, lost update (NC cerrada editable como Photino) | VALIDADA (Fase 3l/3o, gateway 0.4.0) |
-| `noConformidades.adjuntos.eliminar` | DELETE `api/no-conformidades/{id}/adjuntos/{adjuntoId}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un adjunto | no desde la UI | **ALTO** | destructivo; sin autor | APROBADA |
-| `noConformidades.eliminar` | DELETE `api/no-conformidades/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto | borrado lógico de la NC | no desde la UI | **ALTO** | destructivo | APROBADA |
+| `noConformidades.adjuntos.eliminar` | DELETE `api/no-conformidades/{id}/adjuntos/{adjuntoId}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un adjunto | no desde la UI | **ALTO** | destructivo; sin autor (auditoría del gateway `nc:<id>:adjunto:<id>:eliminado`) | VALIDADA (Fase 3r, gateway 0.4.0; roles = Photino) |
+| `noConformidades.eliminar` | DELETE `api/no-conformidades/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto | borrado lógico de la NC | no desde la UI | **ALTO** | destructivo; `actualizadoPor` de sesión, relectura previa (inexistente → error) | VALIDADA (Fase 3r, gateway 0.4.0; roles = Photino) |
 
 ### productoTerminado (2)
 
@@ -488,6 +489,28 @@ imágenes de inspección con URL absoluta de otro origen en `ruta_archivo` (revi
 `recepcion.foto.abrir` con formatos BMP/HEIC o > 10 MB. **Acciones aún no habilitadas visibles en pantallas de lectura**
 (no son divergencias de lo COMPATIBLE): `muestraLab.materialesFps`, módulo Trazabilidad, `recepcion.sap.*`,
 `muestraLab.consultarNp/consultarRegistroProduccion/resolverBobina`.
+
+## NC Internas — paridad con Photino `dd147ad` (Fase 3r, 2026-09-28)
+
+Photino `6c42e05 → dd147ad` (sigue v1.8.12) agrega **NC Internas** (INNPACK `nc-internas` y FARET `faret-nc-internas`)
+sobre las mismas acciones de No Conformidades con `ambito: "INTERNA"`. La web adopta `dd147ad` como referencia.
+
+| Clase | Acciones | Web |
+|---|---|---|
+| A — lectura existente con parámetros nuevos | `noConformidades.list/resumen/exportar` (filtros `ambito`, `empresa`, `area`, `categoriaDefecto` en el orden de Photino), `filtrosOpciones` (`ambito`, `empresa`) | adaptadas; `empresa` siempre la de la sesión |
+| B — lectura nueva | `noConformidades.catalogos.nciAreas.list`, `noConformidades.catalogos.nciTiposDesviacion.list` | habilitadas (`ROLES_INNPACK`) |
+| C — escritura existente con payload nuevo | `noConformidades.create` (ámbito INTERNA), `noConformidades.update` (edición interna) | lista blanca propia `CAMPOS_NCI`, largos del esquema, horas 0–9999,99, título `tipo - NP npNv` recalculado, `ambito`/`empresa`/`creadoPor`/`actualizadoPor` de sesión, lost update igual que PNC |
+| D — escritura ya usada por Photino y ahora visible en la web | `noConformidades.eliminar`, `noConformidades.adjuntos.eliminar` | VALIDADAS (ver matriz); gestión/cierre/análisis/acciones/seguimiento/adjuntos.subir reutilizan las escrituras ya validadas |
+| E — solo FARET | `faret-nc-internas` (API FaretApi) | **pendiente**: la web no tiene sesión FARET |
+
+- **Escape**: la vista NCI escapa con `_esc` y la PNC no; la web solo escapa textos con marcado HTML (`MARCADO_HTML`), así
+  el texto normal (`R&D 5<6`) se ve igual que en Photino en ambas vistas, sin doble escape.
+- **Supuesto**: el soporte de la API para NC Internas (`ambito`, `empresa`, catálogos `nci*`, `Sql/2026_09_nc_internas.sql`)
+  está hoy **sin commitear** en `qualitycontrolinnpack_sqlserver_port`; la web replica Photino `dd147ad` asumiendo esa API
+  desplegada. Sin ella, las lecturas internas devuelven PNC/errores de la API igual que Photino.
+- Catálogos `nciAreas`/`nciTiposDesviacion`: solo lectura; `.crear/.desactivar` siguen denegadas (Photino no los crea inline).
+- Hallazgos Recepción R1–R6 (Fase 3q) siguen documentados, sin cambios.
+- Pruebas: `BridgeFase3rTest` (8), E2E CDP NC Internas 24/24 (×3), regresión PNC 3o 20/20 y Recepción 19/19.
 
 ## Recepción de Calidad — primera escritura y hallazgos (Fase 3q, 2026-09-28)
 

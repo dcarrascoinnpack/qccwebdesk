@@ -340,7 +340,16 @@ public class BridgeConfig {
                         "noConformidades.acciones.actualizar", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
-                        noConformidades::accionesActualizar, NoConformidadesBridgeHandler::recursoAccionActualizada)));
+                        noConformidades::accionesActualizar, NoConformidadesBridgeHandler::recursoAccionActualizada),
+                // Fase 3r — Photino dd147ad (NC Internas y PNC): borrado lógico de NC y de adjuntos, con los roles de Photino
+                // (cualquier usuario INNPACK); actualizadoPor ← sesión; NC releída antes de eliminar.
+                new ActionPolicy.Regla(
+                        "noConformidades.eliminar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                        noConformidades::eliminar, NoConformidadesBridgeHandler::recursoEliminada),
+                new ActionPolicy.Regla(
+                        "noConformidades.adjuntos.eliminar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), noConformidades::adjuntosEliminar, NoConformidadesBridgeHandler::recursoAdjuntoEliminado)));
         // Fase 3d (clientes), 3e (categoriasDefecto), 3f (tiposFalla, supervisores, revisores), 3g (areas), 3h
         // (familiasProducto, impactos; largo 50) y 3i (niveles; largo 20) — escrituras del combo de
         // catálogos (acción dinámica, mismo contrato): identidad "creadoPor" = sesión; `nombre` con el contrato real
@@ -356,6 +365,12 @@ public class BridgeConfig {
                     (p, data) -> NoConformidadesBridgeHandler.recursoCatalogo(catalogo, data)));
         }
         for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS) {
+            reglas.add(new ActionPolicy.Regla(
+                    "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                    noConformidades.catalogoList(catalogo)));
+        }
+        // Fase 3r — catálogos de NC Internas (Photino dd147ad): solo lectura (la pantalla no crea ni desactiva).
+        for (String catalogo : NoConformidadesBridgeHandler.CATALOGOS_NCI) {
             reglas.add(new ActionPolicy.Regla(
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                     noConformidades.catalogoList(catalogo)));

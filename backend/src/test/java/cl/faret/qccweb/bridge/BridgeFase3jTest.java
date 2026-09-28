@@ -234,13 +234,16 @@ class BridgeFase3jTest {
     @Test
     void camposFueraDelFormularioDePhotinoSeRechazanSinLlamarUpstream() throws Exception {
         MockHttpSession s = login("admin1");
-        for (String extra : List.of("empresa", "ambito", "reportadoPor", "norma", "areasSecundarias", "tiempoPerdidoHoras", "estado",
+        for (String extra : List.of("empresa", "reportadoPor", "norma", "areasSecundarias", "tiempoPerdidoHoras", "estado",
                 "estadoGestion", "responsable", "id", "usuario", "codigo", "eliminado", "pctRecuperacion", "actualizadoPor")) {
             crear(s, payload(Map.of(extra, "INTERNA")))
                     .andExpect(jsonPath("$.ok").value(false))
                     .andExpect(jsonPath("$.error").value("Campo no permitido: " + extra));
         }
         crear(s, payload(Map.of("<img src=x>", 1))).andExpect(jsonPath("$.error").value("Campo no permitido: ?"));
+        // ambito distinto de INTERNA → rechazado; INTERNA → rama NC Internas, que no acepta los campos del formulario PNC.
+        crear(s, payload(Map.of("ambito", "PRODUCTO"))).andExpect(jsonPath("$.error").value("Campo no permitido: ambito"));
+        crear(s, payload(Map.of("ambito", "INTERNA"))).andExpect(jsonPath("$.ok").value(false));
         assertThat(API.peticionesNoConformidades()).isEmpty();
     }
 
@@ -334,7 +337,7 @@ class BridgeFase3jTest {
         MockHttpSession s = login("operador1");
         crear(s, "{\"action\":\"noConformidades.adjuntos.subir\",\"id\":951,\"tipo\":\"EVIDENCIA_FOTO\",\"nombreArchivo\":\"a.png\","
                 + "\"tipoMime\":\"image/png\",\"contenidoBase64\":\"AA==\"}").andExpect(status().isForbidden());
-        for (String otra : List.of("noConformidades.eliminar", "noConformidades.adjuntos.eliminar")) {
+        for (String otra : List.of("noConformidades.catalogos.clientes.desactivar", "noConformidades.catalogos.nciAreas.crear")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);
         }
         assertThat(API.peticionesNoConformidades()).isEmpty();
