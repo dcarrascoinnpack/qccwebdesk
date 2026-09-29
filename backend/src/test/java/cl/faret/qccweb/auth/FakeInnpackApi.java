@@ -122,6 +122,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         muestraPorLote.clear();
         siguienteMuestra.set(700);
         demoraMuestraMs = 0;
+        estadosRecibidos.clear();
+        demoraEstadoMs = 0;
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
         peticionesTalleres.clear();
@@ -1249,6 +1251,43 @@ public final class FakeInnpackApi implements AutoCloseable {
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"muestraLaboratorioId\":" + id + "},\"errors\":null}");
     }
 
+    /** Cuerpos EXACTOS de PATCH api/recepcion-calidad/{id}/estado (ncId = loteId). */
+    private final java.util.List<SeguimientoRecibido> estadosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private volatile long demoraEstadoMs;
+
+    public java.util.List<SeguimientoRecibido> estadosRecibidos() {
+        return java.util.List.copyOf(estadosRecibidos);
+    }
+
+    /** Demora de la API al actualizar el estado (para superponer doble clic / sesiones concurrentes). */
+    public void demoraEstado(long ms) {
+        this.demoraEstadoMs = ms;
+    }
+
+    /** Simula que otra persona (Photino u otra sesión) actualizó el estado del lote. */
+    public void cambiarEstadoPorOtro(int loteId, String estado) {
+        estadoLote.put(loteId, estado);
+    }
+
+    /**
+     * Como RecepcionCalidadRepository.ActualizarEstado: un UPDATE directo, sin verificar existencia del lote ni
+     * validar el valor de estado (la API real acepta cualquier string).
+     */
+    private void actualizarEstado(HttpExchange ex, int loteId, int sub) throws IOException {
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        estadosRecibidos.add(new SeguimientoRecibido(loteId, sub, cuerpo, ex.getRequestHeaders().getFirst("Content-Type")));
+        if (demoraEstadoMs > 0) {
+            try {
+                Thread.sleep(demoraEstadoMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        String estado = mapper.readTree(cuerpo).path("estado").asString("");
+        estadoLote.put(loteId, estado);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"actualizado\":true},\"errors\":null}");
+    }
+
     /** Simula que otra persona (Photino u otra sesión) guardó otra selección del lote. */
     public void muestrearPorOtro(int loteId, String numeroBobina) {
         muestreadasPorLote.put(loteId, "[{\"numeroBobina\":\"" + numeroBobina + "\",\"seleccionTipo\":\"Manual\",\"criterioManual\":null,"
@@ -1326,6 +1365,11 @@ public final class FakeInnpackApi implements AutoCloseable {
             crearMuestra(ex, Integer.parseInt(mlab.group(1)), sub);
             return;
         }
+        java.util.regex.Matcher est = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(\\d+)/estado$").matcher(path);
+        if (ex.getRequestMethod().equals("PATCH") && est.matches()) {
+            actualizarEstado(ex, Integer.parseInt(est.group(1)), sub);
+            return;
+        }
         if (!ex.getRequestMethod().equals("GET")) {
             responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
             return;
@@ -1375,8 +1419,8 @@ public final class FakeInnpackApi implements AutoCloseable {
                         + ",\"muestraLaboratorioId\":" + muestraPorLote.get(id) + ",\"usuarioDelToken\":" + sub + "}" + fin);
                 return;
             }
-            responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"" + tipo + "\",\"proveedor\":\"Adhesivos Ñuñoa\",\"estado\":\"PendienteMuestreo\","
-                    + "\"totalBobinas\":0,\"bobinas\":[],\"pva\":{\"tieneFoto\":true},\"usuarioDelToken\":" + sub + "}" + fin);
+            responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"" + tipo + "\",\"proveedor\":\"Adhesivos Ñuñoa\",\"estado\":\"" + estadoLote(id)
+                    + "\",\"totalBobinas\":0,\"bobinas\":[],\"pva\":{\"tieneFoto\":true},\"usuarioDelToken\":" + sub + "}" + fin);
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");

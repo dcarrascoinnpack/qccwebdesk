@@ -45,10 +45,10 @@ import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Fase 3s — recepcion.muestra.crear, igual que Photino para el usuario: la API inserta una muestra de Laboratorio
- * (sin control de duplicados) y pone el lote EnAnalisis. Seguridad transparente: empresa/usuario de sesión, lista blanca,
- * lote de la empresa de sesión, creaciones serializadas por lote y detección de cambios (doble clic, otra sesión,
- * reintento tras error). API SIMULADA con estado.
+ * Fase 3t — recepcion.estado.actualizar, igual que Photino para el usuario: la API hace un UPDATE directo del estado
+ * del lote (sin autor, sin control de duplicados, sin validar el valor). Seguridad transparente: lote de la empresa de
+ * sesión (la API no filtra empresa ni eliminado — hallazgo R5), estado restringido a los 3 valores del &lt;select&gt;
+ * de Photino, detección de cambios concurrentes (huella del estado leído en el detalle) y candado por lote.
  */
 @SpringBootTest(properties = {
     "spring.config.name=" + QccWebGatewayApplication.CONFIG_NAME,
@@ -57,16 +57,17 @@ import tools.jackson.databind.node.ObjectNode;
 })
 @AutoConfigureMockMvc
 @ExtendWith(OutputCaptureExtension.class)
-class BridgeFase3sTest {
+class BridgeFase3tTest {
 
-    private static final String CREAR = "recepcion.muestra.crear";
-    private static final String MSG_FALTA = "Falta indicar el lote";
-    private static final String MSG_SIN_LEER = "Abre el detalle del lote antes de crear la muestra de Laboratorio.";
-    private static final String MSG_CONFLICTO = "El lote fue modificado por otra persona desde que lo abriste (muestra de "
-            + "Laboratorio o estado). Vuelve a abrirlo para ver los cambios.";
+    private static final String ACTUALIZAR = "recepcion.estado.actualizar";
+    private static final String MSG_FALTA = "Falta el lote o el estado";
+    private static final String MSG_INVALIDO = "Estado inválido.";
+    private static final String MSG_SIN_LEER = "Abre el detalle del lote antes de actualizar el estado.";
+    private static final String MSG_CONFLICTO = "El estado del lote fue modificado por otra persona desde que lo abriste "
+            + "(muestreo, muestra de Laboratorio o actualización de estado). Vuelve a abrirlo para ver los cambios.";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
-    private static final String PASS = "ClaveMuestraLab#2026";
+    private static final String PASS = "ClaveEstadoLote#2026";
     private static final AtomicInteger IP = new AtomicInteger(1);
 
     static {
@@ -101,70 +102,67 @@ class BridgeFase3sTest {
         API.close();
     }
 
-    /** Payload EXACTO de crearMuestra de Photino INNPACK: {action, data:{loteId}}. */
-    private static String payload(Object loteId) {
-        return "{\"action\":\"" + CREAR + "\",\"data\":{\"loteId\":" + loteId + "}}";
+    /** Payload EXACTO de actualizarEstado de Photino INNPACK: {action, data:{loteId, estado}}. */
+    private static String payload(Object loteId, Object estado) {
+        return "{\"action\":\"" + ACTUALIZAR + "\",\"data\":{\"loteId\":" + loteId + ",\"estado\":" + estado + "}}";
+    }
+
+    /** Payload con un estado simple (sin comillas en el argumento); evita colisionar con el overload (Object, Object). */
+    private static String pEstado(int loteId, String estado) {
+        return "{\"action\":\"" + ACTUALIZAR + "\",\"data\":{\"loteId\":" + loteId + ",\"estado\":\"" + estado + "\"}}";
     }
 
     // ------------------------------------------------------------------ flujo exitoso y refresco
 
     @Test
-    void creacionCorrectaConCuerpoExactoEstadoYRefresco() throws Exception {
+    void actualizacionCorrectaConCuerpoExactoYRefresco() throws Exception {
         MockHttpSession s = login("operador1");
-        JsonNode antes = abrir(s, 20);
-        assertThat(antes.get("muestraLaboratorioId").isNull()).isTrue();
+        JsonNode antes = abrir(s, 1);
         assertThat(antes.get("estado").asString()).isEqualTo("PendienteMuestreo");
-        JsonNode json = json(enviar(s, payload(20)).andExpect(status().isOk()).andReturn());
+        JsonNode json = json(enviar(s, pEstado(1, "RecibidaConforme")).andExpect(status().isOk()).andReturn());
         assertThat(json.get("ok").asBoolean()).isTrue();
-        assertThat(json.at("/data/muestraLaboratorioId").asInt()).isEqualTo(700);
-        assertThat(API.peticionesRecepcion()).containsExactly("GET /api/recepcion-calidad/20?empresa=INNPACK",
-                "GET /api/recepcion-calidad/20?empresa=INNPACK", "POST /api/recepcion-calidad/20/muestra-laboratorio");
-        SeguimientoRecibido r = API.muestrasRecibidas().get(0);
+        assertThat(json.at("/data/actualizado").asBoolean()).isTrue();
+        assertThat(API.peticionesRecepcion()).containsExactly("GET /api/recepcion-calidad/1?empresa=INNPACK",
+                "GET /api/recepcion-calidad/1?empresa=INNPACK", "PATCH /api/recepcion-calidad/1/estado");
+        SeguimientoRecibido r = API.estadosRecibidos().get(0);
         assertThat(r.sub()).isEqualTo(10);
         assertThat(r.contentType()).startsWith("application/json");
-        assertThat(mapper.readTree(r.cuerpo())).isEqualTo(mapper.readTree(
-                "{\"empresa\":\"INNPACK\",\"usuarioId\":10,\"usuarioNombre\":\"Operador Uno\"}"));
-        // Refresco inmediato (la vista reabre el detalle): muestra vinculada y lote EnAnalisis.
-        JsonNode despues = abrir(s, 20);
-        assertThat(despues.get("muestraLaboratorioId").asInt()).isEqualTo(700);
-        assertThat(despues.get("estado").asString()).isEqualTo("EnAnalisis");
+        assertThat(mapper.readTree(r.cuerpo())).isEqualTo(mapper.readTree("{\"estado\":\"RecibidaConforme\"}"));
+        // Refresco inmediato (la vista reabre el detalle): estado actualizado.
+        assertThat(abrir(s, 1).get("estado").asString()).isEqualTo("RecibidaConforme");
     }
 
     @Test
-    void crearOtraASabiendasYEnCualquierEstadoComoPhotino() throws Exception {
-        MockHttpSession s = login("admin1");
+    void losTresValoresDelSelectFuncionanEnCualquierEstadoComoPhotino() throws Exception {
+        MockHttpSession s = login("operador1");
+        for (String estado : List.of("RecibidaConforme", "RecibidaConObservacion", "NoConforme")) {
+            abrir(s, 1);
+            enviar(s, pEstado(1, estado)).andExpect(jsonPath("$.ok").value(true));
+            assertThat(abrir(s, 1).get("estado").asString()).isEqualTo(estado);
+        }
+        // También sobre un lote de bobinas (otro flujo de estado) y volviendo a un valor anterior (sin transición restringida).
         abrir(s, 20);
-        enviar(s, payload(20)).andExpect(jsonPath("$.ok").value(true));
-        // Photino deja crear otra aunque ya exista una (la vista solo lo informa): tras reabrir, se permite.
-        assertThat(abrir(s, 20).get("muestraLaboratorioId").asInt()).isEqualTo(700);
-        enviar(s, payload(20)).andExpect(jsonPath("$.data.muestraLaboratorioId").value(701));
-        assertThat(API.muestrasCreadas()).isEqualTo(2);
-        // Lote ya EnAnalisis: también se crea (la API no exige estado). loteId como string (GetInt de Photino).
-        abrir(s, 22);
-        enviar(s, payload("\"22\"")).andExpect(jsonPath("$.ok").value(true));
-        assertThat(API.estadoLote(22)).isEqualTo("EnAnalisis");
+        enviar(s, pEstado(20, "NoConforme")).andExpect(jsonPath("$.ok").value(true));
+        abrir(s, 20);
+        enviar(s, pEstado(20, "RecibidaConforme")).andExpect(jsonPath("$.ok").value(true));
+        assertThat(abrir(s, 20).get("estado").asString()).isEqualTo("RecibidaConforme");
     }
 
     @Test
-    void identidadSiempreDeSesionYRolesComoPhotino() throws Exception {
-        String[][] casos = {{"operador1", "10", "Operador Uno"}, {"admin1", "20", "Admin Uno"}, {"adminti1", "25", "Admin TI"}};
-        for (String[] c : casos) {
-            MockHttpSession s = login(c[0]);
-            abrir(s, 20);
-            enviar(s, payload(20)).andExpect(jsonPath("$.ok").value(true));
+    void identidadEmpresaYRolesComoPhotino() throws Exception {
+        for (String usuario : List.of("operador1", "admin1", "adminti1")) {
+            MockHttpSession s = login(usuario);
+            abrir(s, 1);
+            enviar(s, pEstado(1, "RecibidaConforme")).andExpect(jsonPath("$.ok").value(true));
         }
-        for (int k = 0; k < 3; k++) {
-            JsonNode cuerpo = mapper.readTree(API.muestrasRecibidas().get(k).cuerpo());
-            assertThat(cuerpo.get("usuarioId").asInt()).isEqualTo(Integer.parseInt(casos[k][1]));
-            assertThat(cuerpo.get("usuarioNombre").asString()).isEqualTo(casos[k][2]);
-            assertThat(cuerpo.get("empresa").asString()).isEqualTo("INNPACK");
-        }
-        enviar(login("consulta1"), payload(20)).andExpect(status().isForbidden())
+        enviar(login("consulta1"), pEstado(1, "RecibidaConforme")).andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
-        assertThat(policy.evaluar(CREAR, usuario("FARET", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
-        Map<String, Object> d = policy.describir().stream().filter(x -> x.get("accion").equals(CREAR)).findFirst().orElseThrow();
+        assertThat(policy.evaluar(ACTUALIZAR, usuario("FARET", "admin")))
+                .isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
+        Map<String, Object> d = policy.describir().stream().filter(x -> x.get("accion").equals(ACTUALIZAR)).findFirst().orElseThrow();
         assertThat(d.get("escritura")).isEqualTo(true);
         assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti", "operador"));
+        assertThat(d.get("identidad")).isEqualTo(Map.of());
         for (String otra : List.of("recepcion.crear", "recepcion.nc.crear", "recepcion.plan.generar",
                 "recepcion.sap.consultar", "recepcion.sap.lotes")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);
@@ -174,104 +172,104 @@ class BridgeFase3sTest {
     // ------------------------------------------------------------------ validaciones
 
     @Test
-    void identidadEmpresaYCamposInyectadosSeRechazanSinLlamarALaApi() throws Exception {
+    void camposNoPermitidosSeRechazanSinLlamarALaApi() throws Exception {
         MockHttpSession s = login("operador1");
-        abrir(s, 20);
-        for (String campo : List.of("empresa", "usuarioId", "usuarioNombre", "estado")) {
-            ObjectNode raiz = (ObjectNode) mapper.readTree(payload(20));
+        abrir(s, 1);
+        for (String campo : List.of("empresa", "usuarioId", "usuario", "usuarioNombre")) {
+            ObjectNode raiz = (ObjectNode) mapper.readTree(pEstado(1, "RecibidaConforme"));
             raiz.put(campo, "FARET");
             enviar(s, raiz.toString()).andExpect(jsonPath("$.error").value("Campo no permitido: " + campo));
-            ObjectNode enData = (ObjectNode) mapper.readTree(payload(20));
+            ObjectNode enData = (ObjectNode) mapper.readTree(pEstado(1, "RecibidaConforme"));
             ((ObjectNode) enData.get("data")).put(campo, "Otra Persona");
             enviar(s, enData.toString()).andExpect(jsonPath("$.error").value("Campo no permitido: " + campo));
         }
-        assertThat(API.muestrasRecibidas()).isEmpty();
+        assertThat(API.estadosRecibidos()).isEmpty();
     }
 
     @Test
-    void loteFaltanteInvalidoInexistenteODeOtraEmpresa() throws Exception {
+    void loteOEstadoFaltanteOInvalido() throws Exception {
         MockHttpSession s = login("operador1");
-        abrir(s, 20);
+        abrir(s, 1);
         for (String lote : List.of("0", "-1", "\"abc\"", "true", "null", "1.5", "{}")) {
-            enviar(s, payload(lote)).andExpect(jsonPath("$.error").value(MSG_FALTA));
+            enviar(s, payload(lote, "\"RecibidaConforme\"")).andExpect(jsonPath("$.error").value(MSG_FALTA));
         }
-        enviar(s, "{\"action\":\"" + CREAR + "\",\"data\":{}}").andExpect(jsonPath("$.error").value(MSG_FALTA));
-        enviar(s, "{\"action\":\"" + CREAR + "\"}").andExpect(jsonPath("$.error").value(MSG_FALTA));
-        // Lote inexistente / de otra empresa: el detalle de la empresa de sesión no lo encuentra → no se puede abrir ni crear.
-        crear(s, "{\"action\":\"recepcion.detalle\",\"data\":{\"id\":99}}").andExpect(jsonPath("$.ok").value(false));
-        enviar(s, payload(99)).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
-        assertThat(API.muestrasRecibidas()).isEmpty();
-    }
-
-    // ------------------------------------------------------------------ duplicados y concurrencia
-
-    @Test
-    void sinAbrirElLoteOConLaAperturaDeOtraSesionNoSeCrea() throws Exception {
-        enviar(login("operador1"), payload(20)).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
-        MockHttpSession a = login("operador1");
-        abrir(a, 20);
-        MockHttpSession b = login("operador1");
-        enviar(b, payload(20)).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
-        assertThat(API.muestrasRecibidas()).isEmpty();
+        // GetString de Photino: bool/objeto/array → "" (no string/número) → falta el estado.
+        for (String estado : List.of("\"\"", "\"  \"", "null", "true", "{}")) {
+            enviar(s, payload(1, estado)).andExpect(jsonPath("$.error").value(MSG_FALTA));
+        }
+        enviar(s, "{\"action\":\"" + ACTUALIZAR + "\",\"data\":{\"loteId\":1}}").andExpect(jsonPath("$.error").value(MSG_FALTA));
+        enviar(s, "{\"action\":\"" + ACTUALIZAR + "\",\"data\":{}}").andExpect(jsonPath("$.error").value(MSG_FALTA));
+        for (String estado : List.of("\"Aprobada\"", "\"recibidaconforme\"", "\"<script>\"", "123")) {
+            enviar(s, payload(1, estado)).andExpect(jsonPath("$.error").value(MSG_INVALIDO));
+        }
+        assertThat(API.estadosRecibidos()).isEmpty();
     }
 
     @Test
-    void muestraCreadaPorOtraPersonaSeDetectaSinDuplicar() throws Exception {
+    void loteInexistenteODeOtraEmpresaNoSePuedeActualizar() throws Exception {
         MockHttpSession s = login("operador1");
-        abrir(s, 20);
-        API.crearMuestraPorOtro(20);
-        enviar(s, payload(20)).andExpect(jsonPath("$.error").value(MSG_CONFLICTO));
-        assertThat(API.muestrasRecibidas()).isEmpty();
-        assertThat(abrir(s, 20).get("muestraLaboratorioId").asInt()).isEqualTo(700); // reabre y ve la muestra
-        enviar(s, payload(20)).andExpect(jsonPath("$.ok").value(true)); // crear otra a sabiendas: como Photino
+        // Nunca se pudo abrir (empresa≠INNPACK o inexistente en la simulación): sin huella registrada.
+        crear(s, "{\"action\":\"recepcion.detalle\",\"data\":{\"id\":99}}").andExpect(jsonPath("$.ok").value(false));
+        enviar(s, pEstado(99, "RecibidaConforme")).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
+        assertThat(API.estadosRecibidos()).isEmpty();
+    }
+
+    // ------------------------------------------------------------------ concurrencia
+
+    @Test
+    void sinAbrirElLoteOConLaAperturaDeOtraSesionNoSeActualiza() throws Exception {
+        enviar(login("operador1"), pEstado(1, "RecibidaConforme")).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
+        MockHttpSession a = login("operador1");
+        abrir(a, 1);
+        MockHttpSession b = login("operador1");
+        enviar(b, pEstado(1, "RecibidaConforme")).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
+        assertThat(API.estadosRecibidos()).isEmpty();
+    }
+
+    @Test
+    void estadoCambiadoPorOtraPersonaSeDetectaYReabrirLoPermite() throws Exception {
+        MockHttpSession s = login("operador1");
+        abrir(s, 1);
+        API.cambiarEstadoPorOtro(1, "NoConforme");
+        enviar(s, pEstado(1, "RecibidaConforme")).andExpect(jsonPath("$.error").value(MSG_CONFLICTO));
+        assertThat(API.estadosRecibidos()).isEmpty();
+        assertThat(abrir(s, 1).get("estado").asString()).isEqualTo("NoConforme"); // reabre y ve el cambio
+        enviar(s, pEstado(1, "RecibidaConforme")).andExpect(jsonPath("$.ok").value(true)); // a sabiendas: se permite
     }
 
     @Test
     void dosSesionesSecuencialesLaSegundaRecibeElConflicto() throws Exception {
         MockHttpSession a = login("operador1");
         MockHttpSession b = login("admin1");
-        abrir(a, 20);
-        abrir(b, 20);
-        enviar(a, payload(20)).andExpect(jsonPath("$.ok").value(true));
-        enviar(b, payload(20)).andExpect(jsonPath("$.error").value(MSG_CONFLICTO));
-        // Mismo usuario, sin reabrir (doble envío tardío): no crea otra.
-        enviar(a, payload(20)).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
-        assertThat(API.muestrasCreadas()).isEqualTo(1);
+        abrir(a, 1);
+        abrir(b, 1);
+        enviar(a, pEstado(1, "RecibidaConforme")).andExpect(jsonPath("$.ok").value(true));
+        enviar(b, pEstado(1, "NoConforme")).andExpect(jsonPath("$.error").value(MSG_CONFLICTO));
+        // Mismo usuario, sin reabrir (doble envío tardío): no actualiza de nuevo.
+        enviar(a, pEstado(1, "NoConforme")).andExpect(jsonPath("$.error").value(MSG_SIN_LEER));
+        assertThat(API.estadosRecibidos()).hasSize(1);
     }
 
     @Test
-    void dobleClicYDosSesionesSimultaneasCreanUnaSolaMuestra() throws Exception {
-        API.demoraMuestra(400);
+    void dobleClicYDosSesionesSimultaneasActualizanUnaSolaVez() throws Exception {
+        API.demoraEstado(400);
         MockHttpSession s = login("operador1");
-        abrir(s, 20);
-        List<JsonNode> doble = simultaneos(() -> json(enviar(s, payload(20)).andReturn()), () -> json(enviar(s, payload(20)).andReturn()));
+        abrir(s, 1);
+        List<JsonNode> doble = simultaneos(() -> json(enviar(s, pEstado(1, "RecibidaConforme")).andReturn()),
+                () -> json(enviar(s, pEstado(1, "RecibidaConforme")).andReturn()));
         assertThat(doble).filteredOn(j -> j.get("ok").asBoolean()).hasSize(1);
         assertThat(doble).filteredOn(j -> !j.get("ok").asBoolean()).extracting(j -> j.get("error").asString()).containsExactly(MSG_SIN_LEER);
-        assertThat(API.muestrasCreadas()).isEqualTo(1);
+        assertThat(API.estadosRecibidos()).hasSize(1);
 
         MockHttpSession a = login("operador1");
         MockHttpSession b = login("admin1");
-        abrir(a, 22);
-        abrir(b, 22);
-        List<JsonNode> dos = simultaneos(() -> json(enviar(a, payload(22)).andReturn()), () -> json(enviar(b, payload(22)).andReturn()));
+        abrir(a, 2);
+        abrir(b, 2);
+        List<JsonNode> dos = simultaneos(() -> json(enviar(a, pEstado(2, "RecibidaConObservacion")).andReturn()),
+                () -> json(enviar(b, pEstado(2, "NoConforme")).andReturn()));
         assertThat(dos).filteredOn(j -> j.get("ok").asBoolean()).hasSize(1);
         assertThat(dos).filteredOn(j -> !j.get("ok").asBoolean()).extracting(j -> j.get("error").asString()).containsExactly(MSG_CONFLICTO);
-        assertThat(API.muestrasCreadas()).isEqualTo(2);
-    }
-
-    @Test
-    void falloParcialYReintentoNoDuplican() throws Exception {
-        MockHttpSession s = login("operador1");
-        abrir(s, 23);
-        // La API inserta la muestra y falla al actualizar el estado (sin transacción): error genérico, sin reintento.
-        enviar(s, payload(23)).andExpect(jsonPath("$.error").value("Error al comunicarse con la API Innpack"));
-        assertThat(API.muestrasCreadas()).isEqualTo(1);
-        // Reintento del usuario: la huella detecta la muestra ya creada → no se crea otra.
-        enviar(s, payload(23)).andExpect(jsonPath("$.error").value(MSG_CONFLICTO));
-        assertThat(API.muestrasRecibidas()).hasSize(1);
-        JsonNode lote = abrir(s, 23);
-        assertThat(lote.get("muestraLaboratorioId").asInt()).isEqualTo(700);
-        assertThat(lote.get("estado").asString()).isEqualTo("PendienteMuestreo"); // estado parcial, igual que en Photino
+        assertThat(API.estadosRecibidos()).hasSize(2);
     }
 
     // ------------------------------------------------------------------ CSRF, 401 y auditoría
@@ -279,26 +277,27 @@ class BridgeFase3sTest {
     @Test
     void csrfY401() throws Exception {
         MockHttpSession s = login("operador1");
-        abrir(s, 20);
-        mockMvc.perform(post("/api/v1/bridge").session(s).contentType(MediaType.APPLICATION_JSON).content(payload(20)))
+        abrir(s, 1);
+        mockMvc.perform(post("/api/v1/bridge").session(s).contentType(MediaType.APPLICATION_JSON).content(pEstado(1, "RecibidaConforme")))
                 .andExpect(status().isForbidden());
         API.revocarTokens(10);
-        enviar(s, payload(20)).andExpect(status().isUnauthorized());
+        enviar(s, pEstado(1, "RecibidaConforme")).andExpect(status().isUnauthorized());
         assertThat(s.isInvalid()).isTrue();
-        assertThat(API.muestrasRecibidas()).isEmpty();
+        assertThat(API.estadosRecibidos()).isEmpty();
     }
 
     @Test
-    void auditoriaConLoteYMuestraSinTokens(CapturedOutput salida) throws Exception {
+    void auditoriaConLoteYEstadoSinTokens(CapturedOutput salida) throws Exception {
         MockHttpSession s = login("operador1");
-        abrir(s, 20);
-        enviar(s, payload(20)).andExpect(jsonPath("$.ok").value(true));
-        abrir(s, 23);
-        enviar(s, payload(23)).andExpect(jsonPath("$.ok").value(false));
+        abrir(s, 1);
+        enviar(s, pEstado(1, "RecibidaConforme")).andExpect(jsonPath("$.ok").value(true));
+        abrir(s, 2);
+        API.cambiarEstadoPorOtro(2, "NoConforme");
+        enviar(s, pEstado(2, "RecibidaConforme")).andExpect(jsonPath("$.ok").value(false));
         String log = salida.getAll();
-        assertThat(log).containsPattern("evento=ESCRITURA usuario=operador1 empresa=INNPACK accion=recepcion\\.muestra\\.crear "
-                + "recurso=recepcion:20:muestra:700 resultado=OK ms=\\d+");
-        assertThat(log).contains("accion=recepcion.muestra.crear recurso=recepcion:23:muestra resultado=ERROR");
+        assertThat(log).containsPattern("evento=ESCRITURA usuario=operador1 empresa=INNPACK accion=recepcion\\.estado\\.actualizar "
+                + "recurso=recepcion:1:estado:RecibidaConforme resultado=OK ms=\\d+");
+        assertThat(log).contains("accion=recepcion.estado.actualizar recurso=recepcion:2:estado:RecibidaConforme resultado=ERROR");
         assertThat(log).doesNotContain(FakeInnpackApi.firmaDeToken(10), PASS);
     }
 
@@ -353,7 +352,7 @@ class BridgeFase3sTest {
 
     private static Path crearWww() {
         try {
-            Path www = Files.createTempDirectory("qcc-web-fixture-3s");
+            Path www = Files.createTempDirectory("qcc-web-fixture-3t");
             Files.writeString(www.resolve("index.html"), "<html></html>");
             return www;
         } catch (IOException e) {

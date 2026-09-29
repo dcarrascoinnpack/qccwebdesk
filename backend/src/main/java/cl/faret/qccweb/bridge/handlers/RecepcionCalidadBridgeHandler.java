@@ -32,8 +32,8 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * bool/objeto/array en filtros de texto → "Parámetro de filtro inválido." (regla 2e).
  *
- * Escrituras: bobinas.muestrear (Fase 3q) y muestra.crear (Fase 3s). crear, nc.crear, plan.generar y
- * estado.actualizar NO habilitadas. sap.consultar/sap.lotes (apisapfaret, otra API con API key; solo se usan al crear un
+ * Escrituras: bobinas.muestrear (Fase 3q), muestra.crear (Fase 3s) y estado.actualizar (Fase 3t). crear, nc.crear y
+ * plan.generar NO habilitadas. sap.consultar/sap.lotes (apisapfaret, otra API con API key; solo se usan al crear un
  * lote) tampoco: requieren un cliente upstream nuevo.
  */
 public class RecepcionCalidadBridgeHandler {
@@ -90,6 +90,7 @@ public class RecepcionCalidadBridgeHandler {
         if (upstream.ok() && id != null && id > 0) {
             LecturasDeSesion.registrar(recursoLecturaMuestreo(id), huellaMuestreadas(upstream.data()));
             LecturasDeSesion.registrar(recursoLecturaMuestra(id), huellaMuestra(upstream.data()));
+            LecturasDeSesion.registrar(recursoLecturaEstado(id), huellaEstado(upstream.data()));
         }
         return upstream;
     }
@@ -183,6 +184,97 @@ public class RecepcionCalidadBridgeHandler {
         JsonNode d = detalle instanceof JsonNode n && n.isObject() ? n : null;
         JsonNode m = d == null ? null : d.get("muestraLaboratorioId");
         return (m == null || m.isNull() ? "SIN_MUESTRA" : m.asString()) + "|" + (d == null ? "" : texto(d.get("estado")));
+    }
+
+    static final String MENSAJE_FALTA_LOTE_ESTADO = "Falta el lote o el estado";
+    static final String MENSAJE_ESTADO_INVALIDO = "Estado inválido.";
+    static final String MENSAJE_ESTADO_SIN_LEER = "Abre el detalle del lote antes de actualizar el estado.";
+    static final String MENSAJE_ESTADO_CONFLICTO = "El estado del lote fue modificado por otra persona desde que lo abriste "
+            + "(muestreo, muestra de Laboratorio o actualización de estado). Vuelve a abrirlo para ver los cambios.";
+    /** Únicos valores que ofrece el <select id="rcqEstadoManual"> de Photino; la API no valida el valor. */
+    private static final Set<String> ESTADOS_MANUALES = Set.of("RecibidaConforme", "RecibidaConObservacion", "NoConforme");
+    /** Claves de actualizarEstado de Photino ({action, data:{loteId, estado}}). */
+    private static final Set<String> CLAVES_RAIZ_ESTADO = Set.of("action", "data");
+    private static final Set<String> CLAVES_DATA_ESTADO = Set.of("loteId", "estado");
+    /** Un candado por lote: serializa en este gateway las actualizaciones del mismo lote (doble clic, dos sesiones). */
+    private final java.util.concurrent.ConcurrentHashMap<Integer, Object> candadosEstado = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * recepcion.estado.actualizar → PATCH api/recepcion-calidad/{loteId}/estado {estado} (Fase 3t), igual que Photino
+     * para el usuario: un UPDATE directo de `recepcion_lotes_control.estado`, sin autor ni control de duplicados ni
+     * validación del valor en la API.
+     *
+     * Seguridad transparente: el lote se confirma con el detalle de la EMPRESA DE SESIÓN (la API no filtra empresa ni
+     * eliminado — hallazgo R5); `estado` restringido a los 3 valores que ofrece el <select> de Photino (lo único
+     * alcanzable por uso normal; un valor distinto solo vendría de un payload manipulado). Concurrencia: exige haber
+     * abierto el detalle en esta sesión y lo relee antes del PATCH; si el estado cambió desde entonces (otra sesión,
+     * `bobinas.muestrear` o `muestra.crear` también lo mutan) rechaza en vez de pisarlo. Candado por lote para doble
+     * clic. Ventana residual: entre la relectura y el PATCH (milisegundos).
+     */
+    public BridgeResult estadoActualizar(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_RAIZ_ESTADO.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_DATA_ESTADO.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer loteId = entero(data.get("loteId"));
+        String estado = texto(data.get("estado")).trim();
+        if (loteId == null || loteId <= 0 || estado.isEmpty()) {
+            return BridgeResult.error(MENSAJE_FALTA_LOTE_ESTADO);
+        }
+        if (!ESTADOS_MANUALES.contains(estado)) {
+            return BridgeResult.error(MENSAJE_ESTADO_INVALIDO);
+        }
+        String leida = LecturasDeSesion.huella(recursoLecturaEstado(loteId));
+        if (leida == null) {
+            return BridgeResult.error(MENSAJE_ESTADO_SIN_LEER);
+        }
+        synchronized (candadosEstado.computeIfAbsent(loteId, k -> new Object())) {
+            // Una petición en espera (doble clic) ve aquí la huella ya olvidada por la anterior.
+            if (!leida.equals(LecturasDeSesion.huella(recursoLecturaEstado(loteId)))) {
+                return BridgeResult.error(MENSAJE_ESTADO_SIN_LEER);
+            }
+            BridgeResult vigente = detalleLote(loteId, usuario); // empresa de sesión: un lote ajeno no existe para esta sesión
+            if (!vigente.ok()) {
+                return vigente;
+            }
+            if (!huellaEstado(vigente.data()).equals(leida)) {
+                return BridgeResult.error(MENSAJE_ESTADO_CONFLICTO);
+            }
+            ObjectNode cuerpo = mapper.createObjectNode();
+            cuerpo.put("estado", estado);
+            BridgeResult resultado = InnpackRespuestas.reenviar(
+                    api.patchJson(usuario, BASE + "/" + loteId + "/estado", cuerpo), mapper);
+            if (resultado.ok()) {
+                // La vista vuelve a abrir el detalle enseguida y registra la huella nueva.
+                LecturasDeSesion.olvidar(recursoLecturaEstado(loteId));
+            }
+            return resultado;
+        }
+    }
+
+    /** Recurso auditado: "recepcion:<loteId>:estado:<valor>". */
+    public static String recursoEstado(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer loteId = data == null ? null : entero(data.get("loteId"));
+        String estado = data == null ? "" : texto(data.get("estado"));
+        return "recepcion:" + (loteId != null && loteId > 0 ? loteId : "?") + ":estado" + (estado.isEmpty() ? "" : ":" + estado);
+    }
+
+    static String recursoLecturaEstado(int loteId) {
+        return "recepcion-estado:" + loteId;
+    }
+
+    /** Lo único que cambia estado.actualizar en el detalle: el estado del lote. */
+    static String huellaEstado(Object detalle) {
+        JsonNode d = detalle instanceof JsonNode n && n.isObject() ? n : null;
+        return d == null ? "" : texto(d.get("estado"));
     }
 
     static final String MENSAJE_FALTA_LOTE_BOBINAS = "Falta el lote o la lista de bobinas muestreadas";

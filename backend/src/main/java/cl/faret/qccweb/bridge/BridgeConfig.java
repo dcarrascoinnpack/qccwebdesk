@@ -227,8 +227,7 @@ public class BridgeConfig {
                         noConformidades::adjuntosAbrir),
                 // Fase 2j — Recepción Calidad, SOLO LECTURA (payload en "data"). "empresa" = sesión.
                 // foto.abrir: lote confirmado con el detalle de la empresa de sesión y MIME por firma
-                // real. Escrituras (crear/nc.crear/plan.generar/
-                // estado.actualizar) y sap.* (otra API externa) fuera (deny-by-default).
+                // real. Escrituras crear/nc.crear/plan.generar y sap.* (otra API externa) fuera (deny-by-default).
                 new ActionPolicy.Regla(
                         "recepcion.list", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::list),
                 new ActionPolicy.Regla(
@@ -248,6 +247,12 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "recepcion.muestra.crear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), recepcionCalidad::muestraCrear, RecepcionCalidadBridgeHandler::recursoMuestra),
+                // Fase 3t — actualizar el estado manual del lote. Roles = Photino (cualquier usuario INNPACK); lote de
+                // la empresa de sesión (la API no filtra empresa ni eliminado — R5); estado restringido a los 3 valores
+                // del <select> de Photino; detección de cambios concurrentes; recurso "recepcion:<lote>:estado:<valor>".
+                new ActionPolicy.Regla(
+                        "recepcion.estado.actualizar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), recepcionCalidad::estadoActualizar, RecepcionCalidadBridgeHandler::recursoEstado),
                 // Fase 2k — Gestión de Usuarios, SOLO LECTURA y SOLO admin/admin_ti (UsuariosHandler.
                 // IsAdmin + [Authorize(Roles)] de la API): primera regla con roles restringidos.
                 // Respuesta reproyectada a los 7 campos PascalCase de Photino. create/delete/

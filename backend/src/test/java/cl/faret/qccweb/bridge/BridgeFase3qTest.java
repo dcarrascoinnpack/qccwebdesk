@@ -179,7 +179,7 @@ class BridgeFase3qTest {
         assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti", "operador"));
         assertThat(d.get("identidad")).isEqualTo(Map.of("usuario", IdentityOverride.Fuente.NOMBRE_COMPLETO));
         for (String otra : List.of("recepcion.crear", "recepcion.nc.crear", "recepcion.plan.generar",
-                "recepcion.estado.actualizar", "recepcion.sap.consultar", "recepcion.sap.lotes")) {
+                "recepcion.sap.consultar", "recepcion.sap.lotes")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);
         }
     }

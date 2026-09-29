@@ -208,6 +208,7 @@ class BridgeFase1cTest {
                 "noConformidades.catalogos.niveles.crear", "noConformidades.create", "noConformidades.adjuntos.subir",
                 "noConformidades.update", "noConformidades.gestion.actualizar", "noConformidades.cerrar",
                 "noConformidades.acciones.actualizar", "recepcion.bobinas.muestrear", "recepcion.muestra.crear",
+                "recepcion.estado.actualizar",
                 "noConformidades.eliminar", "noConformidades.adjuntos.eliminar",
                 "noConformidades.catalogos.nciAreas.list", "noConformidades.catalogos.nciTiposDesviacion.list");
     }
