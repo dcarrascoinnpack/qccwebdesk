@@ -57,6 +57,15 @@ qcc:
         bloqueo-base: 30s
         bloqueo-maximo: 15m
 
+    fps:
+      # fps-api (Fase 3v, columna "Liberación Calidad"): misma API que Photino (config.json → FpsApi). La API key
+      # SOLO por variable de entorno (nunca en este archivo). Sin base URL = "fps-api no está configurada".
+      base-url: ${QCC_FPS_API_BASE_URL:}
+      api-key: ${QCC_FPS_API_KEY:}
+      connect-timeout: 5s
+      read-timeout: 20s          # = HttpClient.Timeout de FpsApiClient en Photino
+      max-bytes-respuesta: 2097152
+
 management:
   endpoints:
     web:

@@ -5,6 +5,7 @@ import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.LiberacionCalidadBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MuestraLaboratorioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler;
@@ -14,6 +15,8 @@ import cl.faret.qccweb.bridge.handlers.RegistrosControlBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.TalleresExternosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.UsuariosBridgeHandler;
+import cl.faret.qccweb.upstream.FpsApiClient;
+import cl.faret.qccweb.upstream.FpsProperties;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import java.time.Clock;
 import java.time.Duration;
@@ -43,8 +46,6 @@ public class BridgeConfig {
      * estado PENDIENTE_VALIDACION_NEGOCIO hasta que el negocio confirme los permisos funcionales.
      */
     static final Set<String> ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO = Set.of("operador", "admin", "admin_ti");
-    /** Mensaje de LiberacionCalidadHandler de Photino 1.8.14 cuando el equipo no tiene fps-api configurada. */
-    static final String MENSAJE_FPS_NO_CONFIGURADA = "fps-api no está configurada en este equipo.";
     /** Catálogos de NC con `crear` habilitado en la web (por fase, cada uno auditado y validado). */
     static final List<String> CATALOGOS_CREAR_HABILITADOS = List.of(
             "clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas", "familiasProducto",
@@ -53,6 +54,17 @@ public class BridgeConfig {
     @Bean
     public InnpackApiClient innpackApiClient(AuthProperties properties) {
         return new InnpackApiClient(properties);
+    }
+
+    /** fps-api (Fase 3v): API key del servidor; sin base URL responde como Photino sin fps-api configurada. */
+    @Bean
+    public FpsApiClient fpsApiClient(FpsProperties properties) {
+        return new FpsApiClient(properties);
+    }
+
+    @Bean
+    public LiberacionCalidadBridgeHandler liberacionCalidadBridgeHandler(FpsApiClient fps, ObjectMapper mapper) {
+        return new LiberacionCalidadBridgeHandler(fps, mapper);
     }
 
     @Bean
@@ -134,7 +146,8 @@ public class BridgeConfig {
             ProductoTerminadoBridgeHandler productoTerminado, CertificadosLiberacionBridgeHandler certificados,
             ControlDocumentalBridgeHandler controlDocumental, NoConformidadesBridgeHandler noConformidades,
             RecepcionCalidadBridgeHandler recepcionCalidad, UsuariosBridgeHandler usuarios,
-            MuestraLaboratorioBridgeHandler laboratorio, TalleresExternosBridgeHandler talleres) {
+            MuestraLaboratorioBridgeHandler laboratorio, TalleresExternosBridgeHandler talleres,
+            LiberacionCalidadBridgeHandler liberacionCalidad) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -207,12 +220,12 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "controlDocumental.adjunto.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         controlDocumental::adjuntoAbrir),
-                // Fase 3u — columna "Liberación Calidad" de PNC (Photino 1.8.14, fps-api). La web aún no tiene cliente
-                // FPS: responde lo mismo que Photino en un equipo sin fps-api configurada (la celda muestra "No
-                // disponible", sin aviso 403 en cada carga de la lista). No llama a ninguna API. Cliente real: fase propia.
+                // Fase 3v — columna "Liberación Calidad" de PNC (Photino 1.8.14): GET fps-api liberaciones/inspectores con
+                // la API key del servidor. Solo lectura; sin fps-api configurada responde como Photino (celda "No
+                // disponible"). Photino no restringe por rol (cualquier sesión que abra No Conformidades).
                 new ActionPolicy.Regla(
                         "liberacionCalidad.inspectores", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
-                        (payload, usuario) -> BridgeResult.error(MENSAJE_FPS_NO_CONFIGURADA)),
+                        liberacionCalidad::inspectores),
                 // Fase 2i — No Conformidades (solo INNPACK), SOLO LECTURA (payload plano, sin "empresa").
                 // adjuntos.abrir: solo PDF/PNG/JPEG con firma real, la vista lo muestra en la página.
                 // Las 29 escrituras (create/update/eliminar/gestion/cerrar/seguimiento.crear/

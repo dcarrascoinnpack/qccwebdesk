@@ -43,6 +43,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         }
         server.createContext("/api/auth/login", this::login);
         server.createContext("/api/auth/mis-permisos", this::misPermisos);
+        server.createContext("/fps/liberaciones/inspectores", this::fpsInspectores);
         server.createContext("/api/home/dashboard", this::dashboard);
         server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
         server.createContext("/api/dashboard/filtros", ex -> dashboardLectura(ex, true));
@@ -133,6 +134,68 @@ public final class FakeInnpackApi implements AutoCloseable {
         permisosPorUsuario.clear();
         misPermisosCaidos.clear();
         misPermisosConsultados.clear();
+        fpsConsultas.clear();
+        modoFps = "NORMAL";
+    }
+
+    // ------------------------------------------------------------------ Fase 3v: fps-api GET liberaciones/inspectores
+    /** API key que espera el fps-api simulado (la real vive solo en el entorno del servidor). */
+    public static final String FPS_API_KEY = "clave-fps-de-prueba";
+    private final java.util.List<String> fpsConsultas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private volatile String modoFps = "NORMAL";
+
+    /** Query cruda recibida en cada GET (para verificar tandas, escape y que solo viajan dígitos). */
+    public java.util.List<String> fpsConsultas() {
+        return java.util.List.copyOf(fpsConsultas);
+    }
+
+    /** NORMAL | ERROR_500 | JSON_INVALIDO | SIN_DATA | GRANDE (cuerpo > tope del gateway). */
+    public void modoFps(String modo) {
+        this.modoFps = modo;
+    }
+
+    /**
+     * Como produccion.routes.js de fps-api: x-api-key obligatoria (401), nps = dígitos separados por coma, máx. 300
+     * (400). Filas: NP terminada en 0 → sin liberación; el resto 1 fila INNPACK SPA (Np numérico). Además, a propósito,
+     * filas que el gateway debe descartar: otra empresa (FARET), NP no pedida y un campo extra.
+     */
+    private void fpsInspectores(HttpExchange ex) throws IOException {
+        if (!FPS_API_KEY.equals(ex.getRequestHeaders().getFirst("x-api-key"))) {
+            responder(ex, 401, "{\"ok\":false,\"message\":\"No autorizado\"}");
+            return;
+        }
+        String query = ex.getRequestURI().getRawQuery() == null ? "" : ex.getRequestURI().getRawQuery();
+        fpsConsultas.add(query);
+        String crudo = java.net.URLDecoder.decode(query.startsWith("nps=") ? query.substring(4) : "", StandardCharsets.UTF_8);
+        java.util.List<String> nps = java.util.Arrays.stream(crudo.split(",")).map(String::trim).filter(x -> !x.isEmpty()).distinct().toList();
+        if (nps.isEmpty() || nps.size() > 300 || nps.stream().anyMatch(x -> !x.matches("[0-9]+"))) {
+            responder(ex, 400, "{\"ok\":false,\"message\":\"El parámetro \\\"nps\\\" tiene un formato no válido.\"}");
+            return;
+        }
+        switch (modoFps) {
+            case "ERROR_500" -> { responder(ex, 500, "{\"ok\":false,\"codigo\":\"FPS_NO_DISPONIBLE\"}"); return; }
+            case "JSON_INVALIDO" -> { responder(ex, 200, "<html>proxy</html>"); return; }
+            case "SIN_DATA" -> { responder(ex, 200, "{\"ok\":true,\"total\":0}"); return; }
+            case "GRANDE" -> { responder(ex, 200, "{\"ok\":true,\"data\":[],\"x\":\"" + "A".repeat(3 * 1024 * 1024) + "\"}"); return; }
+            default -> { }
+        }
+        StringBuilder data = new StringBuilder("[");
+        for (String np : nps) {
+            if (np.endsWith("0")) {
+                continue;
+            }
+            data.append(data.length() > 1 ? "," : "").append("{\"Np\":").append(np).append(",\"Empresa\":\"INNPACK SPA\",\"CodigoArticulo\":\"C-")
+                    .append(np).append("\",\"Inspector\":\"Inspector <b>").append(np).append("</b>\",\"UltimaLiberacion\":\"2026-09-2")
+                    .append(np.charAt(np.length() - 1)).append("T00:00:00.000Z\",\"UltimoFolio\":").append(np).append("1,\"Liberaciones\":2,")
+                    .append("\"Secreto\":\"no-debe-llegar\"}");
+        }
+        if (nps.contains("4001")) {
+            data.append(",{\"Np\":4001,\"Empresa\":\"FARET SPA\",\"CodigoArticulo\":\"F-1\",\"Inspector\":\"Inspector Faret\",")
+                    .append("\"UltimaLiberacion\":\"2026-09-01T00:00:00.000Z\",\"UltimoFolio\":1,\"Liberaciones\":1}")
+                    .append(",{\"Np\":999999,\"Empresa\":\"INNPACK SPA\",\"CodigoArticulo\":\"X\",\"Inspector\":\"No pedida\",")
+                    .append("\"UltimaLiberacion\":\"2026-09-01T00:00:00.000Z\",\"UltimoFolio\":1,\"Liberaciones\":1}");
+        }
+        responder(ex, 200, "{\"ok\":true,\"total\":0,\"data\":" + data.append("]") + "}");
     }
 
     // ------------------------------------------------------------------ Fase 3u: GET api/auth/mis-permisos

@@ -539,11 +539,18 @@ y una escritura debe pertenecer al módulo abierto (`_modulo`, lo agrega el brid
   exige derivar el ámbito real de la NC en cada escritura (fase propia si el negocio llega a usar esa combinación).
 - **Producción:** `mis-permisos` y `usuarios/{id}/permisos` verificados desplegados (2026-09-30, GET anónimo → 401; rutas
   vecinas inexistentes → 404). En la copia local de la API siguen sin commitear (como NC Internas en 3r).
-- **Degradado hasta su fase:** columna "Liberación Calidad" (`liberacionCalidad.inspectores`, fps-api). La web no tiene
-  cliente FPS: la acción está registrada y responde lo mismo que Photino en un equipo sin fps-api configurada
-  (`ok:false`, "fps-api no está configurada en este equipo.") → la celda muestra "No disponible", sin aviso 403 en cada
-  carga; lista/exportar/imprimir funcionan. Cuenta como COMPATIBLE en el contract check (81/250) pero es DEGRADADA.
-- **Pendiente (fases propias):** cliente FPS real para "Liberación Calidad"; nuevas acciones de Gestión
+- **"Liberación Calidad" (Fase 3v, 2026-09-30):** `liberacionCalidad.inspectores` → GET fps-api
+  `liberaciones/inspectores` con la API key del SERVIDOR (`QCC_FPS_API_KEY`, nunca en el repo ni en el navegador), igual
+  que Photino: solo NP numéricas, sin duplicados, tandas de 300, timeout 20 s, mismos mensajes. Extra web: solo dígitos
+  ASCII ≤ 15 (fps-api interpola las NP en un OPENQUERY a SAP), tope 3.000 NP por acción, solo filas de NP pedidas y de la
+  empresa de la sesión, 7 campos tipados, respuesta ≤ 2 MB, sin NP/nombres/key en logs. Sin `QCC_FPS_API_BASE_URL`
+  responde "fps-api no está configurada en este equipo." (= Photino sin fps-api). Verificado desplegado en producción
+  (GET de solo lectura con la key, 2026-09-30: 200 `{ok,total,data}`; filas `Np` int, `Empresa` "INNPACK SPA",
+  `UltimaLiberacion` ISO con Z). Deploy: el servidor web necesita `QCC_FPS_API_BASE_URL` y `QCC_FPS_API_KEY`.
+  Hallazgo fps-api (backlog): key compartida corta (8 caracteres) y consultas SAP por interpolación (seguras solo por la
+  validación de dígitos de la ruta).
+- **Pendiente (fases propias):** otras lecturas FPS (`muestraLab.materialesFps`, `muestraLab.consultarRegistroProduccion`,
+  `trazabilidad.consultarNp`) reutilizando `FpsApiClient`; nuevas acciones de Gestión
   de Usuarios (`usuarios.activo/eliminarDefinitivo/cambiarRol/permisos.*`, excepción de paridad).
 - Pruebas: `BridgeFase3uTest` (12), tests del shim (`_modulo`), regresión completa; tests del bridge simulan el
   `_modulo` del navegador (`NavegadorSimuladoMockMvc`).
