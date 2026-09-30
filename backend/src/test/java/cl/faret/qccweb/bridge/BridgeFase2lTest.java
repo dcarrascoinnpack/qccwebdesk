@@ -63,7 +63,7 @@ class BridgeFase2lTest {
             "muestraLab.viscosidad.guardar", "muestraLab.ph.guardar", "muestraLab.solidos.guardar", "muestraLab.lugol.guardar",
             "muestraLab.metodo.guardar", "muestraLab.metodo.activar", "muestraLab.especificacion.guardar",
             "muestraLab.especificacion.activar", "muestraLab.ensayo.anular", "muestraLab.nc.crear",
-            "muestraLab.consultarNp", "muestraLab.consultarRegistroProduccion", "muestraLab.materialesFps", "muestraLab.resolverBobina");
+            "muestraLab.consultarNp", "muestraLab.consultarRegistroProduccion", "muestraLab.resolverBobina");
     private static final String BASE = "GET /api/muestra-laboratorio";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
@@ -262,7 +262,7 @@ class BridgeFase2lTest {
     @Test
     void escriturasYLecturasExternasSiguenBloqueadas() throws Exception {
         MockHttpSession admin = login("admin1");
-        assertThat(NO_HABILITADAS).hasSize(29);
+        assertThat(NO_HABILITADAS).hasSize(28); // Fase 3w: materialesFps habilitada
         for (String accion : NO_HABILITADAS) {
             accion(admin, "{\"action\":\"" + accion + "\",\"data\":{\"id\":501,\"muestraId\":501,\"np\":\"NP-1\",\"idProceso\":5,\"lote\":\"L1\"}}")
                     .andExpect(status().isForbidden())

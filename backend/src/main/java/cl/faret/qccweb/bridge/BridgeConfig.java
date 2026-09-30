@@ -123,8 +123,9 @@ public class BridgeConfig {
     }
 
     @Bean
-    public MuestraLaboratorioBridgeHandler muestraLaboratorioBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
-        return new MuestraLaboratorioBridgeHandler(api, mapper);
+    public MuestraLaboratorioBridgeHandler muestraLaboratorioBridgeHandler(InnpackApiClient api, FpsApiClient fps,
+            ObjectMapper mapper) {
+        return new MuestraLaboratorioBridgeHandler(api, fps, mapper);
     }
 
     @Bean
@@ -303,6 +304,10 @@ public class BridgeConfig {
                         laboratorio::registroProduccionList),
                 new ActionPolicy.Regla(
                         "muestraLab.adjunto.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::adjuntoAbrir),
+                // Fase 3w — materiales FPS del detalle de una muestra (fps-api, API key del servidor). Solo lectura;
+                // solo el proceso FPS de una muestra abierta en la sesión.
+                new ActionPolicy.Regla(
+                        "muestraLab.materialesFps", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::materialesFps),
                 // Fase 2m — Talleres Externos, SOLO LECTURA (payload en "data", sin empresa ni rol).
                 // Escrituras (create/update/eliminar/catalogos.eliminar*/sincronizarFps) fuera.
                 new ActionPolicy.Regla("talleresExternos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::list),

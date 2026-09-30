@@ -44,6 +44,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/auth/login", this::login);
         server.createContext("/api/auth/mis-permisos", this::misPermisos);
         server.createContext("/fps/liberaciones/inspectores", this::fpsInspectores);
+        server.createContext("/fps/materiales-por-proceso", this::fpsMateriales);
         server.createContext("/api/home/dashboard", this::dashboard);
         server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
         server.createContext("/api/dashboard/filtros", ex -> dashboardLectura(ex, true));
@@ -152,6 +153,34 @@ public final class FakeInnpackApi implements AutoCloseable {
     /** NORMAL | ERROR_500 | JSON_INVALIDO | SIN_DATA | GRANDE (cuerpo > tope del gateway). */
     public void modoFps(String modo) {
         this.modoFps = modo;
+    }
+
+    /**
+     * GET materiales-por-proceso?ids= (Fase 3w), como fps-api: x-api-key (401), ids con formato (400). 88001 → 2 insumos
+     * (Id_Proceso numérico, uno con HTML y un campo extra); 88003 → sin insumos. Usa modoFps para fallos.
+     */
+    private void fpsMateriales(HttpExchange ex) throws IOException {
+        if (!FPS_API_KEY.equals(ex.getRequestHeaders().getFirst("x-api-key"))) {
+            responder(ex, 401, "{\"ok\":false,\"message\":\"No autorizado\"}");
+            return;
+        }
+        String query = ex.getRequestURI().getRawQuery() == null ? "" : ex.getRequestURI().getRawQuery();
+        fpsConsultas.add(query);
+        if (!query.matches("ids=[0-9]{1,18}")) {
+            responder(ex, 400, "{\"ok\":false,\"message\":\"Uno o más ids de proceso tienen un formato no válido.\"}");
+            return;
+        }
+        switch (modoFps) {
+            case "ERROR_500" -> { responder(ex, 500, "{\"ok\":false,\"message\":\"SQL timeout\"}"); return; }
+            case "JSON_INVALIDO" -> { responder(ex, 200, "<html>proxy</html>"); return; }
+            case "OK_FALSE" -> { responder(ex, 200, "{\"ok\":false,\"message\":\"x\"}"); return; }
+            default -> { }
+        }
+        String data = query.equals("ids=88001")
+                ? "[{\"Id_Proceso\":88001,\"ItemCode\":\"INS-01\",\"ItemName\":\"Tinta <b>negra</b>\",\"Estatus\":\"L\"},"
+                        + "{\"Id_Proceso\":88001,\"ItemCode\":\"INS-02\",\"ItemName\":null,\"Estatus\":\"L\",\"Extra\":\"no-debe-llegar\"}]"
+                : "[]";
+        responder(ex, 200, "{\"ok\":true,\"total\":0,\"data\":" + data + "}");
     }
 
     /**
@@ -1685,8 +1714,10 @@ public final class FakeInnpackApi implements AutoCloseable {
                 responder(ex, 404, fallo("Muestra no encontrada"));
                 return;
             }
+            // Fase 3w: 501 → proceso FPS 88001 (número), 503 → "88003" (texto), el resto sin proceso FPS.
+            String procesoFps = id == 501 ? "88001" : id == 503 ? "\"88003\"" : "null";
             responder(ex, 200, ok + "{\"id\":" + id + ",\"np\":\"NP-100\",\"ensayos\":[],\"adjuntos\":[{\"id\":1,\"nombreArchivo\":\"informe ñ.pdf\"}],"
-                    + "\"usuarioDelToken\":" + sub + "}" + fin);
+                    + "\"idProcesoFps\":" + procesoFps + ",\"usuarioDelToken\":" + sub + "}" + fin);
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");

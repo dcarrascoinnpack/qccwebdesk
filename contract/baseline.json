@@ -650,6 +650,14 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-09-30T12:10:43Z"
+    },
+    "muestraLab.materialesFps": {
+      "huella": "06790060cadb64409cf2fe871a7d67c1c52e7e10964d7f96acdef4d00e86b6bc",
+      "huellaFrontend": "b0e83df72f1d2a4ca3af0a474b8a7dbb933c6e233a63a5cc3750f1641086f254",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-09-30T13:04:45Z"
     }
   }
 }

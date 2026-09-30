@@ -549,8 +549,12 @@ y una escritura debe pertenecer al módulo abierto (`_modulo`, lo agrega el brid
   `UltimaLiberacion` ISO con Z). Deploy: el servidor web necesita `QCC_FPS_API_BASE_URL` y `QCC_FPS_API_KEY`.
   Hallazgo fps-api (backlog): key compartida corta (8 caracteres) y consultas SAP por interpolación (seguras solo por la
   validación de dígitos de la ruta).
-- **Pendiente (fases propias):** otras lecturas FPS (`muestraLab.materialesFps`, `muestraLab.consultarRegistroProduccion`,
-  `trazabilidad.consultarNp`) reutilizando `FpsApiClient`; nuevas acciones de Gestión
+- **"Materiales FPS" de Laboratorio (Fase 3w, 2026-09-30):** `muestraLab.materialesFps` → GET fps-api
+  `materiales-por-proceso?ids=` (consulta parametrizada en fps-api) con la key del servidor; mismos mensajes y respuesta
+  `[{idProceso,itemCode,itemName}]` (texto) que Photino. Extra web: solo el `idProcesoFps` de una muestra cuyo detalle
+  abrió la sesión (el botón solo existe en el detalle; evita recorrer procesos FPS arbitrarios).
+- **Pendiente (fases propias):** `muestraLab.consultarRegistroProduccion` (FPS) va con el alta de muestras (depende de
+  `consultarNp`, Planificación FARET, y de `muestraLab.crear`); `trazabilidad.consultarNp` (FPS + Planificación); nuevas acciones de Gestión
   de Usuarios (`usuarios.activo/eliminarDefinitivo/cambiarRol/permisos.*`, excepción de paridad).
 - Pruebas: `BridgeFase3uTest` (12), tests del shim (`_modulo`), regresión completa; tests del bridge simulan el
   `_modulo` del navegador (`NavegadorSimuladoMockMvc`).
