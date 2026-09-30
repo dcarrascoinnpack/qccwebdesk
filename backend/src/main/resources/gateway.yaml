@@ -66,6 +66,15 @@ qcc:
       read-timeout: 20s          # = HttpClient.Timeout de FpsApiClient en Photino
       max-bytes-respuesta: 2097152
 
+    sap:
+      # apisapfaret (Fase 3y, "Nuevo lote" de Recepción): misma API que Photino (config.json → SapRecepcionApi). La API
+      # key SOLO por variable de entorno (nunca en este archivo); apisapfaret admite una key por consumidor.
+      base-url: ${QCC_SAP_API_BASE_URL:}
+      api-key: ${QCC_SAP_API_KEY:}
+      connect-timeout: 5s
+      read-timeout: 25s          # = HttpClient.Timeout de SapRecepcionApiClient en Photino
+      max-bytes-respuesta: 5242880
+
 management:
   endpoints:
     web:

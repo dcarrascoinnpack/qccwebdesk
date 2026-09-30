@@ -559,6 +559,34 @@ y una escritura debe pertenecer al módulo abierto (`_modulo`, lo agrega el brid
 - Pruebas: `BridgeFase3uTest` (12), tests del shim (`_modulo`), regresión completa; tests del bridge simulan el
   `_modulo` del navegador (`NavegadorSimuladoMockMvc`).
 
+## Recepción — consultas SAP del "Nuevo lote" (Fase 3y, 2026-09-30) y backlog de la API de Recepción
+
+`recepcion.sap.consultar` / `recepcion.sap.lotes` (lecturas) → apisapfaret `GET api/recepcion/bobinas?desde&hasta&empresa`
+y `.../bobinas/lotes?itemCode&fecha&empresa` con `X-Api-Key` del SERVIDOR (`QCC_SAP_API_BASE_URL`, `QCC_SAP_API_KEY`;
+Photino: `config.json → SapRecepcionApi`). Respuestas = `RecepcionSapItemDto` / `RecepcionSapLoteDto` en camelCase con los
+defaults de Photino. Extra web: empresa de sesión (Photino la toma del payload); `desde`/`hasta`/`fecha` solo `yyyyMMdd`
+válidas (**Photino concatena desde/hasta SIN escapar**: un payload manipulado podría inyectar `&empresa=FARET`); `itemCode`
+escapado (≤ 50, sin controles); textos con `<`, `>` o `"` se escapan (la vista los pinta con `innerHTML` y
+`value="${numeroBobina}"`); errores 502/timeout genéricos (el 400 de validación de apisapfaret se muestra como Photino).
+Verificado en producción (1 GET de solo lectura, 2026-09-30): 200 `{ok,total,data}`, `fechaRecepcion` `yyyyMMdd`.
+apisapfaret admite una key por consumidor (`Security:ApiKeys`): **recomendado emitir una key propia para la web** antes
+del deploy (hoy se probó con la de Photino, por decisión del usuario). Pruebas: `BridgeFase3yTest` (5), E2E
+`e2e_cdp_3y.mjs` 9/9.
+
+### Backlog API INNPACK — `RecepcionCalidadRepository.cs` (qualitycontrolinnpack_sqlserver_port; NO se corrige desde la web)
+
+| # | Severidad | Dónde | Problema | Corrección sugerida |
+|---|---|---|---|---|
+| R9 | **CRÍTICA** | `ObtenerDetalle` L331 (PVA) y L358 (Pliego) | `(foto IS NOT NULL) AS tiene_foto` es sintaxis MySQL: en SQL Server la consulta falla → el detalle de todo lote PVA/Pliego responde 500 (Photino y web) | `CAST(CASE WHEN foto IS NOT NULL THEN 1 ELSE 0 END AS bit) AS tiene_foto` en ambas consultas |
+| R10 | **CRÍTICA** | `GenerarPlan` L534 | `REPLACE INTO` no existe en SQL Server → `recepcion.plan.generar` falla siempre | `MERGE recepcion_plan_muestreo ... ON lote_id` (o UPDATE + INSERT) en una transacción |
+| R8a | MEDIA | `CrearLote` | varios INSERT sin transacción; base64 inválido (`Convert.FromBase64String`) o fallo intermedio deja un lote huérfano | transacción + validar base64 antes de insertar |
+| R8b | MEDIA | `CrearLote` | foto guardada siempre como `image/jpeg`, sin validar tipo ni tamaño | detectar tipo por firma, MIME real, tope de tamaño |
+| R7a/b | MEDIA | `CrearNoConformidad` | verificación sin bloqueo (dos NC en paralelo) y creación + vinculación sin transacción (NC suelta) | transacción con `UPDLOCK, HOLDLOCK` o `UPDATE ... WHERE nc_id IS NULL` y validar filas afectadas |
+| R5/R7c | MEDIA | `ActualizarEstado`, `CrearNoConformidad`, `CrearMuestraLaboratorio` | sin filtro de empresa ni de eliminado | `AND empresa=@empresa` (y `eliminado=0` si aplica) |
+
+Prueba sugerida en la API: crear lote PVA con foto y abrir su detalle (`tieneFoto:true`); generar el plan dos veces (actualiza,
+no duplica); crear la NC dos veces en paralelo (queda una).
+
 ## Recepción — `recepcion.nc.crear` — VALIDADA (Fase 3x, 2026-09-30)
 
 Botón "Crear No Conformidad" del detalle de un lote "No conforme" sin NC (Photino: `confirm` → `recepcion.nc.crear

@@ -194,7 +194,7 @@ class BridgeFase1cTest {
                 "noConformidades.catalogos.revisores.list", "noConformidades.catalogos.areas.list",
                 "noConformidades.catalogos.familiasProducto.list", "noConformidades.catalogos.niveles.list",
                 "noConformidades.catalogos.impactos.list",
-                "recepcion.list", "recepcion.detalle", "recepcion.foto.abrir",
+                "recepcion.list", "recepcion.detalle", "recepcion.foto.abrir", "recepcion.sap.consultar", "recepcion.sap.lotes",
                 "usuarios.list",
                 "muestraLab.list", "muestraLab.detalle", "muestraLab.materialesFps", "muestraLab.catalogos", "muestraLab.indicadores",
                 "muestraLab.metodo.list", "muestraLab.especificacion.list", "muestraLab.bobinaHistorial",

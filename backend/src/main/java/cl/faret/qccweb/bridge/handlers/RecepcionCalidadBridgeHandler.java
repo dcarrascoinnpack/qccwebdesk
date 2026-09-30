@@ -5,6 +5,7 @@ import cl.faret.qccweb.bridge.BridgeResult;
 import cl.faret.qccweb.bridge.LecturasDeSesion;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.InnpackRespuestas;
+import cl.faret.qccweb.upstream.SapApiClient;
 import cl.faret.qccweb.upstream.UriEscape;
 import java.util.HashSet;
 import java.util.List;
@@ -32,9 +33,8 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * bool/objeto/array en filtros de texto → "Parámetro de filtro inválido." (regla 2e).
  *
- * Escrituras: bobinas.muestrear (Fase 3q), muestra.crear (Fase 3s) y estado.actualizar (Fase 3t). crear, nc.crear y
- * plan.generar NO habilitadas. sap.consultar/sap.lotes (apisapfaret, otra API con API key; solo se usan al crear un
- * lote) tampoco: requieren un cliente upstream nuevo.
+ * Escrituras: bobinas.muestrear (Fase 3q), muestra.crear (Fase 3s), estado.actualizar (Fase 3t) y nc.crear (Fase 3x).
+ * crear y plan.generar NO habilitadas. sap.consultar/sap.lotes (Fase 3y): apisapfaret con la API key del servidor.
  */
 public class RecepcionCalidadBridgeHandler {
 
@@ -51,11 +51,195 @@ public class RecepcionCalidadBridgeHandler {
     private static final String BASE = "/api/recepcion-calidad";
 
     private final InnpackApiClient api;
+    private final SapApiClient sap;
     private final ObjectMapper mapper;
 
-    public RecepcionCalidadBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+    public RecepcionCalidadBridgeHandler(InnpackApiClient api, SapApiClient sap, ObjectMapper mapper) {
         this.api = api;
+        this.sap = sap;
         this.mapper = mapper;
+    }
+
+    // ------------------------------------------------------------------ Fase 3y: consultas SAP (apisapfaret)
+    static final String MENSAJE_SAP_NO_CONFIGURADA = "La consulta a SAP no está configurada en este equipo.";
+    static final String MENSAJE_SAP_RANGO = "Debes indicar desde y hasta (yyyyMMdd)";
+    static final String MENSAJE_SAP_LOTES = "Debes indicar itemCode y fecha (yyyyMMdd)";
+    static final String MENSAJE_SAP_FALLO = "No fue posible consultar SAP (apisapfaret).";
+    private static final Pattern FECHA_SAP = Pattern.compile("[0-9]{8}");
+    private static final int MAX_ITEM_CODE = 50;
+    private static final int MAX_MENSAJE_SAP = 200;
+    /** Caracteres que rompen el innerHTML / value="..." donde la vista de Photino pinta los datos de SAP. */
+    private static final Pattern PELIGROSO_HTML = Pattern.compile("[<>\"]");
+
+    /**
+     * recepcion.sap.consultar {data:{desde, hasta}} → GET apisapfaret api/recepcion/bobinas?desde=&hasta=&empresa= (Photino:
+     * RecepcionSapItemDto en camelCase). Seguridad transparente: empresa ← sesión (Photino la toma del payload con
+     * default INNPACK); desde/hasta solo fechas yyyyMMdd válidas (Photino las concatena SIN escapar a la query: un payload
+     * manipulado podría inyectar otra empresa); textos con marcado HTML o comillas se escapan (la vista los pinta con
+     * innerHTML).
+     */
+    public BridgeResult sapConsultar(ObjectNode payload, SessionUser usuario) {
+        if (!sap.configurada()) {
+            return BridgeResult.error(MENSAJE_SAP_NO_CONFIGURADA);
+        }
+        JsonNode data = data(payload);
+        String desde = texto(data.get("desde")).trim();
+        String hasta = texto(data.get("hasta")).trim();
+        if (!fechaSap(desde) || !fechaSap(hasta)) {
+            return BridgeResult.error(MENSAJE_SAP_RANGO);
+        }
+        JsonNode filas = consultarSap("api/recepcion/bobinas?desde=" + desde + "&hasta=" + hasta + "&empresa="
+                + UriEscape.dataString(usuario.empresa()));
+        if (filas instanceof ObjectNode error) {
+            return BridgeResult.error(error.get("mensaje").asString());
+        }
+        ArrayNode lista = mapper.createArrayNode();
+        for (JsonNode fila : filas) {
+            ObjectNode m = lista.addObject();
+            m.put("docEntry", entero32(fila, "docEntry", 0));
+            m.put("lineNum", entero32(fila, "lineNum", 0));
+            m.put("fechaRecepcion", textoSap(fila, "fechaRecepcion"));
+            m.put("proveedor", textoSap(fila, "proveedor"));
+            m.put("guia", textoSap(fila, "guia"));
+            m.put("itemCode", textoSap(fila, "itemCode"));
+            m.put("descripcion", textoSap(fila, "descripcion"));
+            java.math.BigDecimal cantidad = decimal(fila, "cantidadRecibida");
+            m.put("cantidadRecibida", cantidad != null ? cantidad : java.math.BigDecimal.ZERO);
+            ponerDecimal(m, "anchoDeclarado", decimal(fila, "anchoDeclarado"));
+            ponerDecimal(m, "gramajeDeclarado", decimal(fila, "gramajeDeclarado"));
+        }
+        return BridgeResult.ok(lista);
+    }
+
+    /**
+     * recepcion.sap.lotes {data:{itemCode, fecha}} → GET apisapfaret api/recepcion/bobinas/lotes?itemCode=&fecha=&empresa=
+     * (Photino: RecepcionSapLoteDto en camelCase). Empresa ← sesión; fecha yyyyMMdd; itemCode escapado (≤ 50, sin
+     * controles); textos peligrosos para innerHTML/atributos escapados.
+     */
+    public BridgeResult sapLotes(ObjectNode payload, SessionUser usuario) {
+        if (!sap.configurada()) {
+            return BridgeResult.error(MENSAJE_SAP_NO_CONFIGURADA);
+        }
+        JsonNode data = data(payload);
+        String itemCode = texto(data.get("itemCode"));
+        String fecha = texto(data.get("fecha")).trim();
+        if (itemCode.isBlank() || fecha.isEmpty() || !fechaSap(fecha) || itemCode.length() > MAX_ITEM_CODE
+                || CONTROL_UNA_LINEA.matcher(itemCode).find()) {
+            return BridgeResult.error(MENSAJE_SAP_LOTES);
+        }
+        JsonNode filas = consultarSap("api/recepcion/bobinas/lotes?itemCode=" + UriEscape.dataString(itemCode) + "&fecha=" + fecha
+                + "&empresa=" + UriEscape.dataString(usuario.empresa()));
+        if (filas instanceof ObjectNode error) {
+            return BridgeResult.error(error.get("mensaje").asString());
+        }
+        ArrayNode lista = mapper.createArrayNode();
+        for (JsonNode fila : filas) {
+            ObjectNode m = lista.addObject();
+            m.put("itemCode", textoSap(fila, "itemCode"));
+            m.put("numeroBobina", textoSap(fila, "numeroBobina"));
+            m.put("absEntry", entero32(fila, "absEntry", 0));
+            m.put("fechaCreacion", textoSap(fila, "fechaCreacion"));
+        }
+        return BridgeResult.ok(lista);
+    }
+
+    /** Arreglo data de apisapfaret, o un ObjectNode {mensaje} con el error a mostrar (como ExtraerMensajeSap de Photino). */
+    private JsonNode consultarSap(String pathYQuery) {
+        InnpackApiClient.Respuesta r = sap.get(pathYQuery);
+        JsonNode cuerpo = null;
+        if (r.body() != null) {
+            try {
+                cuerpo = mapper.readTree(r.body());
+            } catch (RuntimeException e) {
+                cuerpo = null;
+            }
+        }
+        if (r.status() >= 200 && r.status() <= 299 && cuerpo != null) {
+            JsonNode d = cuerpo.get("data");
+            return d != null && d.isArray() ? d : mapper.createArrayNode();
+        }
+        String mensaje = MENSAJE_SAP_FALLO;
+        // Validaciones de apisapfaret (400): su texto, como Photino. Fallos de SAP (502), red o timeout: genérico.
+        if (r.status() == 400 && cuerpo != null) {
+            JsonNode e = cuerpo.has("error") ? cuerpo.get("error") : cuerpo.get("message");
+            if (e != null && e.isString() && !e.asString().isBlank() && e.asString().length() <= MAX_MENSAJE_SAP) {
+                mensaje = escaparSiPeligroso(e.asString());
+            }
+        }
+        ObjectNode error = mapper.createObjectNode();
+        error.put("mensaje", mensaje);
+        return error;
+    }
+
+    private static boolean fechaSap(String v) {
+        if (!FECHA_SAP.matcher(v).matches()) {
+            return false;
+        }
+        try {
+            java.time.LocalDate.parse(v, java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+            return true;
+        } catch (java.time.format.DateTimeParseException e) {
+            return false;
+        }
+    }
+
+    /** GetString de Photino (string o número → texto; otro → ""), escapado si trae marcado HTML o comillas. */
+    private static String textoSap(JsonNode fila, String campo) {
+        JsonNode v = fila != null && fila.isObject() ? fila.get(campo) : null;
+        return escaparSiPeligroso(v != null && (v.isString() || v.isNumber()) ? v.asString() : "");
+    }
+
+    private static String escaparSiPeligroso(String v) {
+        if (!PELIGROSO_HTML.matcher(v).find()) {
+            return v;
+        }
+        return v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
+    }
+
+    /** GetInt de Photino: número int32 o texto convertible; si no, el valor por defecto del DTO. */
+    private static int entero32(JsonNode fila, String campo, int porDefecto) {
+        JsonNode v = fila != null && fila.isObject() ? fila.get(campo) : null;
+        if (v == null) {
+            return porDefecto;
+        }
+        if (v.isIntegralNumber() && v.canConvertToInt()) {
+            return v.asInt();
+        }
+        if (v.isString()) {
+            try {
+                return Integer.parseInt(v.asString().trim());
+            } catch (NumberFormatException e) {
+                return porDefecto;
+            }
+        }
+        return porDefecto;
+    }
+
+    /** GetDecimal de Photino: número o texto convertible; si no, null. */
+    private static java.math.BigDecimal decimal(JsonNode fila, String campo) {
+        JsonNode v = fila != null && fila.isObject() ? fila.get(campo) : null;
+        if (v == null) {
+            return null;
+        }
+        if (v.isNumber()) {
+            return v.decimalValue();
+        }
+        if (v.isString()) {
+            try {
+                return new java.math.BigDecimal(v.asString().trim());
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private static void ponerDecimal(ObjectNode m, String campo, java.math.BigDecimal v) {
+        if (v == null) {
+            m.putNull(campo);
+        } else {
+            m.put(campo, v);
+        }
     }
 
     /** recepcion.list → GET api/recepcion-calidad?[estado=..&][tipoMateriaPrima=..&]empresa=.. */

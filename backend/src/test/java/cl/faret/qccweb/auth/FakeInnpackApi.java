@@ -45,6 +45,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/auth/mis-permisos", this::misPermisos);
         server.createContext("/fps/liberaciones/inspectores", this::fpsInspectores);
         server.createContext("/fps/materiales-por-proceso", this::fpsMateriales);
+        server.createContext("/sap/api/recepcion/bobinas", this::sapBobinas);
         server.createContext("/api/home/dashboard", this::dashboard);
         server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
         server.createContext("/api/dashboard/filtros", ex -> dashboardLectura(ex, true));
@@ -137,10 +138,87 @@ public final class FakeInnpackApi implements AutoCloseable {
         misPermisosConsultados.clear();
         fpsConsultas.clear();
         modoFps = "NORMAL";
+        sapConsultas.clear();
+        modoSap = "NORMAL";
         ncPorLote.clear();
         ncRecepcionRecibidas.clear();
         siguienteNcRecepcion.set(900);
         demoraNcRecepcionMs = 0;
+    }
+
+    // ------------------------------------------------------------------ Fase 3y: apisapfaret GET api/recepcion/bobinas[/lotes]
+    public static final String SAP_API_KEY = "clave-sap-de-prueba";
+    private final java.util.List<String> sapConsultas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private volatile String modoSap = "NORMAL";
+
+    /** "<ruta>?<query cruda>" recibidas por el apisapfaret simulado. */
+    public java.util.List<String> sapConsultas() {
+        return java.util.List.copyOf(sapConsultas);
+    }
+
+    /** NORMAL | ERROR_502 | JSON_INVALIDO | TIPOS_RAROS (textos numéricos y campos ausentes). */
+    public void modoSap(String modo) {
+        this.modoSap = modo;
+    }
+
+    /**
+     * Como RecepcionController de apisapfaret: X-Api-Key (401), desde/hasta o itemCode/fecha obligatorios (400 {ok,error}),
+     * empresa INNPACK|FARET (400), 502 si falla SAP. Datos con un proveedor con HTML y un número de bobina con comillas
+     * (la vista de Photino los pinta con innerHTML / value="...").
+     */
+    private void sapBobinas(HttpExchange ex) throws IOException {
+        if (!SAP_API_KEY.equals(ex.getRequestHeaders().getFirst("X-Api-Key"))) {
+            responder(ex, 401, "{\"ok\":false,\"error\":\"API key inválida\"}");
+            return;
+        }
+        String path = ex.getRequestURI().getRawPath();
+        String query = ex.getRequestURI().getRawQuery() == null ? "" : ex.getRequestURI().getRawQuery();
+        sapConsultas.add(path.substring(4) + "?" + query);
+        Map<String, String> q = new java.util.HashMap<>();
+        for (String par : query.split("&")) {
+            int i = par.indexOf('=');
+            if (i > 0) {
+                q.putIfAbsent(par.substring(0, i), java.net.URLDecoder.decode(par.substring(i + 1), StandardCharsets.UTF_8));
+            }
+        }
+        String empresa = q.getOrDefault("empresa", "INNPACK");
+        if (!empresa.equals("INNPACK") && !empresa.equals("FARET")) {
+            responder(ex, 400, "{\"ok\":false,\"error\":\"empresa debe ser INNPACK o FARET\"}");
+            return;
+        }
+        if (modoSap.equals("ERROR_502")) {
+            responder(ex, 502, "{\"ok\":false,\"error\":\"Service Layer: login failed for B1SESSION xyz\",\"sap\":null}");
+            return;
+        }
+        if (modoSap.equals("JSON_INVALIDO")) {
+            responder(ex, 200, "<html>proxy</html>");
+            return;
+        }
+        if (path.endsWith("/lotes")) {
+            if (q.getOrDefault("itemCode", "").isBlank() || q.getOrDefault("fecha", "").isBlank()) {
+                responder(ex, 400, "{\"ok\":false,\"error\":\"itemCode y fecha son obligatorios\"}");
+                return;
+            }
+            String item = mapper.writeValueAsString(q.get("itemCode"));
+            responder(ex, 200, "{\"ok\":true,\"total\":2,\"data\":[{\"itemCode\":" + item + ",\"numeroBobina\":\"B-001\",\"absEntry\":11,"
+                    + "\"fechaCreacion\":\"20260926\"},{\"itemCode\":" + item + ",\"numeroBobina\":\"B\\\"><img src=x>\",\"absEntry\":12,"
+                    + "\"fechaCreacion\":\"20260926\",\"extra\":\"no-debe-llegar\"}]}");
+            return;
+        }
+        if (q.getOrDefault("desde", "").isBlank() || q.getOrDefault("hasta", "").isBlank()) {
+            responder(ex, 400, "{\"ok\":false,\"error\":\"desde y hasta son obligatorios (yyyyMMdd)\"}");
+            return;
+        }
+        if (modoSap.equals("TIPOS_RAROS")) {
+            responder(ex, 200, "{\"ok\":true,\"data\":[{\"docEntry\":\"77\",\"lineNum\":1.5,\"fechaRecepcion\":20260926,"
+                    + "\"cantidadRecibida\":\"x\",\"anchoDeclarado\":\"1.25\",\"proveedor\":null}]}");
+            return;
+        }
+        responder(ex, 200, "{\"ok\":true,\"total\":2,\"data\":[{\"docEntry\":501,\"lineNum\":0,\"fechaRecepcion\":\"20260926\","
+                + "\"proveedor\":\"Papeles & Cía <b>SA</b>\",\"guia\":\"G-77\",\"itemCode\":\"1095SC21000090\",\"descripcion\":\"Kraft 125\","
+                + "\"cantidadRecibida\":1250.5,\"anchoDeclarado\":1600,\"gramajeDeclarado\":125,\"empresaInterna\":\"no-debe-llegar\"},"
+                + "{\"docEntry\":502,\"lineNum\":1,\"fechaRecepcion\":\"20260927\",\"proveedor\":\"Papeles Sur\",\"guia\":\"G-78\","
+                + "\"itemCode\":\"ABC-1\",\"descripcion\":\"Test\",\"cantidadRecibida\":10,\"anchoDeclarado\":null,\"gramajeDeclarado\":null}]}");
     }
 
     // ------------------------------------------------------------------ Fase 3v: fps-api GET liberaciones/inspectores

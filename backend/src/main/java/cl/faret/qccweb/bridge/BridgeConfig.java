@@ -18,6 +18,8 @@ import cl.faret.qccweb.bridge.handlers.UsuariosBridgeHandler;
 import cl.faret.qccweb.upstream.FpsApiClient;
 import cl.faret.qccweb.upstream.FpsProperties;
 import cl.faret.qccweb.upstream.InnpackApiClient;
+import cl.faret.qccweb.upstream.SapApiClient;
+import cl.faret.qccweb.upstream.SapProperties;
 import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -54,6 +56,12 @@ public class BridgeConfig {
     @Bean
     public InnpackApiClient innpackApiClient(AuthProperties properties) {
         return new InnpackApiClient(properties);
+    }
+
+    /** apisapfaret (Fase 3y): API key del servidor; sin base URL responde como Photino sin SAP configurado. */
+    @Bean
+    public SapApiClient sapApiClient(SapProperties properties) {
+        return new SapApiClient(properties);
     }
 
     /** fps-api (Fase 3v): API key del servidor; sin base URL responde como Photino sin fps-api configurada. */
@@ -113,8 +121,8 @@ public class BridgeConfig {
     }
 
     @Bean
-    public RecepcionCalidadBridgeHandler recepcionCalidadBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
-        return new RecepcionCalidadBridgeHandler(api, mapper);
+    public RecepcionCalidadBridgeHandler recepcionCalidadBridgeHandler(InnpackApiClient api, SapApiClient sap, ObjectMapper mapper) {
+        return new RecepcionCalidadBridgeHandler(api, sap, mapper);
     }
 
     @Bean
@@ -262,6 +270,12 @@ public class BridgeConfig {
                         "recepcion.detalle", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::detalle),
                 new ActionPolicy.Regla(
                         "recepcion.foto.abrir", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::fotoAbrir),
+                // Fase 3y — consultas SAP del formulario "Nuevo lote" (apisapfaret, API key del servidor). Solo lectura;
+                // empresa de sesión (Photino la toma del payload y concatena desde/hasta sin escapar).
+                new ActionPolicy.Regla(
+                        "recepcion.sap.consultar", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::sapConsultar),
+                new ActionPolicy.Regla(
+                        "recepcion.sap.lotes", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::sapLotes),
                 // Fase 3q — PRIMERA escritura de Recepción: guardar bobinas muestreadas. Roles = Photino (cualquier
                 // usuario INNPACK); "usuario" ← sesión; lote confirmado con la empresa de sesión; detección de cambios
                 // concurrentes en la selección; recurso "recepcion:<lote>:muestreadas:<n>".

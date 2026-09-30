@@ -666,6 +666,22 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-09-30T13:20:33Z"
+    },
+    "recepcion.sap.consultar": {
+      "huella": "62a3743aa5bd1be85e088bc84a3394d5f4b8c97a7d1c22321590d7a37592adae",
+      "huellaFrontend": "fee4790ba12e1a6c340d6c52631ad9e4328dcb503677c183b6ccdb132c502a19",
+      "handler": "RecepcionCalidadHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-09-30T13:37:43Z"
+    },
+    "recepcion.sap.lotes": {
+      "huella": "52d3cf7a7b327287e864ccf640455ac22623f999bd1f82b80e4ef2ca1ce41143",
+      "huellaFrontend": "80c6b363fc241ab26f0f256dc38092eb2471cb88bea7d4183cf37ea1a709cd1b",
+      "handler": "RecepcionCalidadHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-09-30T13:37:43Z"
     }
   }
 }
