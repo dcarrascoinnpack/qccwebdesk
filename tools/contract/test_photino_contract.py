@@ -241,6 +241,58 @@ class HuellaTest(unittest.TestCase):
         self.assertIn("no se pudo calcular", filas["excel.guardar"]["motivo"])
 
 
+# Photino 1.8.14: acción atendida con código inline en su rama del router (sin handler ni método propio).
+PERMISOS_ROUTER = ROUTER.replace(
+    '      else if (action == "excel.guardar")',
+    '      else if (action == "permisos.mios")\n      {\n        rawResult = JsonSerializer.Serialize(\n'
+    '          new { ok = true, data = _permisos.NivelesEfectivos() });\n      }\n'
+    '      else if (action == "excel.guardar")').replace(
+    'public class MessageRouter {', 'public class MessageRouter {\n    private readonly PermisosService _permisos;')
+PERMISOS = '''
+public class PermisosService {
+    public Dictionary<string, string> NivelesEfectivos() { return new(); }
+    public string? ValidarAccion(string action, string? modulo) { return null; }
+}
+'''
+
+
+class HuellaRamaInlineTest(unittest.TestCase):
+    WEB = {"acciones": [{"accion": "permisos.mios"}]}
+
+    def fuente(self, router=PERMISOS_ROUTER, permisos=PERMISOS):
+        return repo(**{pc.ROUTER: router, "src/Backend/Services/PermisosService.cs": permisos,
+                       "src/UI/www/core/app.js": 'window.PhotinoBridge.send({ action: "permisos.mios" });'})
+
+    def fila(self, fuente, baseline):
+        filas, _ = estados(fuente, web=self.WEB, baseline=baseline)
+        return filas["permisos.mios"]
+
+    def setUp(self):
+        f = self.fuente()
+        inv = pc.Inventario(f)
+        self.base = pc.aprobar({"acciones": {}}, pc.comparar(inv, self.WEB, {"acciones": {}}), ["permisos.mios"], f)
+
+    def test_no_toma_el_handler_de_la_rama_siguiente(self):
+        inv = pc.Inventario(self.fuente())
+        self.assertEqual(inv.enrutar("permisos.mios"), "MessageRouter#inline")
+        self.assertEqual(inv.enrutar("excel.guardar"), "MessageRouter.GuardarExcel")
+        self.assertEqual(self.fila(self.fuente(), self.base)["estado"], "COMPATIBLE")
+        self.assertEqual(self.fila(self.fuente(), self.base)["componentesHuella"],
+                         ['MessageRouter.cs action == "permisos.mios"', "PermisosService.cs (completo)"])
+
+    def test_cambio_en_cualquier_regla_del_servicio_pasa_a_revisar(self):
+        otro = PERMISOS.replace("return null;", 'return "Solo vista";')
+        self.assertEqual(self.fila(self.fuente(permisos=otro), self.base)["estado"], "REVISAR")
+
+    def test_cambio_en_la_rama_pasa_a_revisar(self):
+        otro = PERMISOS_ROUTER.replace("ok = true,", "ok = true, extra = 1,")
+        self.assertEqual(self.fila(self.fuente(router=otro), self.base)["estado"], "REVISAR")
+
+    def test_cambios_cosmeticos_no_alteran_la_huella(self):
+        otro = PERMISOS.replace("public string? ValidarAccion", "// comentario\n    public   string?   ValidarAccion")
+        self.assertEqual(self.fila(self.fuente(permisos=otro), self.base)["estado"], "COMPATIBLE")
+
+
 AUTH_ROUTER = ROUTER.replace('if (action.StartsWith("inicio"))',
                              'if (action.StartsWith("auth")) { rawResult = await _authHandler.Handle(action, d); }\n'
                              '      else if (action.StartsWith("inicio"))')
@@ -753,8 +805,9 @@ class LimpiezaCsTest(unittest.TestCase):
 
 
 PHOTINO_REAL = os.path.join(os.path.dirname(__file__), "..", "..", "..", "qualitycontrol_desktop_faret")
-# Commit de Photino que la web reproduce (Fase 3r: 6c42e05 → dd147ad, NC Internas). El módulo PNC es idéntico en ambos.
-REFERENCIA = "dd147ad"
+# Commit de Photino que la web reproduce (Fase 3r: 6c42e05 → dd147ad, NC Internas; Fase 3u: → fd7f076, v1.8.14,
+# permisos por módulo). El módulo PNC mantiene el contrato de sus acciones en los tres.
+REFERENCIA = "fd7f076"
 
 
 @unittest.skipUnless(os.path.isdir(os.path.join(PHOTINO_REAL, ".git")), "repo Photino no disponible")
@@ -768,7 +821,7 @@ class PhotinoRealTest(unittest.TestCase):
         baseline = pc.leer_json(os.path.join(raiz, "contract", "baseline.json"))
         web = {"acciones": [{"accion": a} for a in baseline["acciones"]]}
         rep = pc.construir_reporte(fuente, inv, pc.comparar(inv, web, baseline), web, baseline)
-        self.assertEqual(rep["resumen"]["accionesFrontend"], 238)
+        self.assertEqual(rep["resumen"]["accionesFrontend"], 250)
         self.assertEqual(rep["resumen"]["noUsadas"], 33)
         self.assertEqual(rep["resumen"]["photinoSinHandler"], 0)
         self.assertEqual(rep["resumen"]["dinamicasSinResolver"], 0)

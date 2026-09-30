@@ -27,7 +27,8 @@ import tools.jackson.databind.node.ObjectNode;
  * Recibe el mismo payload que PhotinoBridge.send ({ action, data } o campos en la raíz) y responde
  * el contrato normalizado { ok, success, data, error }.
  *
- * Requiere sesión (401 si no) y token CSRF (403 si no). Toda acción pasa por ActionPolicy.
+ * Requiere sesión (401 si no) y token CSRF (403 si no). Toda acción pasa por ActionPolicy y después por los permisos
+ * por módulo de Photino 1.8.14 (PermisosModulo, con el `_modulo` que envía el navegador; 403 con el mensaje de Photino).
  *
  * ESCRITURAS (reglas con recurso): antes del handler, límite por usuario (429 sin tocar la API);
  * después, auditoría evento=ESCRITURA con el usuario real de la sesión y el recurso afectado.
@@ -46,6 +47,8 @@ public class BridgeController {
     static final String MENSAJE_SUBIDAS_OCUPADAS = "Hay otras subidas de archivos en curso. Inténtalo de nuevo en unos segundos.";
     /** Acciones con archivo en base64: solo por /api/v1/bridge/archivo. */
     public static final Set<String> ACCIONES_ARCHIVO = Set.of("noConformidades.adjuntos.subir");
+    /** Módulo de origen de cada acción (Fase 3u, PermisosModulo). */
+    static final String CAMPO_MODULO = "_modulo";
     private static final Pattern FORMATO_ACCION = Pattern.compile("[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z0-9]+){1,4}");
     private static final Logger LOGGER = LoggerFactory.getLogger(BridgeController.class);
 
@@ -88,6 +91,13 @@ public class BridgeController {
             return respuesta(HttpStatus.BAD_REQUEST, BridgeResult.error("Solicitud inválida."));
         }
 
+        // Módulo abierto en el navegador (Fase 3u): lo agrega web-bridge.js como el PhotinoBridge de Photino 1.8.14.
+        // Se quita del payload antes de los handlers (validan las claves de la raíz) y solo se acepta si es conocido.
+        JsonNode moduloNodo = payload.remove(CAMPO_MODULO);
+        String modulo = moduloNodo != null && moduloNodo.isString() && PermisosModulo.moduloConocido(moduloNodo.asString())
+                ? moduloNodo.asString()
+                : null;
+
         if (ACCIONES_ARCHIVO.contains(accion) != rutaArchivo) {
             audit.accionDenegada(usuario.codigoUsuario(), usuario.empresa(), accion, "RUTA_NO_PERMITIDA");
             return respuesta(HttpStatus.FORBIDDEN, BridgeResult.error(MENSAJE_NO_DISPONIBLE));
@@ -98,6 +108,12 @@ public class BridgeController {
             return respuesta(HttpStatus.FORBIDDEN, BridgeResult.error(MENSAJE_NO_DISPONIBLE));
         }
         ActionPolicy.Regla regla = ((ActionPolicy.Decision.Permitida) decision).regla();
+        String rechazoPermiso = PermisosModulo.validar(accion, modulo, usuario);
+        if (rechazoPermiso != null) {
+            audit.accionDenegada(usuario.codigoUsuario(), usuario.empresa(), accion,
+                    "PERMISO_MODULO:" + (modulo != null ? modulo : "-"));
+            return respuesta(HttpStatus.FORBIDDEN, BridgeResult.error(rechazoPermiso));
+        }
         if (regla.escritura() && !limiteEscrituras.permitir(usuario.userId())) {
             audit.accionDenegada(usuario.codigoUsuario(), usuario.empresa(), accion, "LIMITE_ESCRITURAS");
             return respuesta(HttpStatus.TOO_MANY_REQUESTS, BridgeResult.error(MENSAJE_LIMITE_ESCRITURAS));

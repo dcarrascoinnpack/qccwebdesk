@@ -448,7 +448,12 @@
 
             default:
                 var url = Object.prototype.hasOwnProperty.call(ACCIONES_ARCHIVO, payload.action) ? BRIDGE_ARCHIVO_URL : BRIDGE_URL;
-                return peticion("POST", url, payload).then(function (r) {
+                // _modulo: módulo abierto, igual que el PhotinoBridge de Photino 1.8.14 (el gateway valida permisos
+                // por módulo y lo quita antes de los handlers). Nunca otorga permisos: los decide la sesión.
+                var conModulo = Object.assign({}, payload, {
+                    _modulo: (window.App && window.App.currentModule) || null
+                });
+                return peticion("POST", url, conModulo).then(function (r) {
                     if (r.status === 401) {
                         sesionPerdida();
                     }

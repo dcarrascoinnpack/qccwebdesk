@@ -460,6 +460,7 @@ LITERAL_ACCION = re.compile(r'"([a-zA-Z]+(?:\.[a-zA-Z0-9_]+)+)"')
 class Inventario:
     def __init__(self, fuente):
         self.fuente = fuente
+        self.inline = {}                              # accion -> rama `action == "x" { ... }` del router
         self.rutas = self._leer_router()
         self.prefijos = sorted({k.split(".")[0] for _, k, _ in self.rutas}, key=len, reverse=True)
         self.clases = self._indexar_clases()
@@ -472,6 +473,12 @@ class Inventario:
         rutas = []
         for m in re.finditer(r'action\.StartsWith\("([^"]+)"\)|action == "([^"]+)"', src):
             cola = src[m.end(): m.end() + 400]
+            if m.group(2):
+                # Ruta exacta: el handler se busca SOLO dentro de su rama (si no, una rama con código inline
+                # —p. ej. permisos.mios— tomaría el handler de la rama siguiente).
+                llave = src.find("{", m.end())
+                if llave >= 0 and ";" not in src[m.end():llave]:
+                    cola = src[llave:_cerrar_llave(src, llave) + 1]
             h = re.search(r"new (\w+Handler)\(|_authHandler|rawResult\s*=\s*([A-Z]\w*)\s*\(", cola)
             if h and h.group(1):
                 handler = h.group(1)
@@ -480,6 +487,10 @@ class Inventario:
             elif h and h.group(2):
                 # Acción atendida por un método del propio router (p. ej. excel.guardar → GuardarExcel).
                 handler = "MessageRouter." + h.group(2)
+            elif m.group(2):
+                # Acción atendida con código inline en la rama del router (Photino 1.8.14: permisos.mios).
+                handler = "MessageRouter#inline"
+                self.inline[m.group(2)] = cola
             else:
                 handler = "MessageRouter"
             rutas.append(("prefijo" if m.group(1) else "exacta", m.group(1) or m.group(2), handler))
@@ -578,6 +589,8 @@ class Inventario:
             return None, "sin handler en Photino", []
         if enrutada.startswith("MessageRouter."):
             return self._huella_metodo_router(accion, enrutada.split(".", 1)[1])
+        if enrutada == "MessageRouter#inline":
+            return self._huella_rama_router(accion)
         propias = [d for d in declaraciones if d[0] == enrutada and d[2] is not None]
         if not propias:
             return None, "el router envía '%s' a %s, que no la declara" % (accion, enrutada), []
@@ -638,6 +651,24 @@ class Inventario:
         partes = ["router:MessageRouter.%s" % metodo, "ruta:%s" % accion, "MessageRouter.cs#%s:%s" % (metodo, normalizar(cuerpo))]
         digest = hashlib.sha256("\n".join(partes).encode("utf-8")).hexdigest()
         return digest, None, ['MessageRouter.cs action == "%s"' % accion, "MessageRouter.cs#%s" % metodo]
+
+    def _huella_rama_router(self, accion):
+        """
+        Acción atendida con código inline en su rama de MessageRouter: la rama + el archivo COMPLETO de cada servicio que
+        invoca vía campo del router (p. ej. permisos.mios → _permisos.NivelesEfectivos → PermisosService.cs). Archivo
+        completo a propósito: la web porta ese servicio entero (reglas de permisos), cualquier cambio debe revisarse.
+        """
+        rama = self.inline.get(accion)
+        if rama is None:
+            return None, "rama de MessageRouter no encontrada", []
+        router = quitar_comentarios_cs(self.fuente.read(ROUTER))
+        partes = ["router:MessageRouter#inline", "ruta:%s" % accion, "rama:" + normalizar(rama)]
+        componentes = ['MessageRouter.cs action == "%s"' % accion]
+        for archivo in sorted({a for a, _ in self._llamadas_a_campos(router, rama)}):
+            partes.append("%s:%s" % (archivo.rsplit("/", 1)[1], normalizar(self.fuente.read(archivo))))
+            componentes.append("%s (completo)" % archivo.rsplit("/", 1)[1])
+        digest = hashlib.sha256("\n".join(partes).encode("utf-8")).hexdigest()
+        return digest, None, componentes
 
     def _llamadas_a_campos(self, src_handler, codigo):
         """_api.Metodo( → (archivo de la clase del campo, Metodo)."""

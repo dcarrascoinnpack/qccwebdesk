@@ -148,7 +148,22 @@ test("adjuntos.subir va por la ruta de archivos (con CSRF) y el resto por el bri
     await shim.ctx.PhotinoBridge.send({ action: "noConformidades.adjuntos.list", id: 7 });
     assert.deepEqual(shim.registro.fetch.map(f => f.url), ["api/v1/bridge/archivo", "api/v1/bridge"]);
     assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
-    assert.deepEqual(JSON.parse(shim.registro.fetch[0].opciones.body), payload);
+    assert.deepEqual(JSON.parse(shim.registro.fetch[0].opciones.body), { ...payload, _modulo: null });
+});
+
+test("cada acción al gateway lleva el módulo abierto (_modulo) como el PhotinoBridge de Photino 1.8.14", async () => {
+    const shim = cargarShim();
+    await shim.ctx.PhotinoBridge.send({ action: "noConformidades.list", data: { page: 1 } });
+    shim.ctx.App = { currentModule: "nc-internas" };
+    const payload = { action: "noConformidades.get", id: 5, _modulo: "usuarios" };
+    await shim.ctx.PhotinoBridge.send(payload);
+    await shim.ctx.PhotinoBridge.send({ action: "excel.guardar", data: { fileName: "a.xlsx", base64: XLSX_MINIMO } });
+    const cuerpos = shim.registro.fetch.map(f => JSON.parse(f.opciones.body));
+    assert.equal(cuerpos.length, 2, "excel.guardar sigue sin llamar al gateway");
+    assert.deepEqual(cuerpos[0], { action: "noConformidades.list", data: { page: 1 }, _modulo: null });
+    // El valor lo pone el shim (módulo abierto), no el controller; el payload original no se modifica.
+    assert.deepEqual(cuerpos[1], { action: "noConformidades.get", id: 5, _modulo: "nc-internas" });
+    assert.equal(payload._modulo, "usuarios");
 });
 
 test("un 403 del bridge muestra el aviso 'no disponible' sin bloquear", async () => {

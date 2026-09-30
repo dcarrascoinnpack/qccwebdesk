@@ -50,6 +50,8 @@ public class AuthController {
     static final String MENSAJE_REQUERIDOS = "Completa todos los campos";
     static final String MENSAJE_BLOQUEO = "Demasiados intentos. Espera unos minutos e inténtalo nuevamente.";
     static final String MENSAJE_NO_DISPONIBLE = "Servicio de autenticación no disponible. Intenta más tarde.";
+    /** Mismo texto que Photino 1.8.14 cuando no puede cargar los permisos tras un login correcto. */
+    static final String MENSAJE_PERMISOS = "No se pudieron cargar los permisos del usuario. Intenta nuevamente.";
     private static final int MAX_LARGO_USUARIO = 100;
     private static final int MAX_LARGO_PASSWORD = 256;
 
@@ -122,7 +124,14 @@ public class AuthController {
         ResponseEntity<Map<String, Object>> salida;
         if (resultado instanceof InnpackAuthClient.Autenticado ok) {
             rateLimiter.registrarExito(ip, usuario);
-            HttpSession sesion = crearSesion(ok, request, response);
+            // Photino 1.8.14 (MessageRouter.CargarPermisosInnpackAsync): sin permisos no se entra.
+            Map<String, String> permisos = authClient.misPermisos(ok.token());
+            if (permisos == null) {
+                audit.loginErrorUpstream(ok.codigoUsuario(), ip, "mis-permisos no disponible");
+                esperarDuracionMinima(inicio);
+                return error(HttpStatus.SERVICE_UNAVAILABLE, MENSAJE_PERMISOS);
+            }
+            HttpSession sesion = crearSesion(ok, permisos, request, response);
             audit.loginOk(ok.codigoUsuario(), ip, EMPRESA_INNPACK, sesion.getId());
             salida = ResponseEntity.ok(respuesta(true, datosLogin(ok), null));
         } else if (resultado instanceof InnpackAuthClient.Rechazado rechazado) {
@@ -172,7 +181,8 @@ public class AuthController {
      * Sesión nueva en cada login: se invalida cualquier sesión previa del navegador (protección
      * contra session fixation) y se rota el token CSRF.
      */
-    private HttpSession crearSesion(InnpackAuthClient.Autenticado ok, HttpServletRequest request, HttpServletResponse response) {
+    private HttpSession crearSesion(InnpackAuthClient.Autenticado ok, Map<String, String> permisosModulo,
+            HttpServletRequest request, HttpServletResponse response) {
         HttpSession anterior = request.getSession(false);
         if (anterior != null) {
             anterior.invalidate();
@@ -184,7 +194,8 @@ public class AuthController {
         Instant tope = ahora.plus(properties.sessionMaxDuration());
         Instant expira = ok.tokenExpira() != null && ok.tokenExpira().isBefore(tope) ? ok.tokenExpira() : tope;
         SessionUser usuario = new SessionUser(
-                ok.userId(), ok.codigoUsuario(), ok.nombreCompleto(), ok.rol(), EMPRESA_INNPACK, ok.token(), ahora, expira);
+                ok.userId(), ok.codigoUsuario(), ok.nombreCompleto(), ok.rol(), EMPRESA_INNPACK, ok.token(), ahora, expira,
+                permisosModulo);
 
         List<SimpleGrantedAuthority> permisos = List.of(
                 new SimpleGrantedAuthority("ROLE_" + ok.rol().toUpperCase(Locale.ROOT)),

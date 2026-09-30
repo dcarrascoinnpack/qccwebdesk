@@ -102,7 +102,7 @@ class BridgeFase3mTest {
         p.put("action", GESTION);
         p.put("id", 501);
         p.put("responsable", "Juan Pérez (Calidad)");
-        p.put("estadoGestion", "EN_GESTION");
+        p.put("estadoGestion", "PENDIENTE");
         p.put("fechaCompromiso", "2026-10-15");
         p.put("actualizadoPor", "Admin Uno");
         cambios.forEach((k, v) -> {
@@ -140,11 +140,11 @@ class BridgeFase3mTest {
         assertThat(r.ncId()).isEqualTo(501);
         assertThat(r.sub()).isEqualTo(20);
         assertThat(mapper.readTree(r.cuerpo())).isEqualTo(mapper.readTree(
-                "{\"responsable\":\"Juan Pérez (Calidad)\",\"estadoGestion\":\"EN_GESTION\",\"fechaCompromiso\":\"2026-10-15\",\"actualizadoPor\":\"Admin Uno\"}"));
+                "{\"responsable\":\"Juan Pérez (Calidad)\",\"estadoGestion\":\"PENDIENTE\",\"fechaCompromiso\":\"2026-10-15\",\"actualizadoPor\":\"Admin Uno\"}"));
         // El modal sigue abierto: se puede volver a guardar (la huella se renovó tras el PATCH).
-        enviar(s, gestion(Map.of("estadoGestion", "ASIGNADA", "fechaCompromiso", "", "responsable", ""))).andExpect(jsonPath("$.ok").value(true));
+        enviar(s, gestion(Map.of("estadoGestion", "CERRADA", "fechaCompromiso", "", "responsable", ""))).andExpect(jsonPath("$.ok").value(true));
         assertThat(mapper.readTree(API.gestionesRecibidas().get(1).cuerpo())).isEqualTo(mapper.readTree(
-                "{\"responsable\":\"\",\"estadoGestion\":\"ASIGNADA\",\"fechaCompromiso\":null,\"actualizadoPor\":\"Admin Uno\"}"));
+                "{\"responsable\":\"\",\"estadoGestion\":\"CERRADA\",\"fechaCompromiso\":null,\"actualizadoPor\":\"Admin Uno\"}"));
     }
 
     @Test
@@ -153,8 +153,11 @@ class BridgeFase3mTest {
         abrir(s, 501);
         enviar(s, gestion(Map.of("estadoGestion", "CERRADA"))).andExpect(jsonPath("$.ok").value(true));
         assertThat(mapper.readTree(API.gestionesRecibidas().get(0).cuerpo()).get("estadoGestion").asString()).isEqualTo("CERRADA");
-        String invalido = "Estado de gestión inválido. Valores permitidos: PENDIENTE, ASIGNADA, EN_GESTION, CERRADA";
+        String invalido = "Estado de gestión inválido. Valores permitidos: PENDIENTE, CERRADA";
         enviar(s, gestion(Map.of("estadoGestion", "cerrada"))).andExpect(jsonPath("$.error").value(invalido));
+        // Fase 3u: Photino 1.8.14 quitó Asignada y En gestión del select (la API aún los acepta).
+        enviar(s, gestion(Map.of("estadoGestion", "ASIGNADA"))).andExpect(jsonPath("$.error").value(invalido));
+        enviar(s, gestion(Map.of("estadoGestion", "EN_GESTION"))).andExpect(jsonPath("$.error").value(invalido));
         enviar(s, gestion(Map.of("estadoGestion", ""))).andExpect(jsonPath("$.error").value("Falta el estado de gestión"));
         enviar(s, gestion(Map.of("estadoGestion", Borrar.CAMPO))).andExpect(jsonPath("$.error").value("Falta el estado de gestión"));
         enviar(s, gestion(Map.of("responsable", "R".repeat(151)))).andExpect(jsonPath("$.error").value("El responsable supera el máximo de 150 caracteres."));
@@ -201,7 +204,7 @@ class BridgeFase3mTest {
                 "{\"cerradoPor\":\"Operador Uno\",\"comentarioCierre\":null}"));
         // Y se puede reabrir desde Gestión.
         abrir(s, 502);
-        enviar(s, gestion(Map.of("id", 502, "estadoGestion", "EN_GESTION"))).andExpect(jsonPath("$.ok").value(true));
+        enviar(s, gestion(Map.of("id", 502, "estadoGestion", "PENDIENTE"))).andExpect(jsonPath("$.ok").value(true));
         enviar(s, cierre(501, "")).andExpect(jsonPath("$.ok").value(true));
         assertThat(mapper.readTree(API.cierresRecibidos().get(2).cuerpo()).get("comentarioCierre").isNull()).isTrue();
     }
@@ -253,7 +256,7 @@ class BridgeFase3mTest {
         enviar(s, cierre(404, "otra vez")).andExpect(jsonPath("$.ok").value(false));
         String log = salida.getAll();
         assertThat(log).containsPattern("evento=ESCRITURA usuario=admin1 empresa=INNPACK accion=noConformidades\\.gestion\\.actualizar "
-                + "recurso=nc:501:gestion:EN_GESTION resultado=OK ms=\\d+");
+                + "recurso=nc:501:gestion:PENDIENTE resultado=OK ms=\\d+");
         assertThat(log).containsPattern("accion=noConformidades\\.cerrar recurso=nc:502:cierre resultado=OK");
         assertThat(log).containsPattern("accion=noConformidades\\.cerrar recurso=nc:404:cierre resultado=ERROR");
         assertThat(log).doesNotContain("Responsable Sensible", "12.345.678-9", "Comentario Sensible", FakeInnpackApi.firmaDeToken(20), PASS);

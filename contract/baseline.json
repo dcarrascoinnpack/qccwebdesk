@@ -1,7 +1,7 @@
 {
   "descripcion": "Huellas validadas por acción habilitada en web: lógica C# de Photino (huella) y llamado/payload del frontend (huellaFrontend). Solo se actualiza con --aprobar tras revisar el cambio.",
-  "photinoCommit": "dd147ad5dff2311a8a25958521df06af7d2b5038",
-  "photinoVersion": "1.8.12",
+  "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+  "photinoVersion": "1.8.14",
   "acciones": {
     "inicio.getDashboard": {
       "huella": "f8c3f4365acd811e2fbf25580e18a7abdf54f033bb04bcb1772afd2dce7595e9",
@@ -13,11 +13,11 @@
     },
     "auth.login": {
       "huella": "b33a653147dbd2d8c1f7d1ded9aba613dbb0bc9964dd10e8dce902fad3d70565",
-      "huellaFrontend": "58fed93626eba4e687d6ec7cb573ad5eae3f5b6bb39b1a7299a9b12c3e2e4a58",
+      "huellaFrontend": "339af465914362f7d14e10cef71b7af4c48e93a70c92ef810b0ce0f9f186be89",
       "handler": "AuthHandler",
-      "photinoCommit": "6c42e05d11c0aef96b39363cb6941872a88ff9a6",
-      "photinoVersion": "1.8.12",
-      "aprobado": "2026-09-25T12:32:16Z"
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-09-30T12:07:19Z"
     },
     "auth.me": {
       "huella": "128d558dcd4ac4103ee54a9852df2db1d5d5c3b9f96e693ed8cc450d2211a28d",
@@ -634,6 +634,22 @@
       "photinoCommit": "dd147ad5dff2311a8a25958521df06af7d2b5038",
       "photinoVersion": "1.8.12",
       "aprobado": "2026-09-29T19:53:49Z"
+    },
+    "permisos.mios": {
+      "huella": "eada6ef25b33ef82ad0f3d3e3c049d98055053ad2adb042a72948277a2238fd5",
+      "huellaFrontend": "258713389f8a3e887b0aa60a400449cbf7a622bb5f8746fa0aadd79d9a11ff37",
+      "handler": "MessageRouter#inline",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-09-30T12:07:19Z"
+    },
+    "liberacionCalidad.inspectores": {
+      "huella": "870c00ebbed8bfc0ac9dc3891b9898fd80d02d6fc4b87d22c801f9bebb1d7577",
+      "huellaFrontend": "cad2926dc6f318e79dc4731e39b2f3988dd707492055e66d84e76bf7acf19ece",
+      "handler": "LiberacionCalidadHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-09-30T12:10:43Z"
     }
   }
 }

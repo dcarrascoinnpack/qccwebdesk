@@ -781,8 +781,11 @@ public class NoConformidadesBridgeHandler {
 
     private static final Set<String> CAMPOS_GESTION = Set.of("action", "id", "responsable", "estadoGestion", "fechaCompromiso",
             "actualizadoPor");
-    /** Opciones exactas del <select id="ncq-gestion-estado"> de Photino (= EstadosGestionValidos de la API). */
-    private static final List<String> ESTADOS_GESTION_WEB = List.of("PENDIENTE", "ASIGNADA", "EN_GESTION", "CERRADA");
+    /**
+     * Opciones exactas del <select id="ncq-gestion-estado"> (y "nci-gestion-estado") de Photino 1.8.14: PENDIENTE y
+     * CERRADA. La API aún acepta ASIGNADA/EN_GESTION, pero ya no son alcanzables por uso normal (Fase 3u).
+     */
+    private static final List<String> ESTADOS_GESTION_WEB = List.of("PENDIENTE", "CERRADA");
     static final String MENSAJE_GESTION_SIN_LEER = "Abre la gestión de la no conformidad antes de guardarla.";
     private static final Set<String> CAMPOS_CERRAR = Set.of("action", "id", "cerradoPor", "comentarioCierre");
 
@@ -827,7 +830,7 @@ public class NoConformidadesBridgeHandler {
             return BridgeResult.error("Falta el estado de gestión");
         }
         if (!ESTADOS_GESTION_WEB.contains(estado)) {
-            return BridgeResult.error("Estado de gestión inválido. Valores permitidos: PENDIENTE, ASIGNADA, EN_GESTION, CERRADA");
+            return BridgeResult.error("Estado de gestión inválido. Valores permitidos: PENDIENTE, CERRADA");
         }
         String fecha = textoPlano(payload.get("fechaCompromiso"));
         if (!fecha.isEmpty()) {

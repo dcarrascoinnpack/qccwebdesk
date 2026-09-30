@@ -39,7 +39,7 @@ import org.springframework.test.web.servlet.ResultActions;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
-/** Fase 2k — Gestión de Usuarios, solo lectura y solo admin/admin_ti (usuarios.list). API SIMULADA. */
+/** Fase 2k — Gestión de Usuarios, solo lectura (usuarios.list); desde la Fase 3u solo admin_ti como Photino 1.8.14. API SIMULADA. */
 @SpringBootTest(properties = {
     "spring.config.name=" + QccWebGatewayApplication.CONFIG_NAME,
     "qcc.web.auth.login-min-duration=0ms"
@@ -59,6 +59,7 @@ class BridgeFase2kTest {
         API.agregar(new FakeInnpackApi.Usuario(10, "operador1", PASS, "Operador Uno", "operador", true));
         API.agregar(new FakeInnpackApi.Usuario(20, "admin1", PASS, "Admin Uno", "admin", true));
         API.agregar(new FakeInnpackApi.Usuario(25, "adminti1", PASS, "Admin TI", "admin_ti", true));
+        API.agregar(new FakeInnpackApi.Usuario(26, "adminti2", PASS, "Admin TI Dos", "admin_ti", true));
         API.agregar(new FakeInnpackApi.Usuario(30, "consulta1", PASS, "Consulta Uno", "consulta", true));
     }
 
@@ -89,7 +90,7 @@ class BridgeFase2kTest {
 
     @Test
     void listReproyectaALosSieteCamposPascalCaseYDescartaLoDemas() throws Exception {
-        JsonNode json = json(accion(login("admin1"), CUERPO).andExpect(status().isOk()).andReturn());
+        JsonNode json = json(accion(login("adminti1"), CUERPO).andExpect(status().isOk()).andReturn());
         List<String> raiz = new ArrayList<>();
         json.propertyNames().forEach(raiz::add);
         assertThat(raiz).containsExactly("ok", "success", "data", "error");
@@ -118,7 +119,7 @@ class BridgeFase2kTest {
 
     @Test
     void datasetVacioNuloYFormasInvalidas() throws Exception {
-        MockHttpSession sesion = login("admin1");
+        MockHttpSession sesion = login("adminti1");
         API.modoUsuarios("VACIO");
         accion(sesion, CUERPO).andExpect(jsonPath("$.ok").value(true)).andExpect(jsonPath("$.data.length()").value(0));
         API.modoUsuarios("NULO");
@@ -136,13 +137,15 @@ class BridgeFase2kTest {
 
     @Test
     void operadorYRolDesconocidoNoLleganALaApi() throws Exception {
-        for (String usuario : List.of("operador1", "consulta1")) {
+        // Fase 3u: admin tampoco (Photino 1.8.14: Gestión de Usuarios solo admin_ti).
+        for (String usuario : List.of("operador1", "consulta1", "admin1")) {
             accion(login(usuario), CUERPO)
                     .andExpect(status().isForbidden())
                     .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
         }
         assertThat(API.peticionesUsuarios()).isEmpty();
         assertThat(policy.evaluar(LIST, usuario("INNPACK", "operador"))).isEqualTo(new ActionPolicy.Decision.Denegada("ROL_NO_PERMITIDO"));
+        assertThat(policy.evaluar(LIST, usuario("INNPACK", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("ROL_NO_PERMITIDO"));
         assertThat(policy.evaluar(LIST, usuario("INNPACK", "ADMIN_TI"))).isInstanceOf(ActionPolicy.Decision.Permitida.class);
         assertThat(policy.evaluar(LIST, usuario("FARET", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
     }
@@ -170,8 +173,8 @@ class BridgeFase2kTest {
 
     @Test
     void jwtDeLaSesionYConcurrencia() throws Exception {
-        MockHttpSession a = login("admin1");
-        MockHttpSession b = login("adminti1");
+        MockHttpSession a = login("adminti1");
+        MockHttpSession b = login("adminti2");
         ExecutorService pool = Executors.newFixedThreadPool(8);
         try {
             List<Callable<Boolean>> tareas = new ArrayList<>();
@@ -185,14 +188,14 @@ class BridgeFase2kTest {
         } finally {
             pool.shutdownNow();
         }
-        assertThat(API.authorizationRecibidos()).allMatch(x -> x.endsWith(FakeInnpackApi.firmaDeToken(20)) || x.endsWith(FakeInnpackApi.firmaDeToken(25)));
+        assertThat(API.authorizationRecibidos()).allMatch(x -> x.endsWith(FakeInnpackApi.firmaDeToken(25)) || x.endsWith(FakeInnpackApi.firmaDeToken(26)));
     }
 
     @Test
     void unauthorizedUpstreamInvalidaSoloEsaSesion() throws Exception {
-        MockHttpSession a = login("admin1");
-        MockHttpSession b = login("adminti1");
-        API.revocarTokens(20);
+        MockHttpSession a = login("adminti1");
+        MockHttpSession b = login("adminti2");
+        API.revocarTokens(25);
         accion(a, CUERPO).andExpect(status().isUnauthorized());
         assertThat(a.isInvalid()).isTrue();
         accion(b, CUERPO).andExpect(status().isOk());
@@ -200,7 +203,7 @@ class BridgeFase2kTest {
 
     @Test
     void csrfObligatorio() throws Exception {
-        MockHttpSession sesion = login("admin1");
+        MockHttpSession sesion = login("adminti1");
         mockMvc.perform(post("/api/v1/bridge").session(sesion).contentType(MediaType.APPLICATION_JSON).content(CUERPO))
                 .andExpect(status().isForbidden());
         assertThat(API.peticionesUsuarios()).isEmpty();

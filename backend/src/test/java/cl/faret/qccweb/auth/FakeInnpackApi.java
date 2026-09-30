@@ -42,6 +42,7 @@ public final class FakeInnpackApi implements AutoCloseable {
             throw new IllegalStateException(e);
         }
         server.createContext("/api/auth/login", this::login);
+        server.createContext("/api/auth/mis-permisos", this::misPermisos);
         server.createContext("/api/home/dashboard", this::dashboard);
         server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
         server.createContext("/api/dashboard/filtros", ex -> dashboardLectura(ex, true));
@@ -129,6 +130,46 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesTalleres.clear();
         modoUsuarios = "NORMAL";
         modoDashboard = ModoDashboard.NORMAL;
+        permisosPorUsuario.clear();
+        misPermisosCaidos.clear();
+        misPermisosConsultados.clear();
+    }
+
+    // ------------------------------------------------------------------ Fase 3u: GET api/auth/mis-permisos
+    private final Map<Integer, String> permisosPorUsuario = new ConcurrentHashMap<>();
+    private final java.util.Set<Integer> misPermisosCaidos = ConcurrentHashMap.newKeySet();
+    private final java.util.List<Integer> misPermisosConsultados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** Permisos personalizados de un usuario (arreglo JSON crudo de data, p. ej. [{"modulo":"dashboard","nivel":"VER"}]). */
+    public void permisos(int userId, String dataJson) {
+        permisosPorUsuario.put(userId, dataJson);
+    }
+
+    /** Simula que mis-permisos falla (500) para un usuario: el login debe anularse, como en Photino. */
+    public void misPermisosCaido(int userId) {
+        misPermisosCaidos.add(userId);
+    }
+
+    /** "sub" de los tokens con que se consultó mis-permisos (la API toma el id del token). */
+    public java.util.List<Integer> misPermisosConsultados() {
+        return java.util.List.copyOf(misPermisosConsultados);
+    }
+
+    /** Como AuthController.MisPermisos de la API: [Authorize], id del token, ApiResponse con data = arreglo. */
+    private void misPermisos(HttpExchange ex) throws IOException {
+        Integer sub = subDeBearer(ex.getRequestHeaders().getFirst("Authorization"));
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        misPermisosConsultados.add(sub);
+        if (misPermisosCaidos.contains(sub)) {
+            responder(ex, 500, "{\"type\":\"about:blank\",\"title\":\"Internal Server Error\",\"status\":500}");
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + permisosPorUsuario.getOrDefault(sub, "[]")
+                + ",\"errors\":null}");
     }
 
     /**

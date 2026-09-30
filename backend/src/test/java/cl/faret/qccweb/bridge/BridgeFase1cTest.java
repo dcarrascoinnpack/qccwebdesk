@@ -178,7 +178,7 @@ class BridgeFase1cTest {
     @Test
     void soloAccionesHabilitadasHastaFase3s() {
         assertThat(policy.accionesRegistradas()).containsExactlyInAnyOrder(
-                "inicio.getDashboard", "maquinasSeguimiento.obtenerResumen",
+                "inicio.getDashboard", "permisos.mios", "liberacionCalidad.inspectores", "maquinasSeguimiento.obtenerResumen",
                 "dashboard.obtenerFiltros", "dashboard.obtenerResumen",
                 "registrosProduccion.obtenerFiltros", "registrosProduccion.obtenerResumen",
                 "registrosControl.obtenerRegistros",

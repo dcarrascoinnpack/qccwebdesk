@@ -109,6 +109,49 @@ public class InnpackAuthClient {
                 token, userId.asInt(), codigo, texto(campo(data, "nombreCompleto")), rol, expiracionJwt(token));
     }
 
+    /**
+     * Permisos personalizados del usuario recién autenticado: GET api/auth/mis-permisos con SU token (la API toma el
+     * id del token). Mismo criterio que PermisosService.TryParsearPermisos de Photino 1.8.14: data debe ser un arreglo;
+     * se ignoran filas sin módulo/nivel y niveles desconocidos; el nivel se normaliza a mayúsculas.
+     *
+     * @return módulo → nivel, o null si no se pudieron cargar (Photino anula el login en ese caso)
+     */
+    public Map<String, String> misPermisos(String token) {
+        ResponseEntity<String> respuesta;
+        try {
+            respuesta = restClient.get()
+                    .uri("/api/auth/mis-permisos")
+                    .header("Authorization", "Bearer " + token)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {})
+                    .toEntity(String.class);
+        } catch (RestClientException e) {
+            return null;
+        }
+        if (respuesta.getStatusCode().value() != 200) {
+            return null;
+        }
+        JsonNode data = campo(leerJson(respuesta.getBody()), "data");
+        if (data == null || !data.isArray()) {
+            return null;
+        }
+        Map<String, String> permisos = new java.util.LinkedHashMap<>();
+        for (JsonNode fila : data) {
+            JsonNode modulo = campo(fila, "modulo");
+            JsonNode nivel = campo(fila, "nivel");
+            if (modulo == null || !modulo.isString() || modulo.asString().isBlank()
+                    || nivel == null || !nivel.isString() || nivel.asString().isBlank()) {
+                continue;
+            }
+            String n = nivel.asString().toUpperCase(java.util.Locale.ROOT);
+            if (n.equals("SIN_ACCESO") || n.equals("VER") || n.equals("EDITAR")) {
+                permisos.put(modulo.asString(), n);
+            }
+        }
+        return permisos;
+    }
+
     /** Lee el claim exp del JWT (sin verificar firma: solo se usa para acotar la sesión web). */
     Instant expiracionJwt(String token) {
         try {

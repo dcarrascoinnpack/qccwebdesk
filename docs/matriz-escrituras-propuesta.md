@@ -14,15 +14,15 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **22** (`recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **23** (`recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-mismos roles que Photino). Las otras 59 siguen denegadas por `ActionPolicy`
+mismos roles que Photino). Las otras 58 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
-- Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
+- Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
   API INNPACK `qualitycontrolinnpack_sqlserver_port` (atributos `[Authorize]`, servicios). Extraída con el
   inventario del contract check y revisada a mano en los casos dudosos.
 - Generada el 2026-09-25. Toda modificación posterior se hace editando este archivo (y el estado de cada fila).
@@ -169,7 +169,7 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | `recepcion.muestra.crear` | POST `api/recepcion-calidad/{id}/muestra-laboratorio` | INNPACK de sesión (el handler la fija) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | crea muestra de laboratorio / NC desde el lote | sí: anular/eliminar en su módulo (admin) | **BAJO** | aditivo; autor y empresa desde sesión | VALIDADA (Fase 3s, gateway 0.4.0; roles = Photino) |
 | `recepcion.nc.crear` | POST `api/recepcion-calidad/{id}/nc` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea muestra de laboratorio / NC desde el lote | sí: anular/eliminar en su módulo (admin) | **BAJO** | aditivo; autor y empresa desde sesión | APROBADA |
 | `recepcion.plan.generar` | POST `api/recepcion-calidad/{id}/plan` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | genera plan AQL / registra bobinas muestreadas | sí: regenerar / volver a guardar | **BAJO** | operativo; sin autor en plan | APROBADA |
-| `recepcion.estado.actualizar` | PATCH `api/recepcion-calidad/{id}/estado` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | decide el estado del lote (conforme / no conforme) | sí: volver a cambiar | **MEDIO** | decisión de calidad; sin autor en API | APROBADA |
+| `recepcion.estado.actualizar` | PATCH `api/recepcion-calidad/{id}/estado` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | decide el estado del lote (conforme / no conforme) | sí: volver a cambiar | **MEDIO** | decisión de calidad; sin autor en API; estado restringido a los 3 valores del select, conflicto por huella del detalle (R5 sin corregir en la API) | VALIDADA (Fase 3t, gateway 0.4.0; roles = Photino) |
 
 ### registrosControl (3)
 
@@ -204,9 +204,9 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `usuarios.create` | POST `api/usuarios` | INNPACK (sin parámetro) | usuarios.*: admin/admin_ti (handler + menú) | — (deshabilitada; gestión de usuarios = excepción, se definirá aparte) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize(Roles=admin,admin_ti)]` | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | crea una cuenta (con rol elegido) | sí: eliminar (admin) | **ALTO** | gestión de cuentas; ya restringido en Photino y API | APROBADA |
-| `usuarios.delete` | DELETE `api/usuarios/{id}` | INNPACK (sin parámetro) | usuarios.*: admin/admin_ti (handler + menú) | — (deshabilitada; gestión de usuarios = excepción, se definirá aparte) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize(Roles=admin,admin_ti)]` | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina/desactiva una cuenta | no desde la UI | **ALTO** | gestión de cuentas; la API impide eliminarse a sí mismo (JWT) | APROBADA |
-| `usuarios.resetPassword` | PUT `api/usuarios/{id}/password` | INNPACK (sin parámetro) | usuarios.*: admin/admin_ti (handler + menú) | — (deshabilitada; gestión de usuarios = excepción, se definirá aparte) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize(Roles=admin,admin_ti)]` | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | fija una contraseña nueva a otra cuenta | sí: nuevo reset | **ALTO** | credenciales; nunca loguear la contraseña | APROBADA |
+| `usuarios.create` | POST `api/usuarios` | INNPACK (sin parámetro) | usuarios.*: solo admin_ti (handler + `PermisosService`, Photino 1.8.14) | — (deshabilitada; gestión de usuarios = excepción, se definirá aparte) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize(Roles=admin,admin_ti)]` | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | crea una cuenta (con rol elegido) | sí: eliminar (admin) | **ALTO** | gestión de cuentas; ya restringido en Photino y API | APROBADA |
+| `usuarios.delete` | DELETE `api/usuarios/{id}` | INNPACK (sin parámetro) | usuarios.*: solo admin_ti (handler + `PermisosService`, Photino 1.8.14) | — (deshabilitada; gestión de usuarios = excepción, se definirá aparte) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize(Roles=admin,admin_ti)]` | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina/desactiva una cuenta | no desde la UI | **ALTO** | gestión de cuentas; la API impide eliminarse a sí mismo (JWT) | APROBADA |
+| `usuarios.resetPassword` | PUT `api/usuarios/{id}/password` | INNPACK (sin parámetro) | usuarios.*: solo admin_ti (handler + `PermisosService`, Photino 1.8.14) | — (deshabilitada; gestión de usuarios = excepción, se definirá aparte) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize(Roles=admin,admin_ti)]` | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | fija una contraseña nueva a otra cuenta | sí: nuevo reset | **ALTO** | credenciales; nunca loguear la contraseña | APROBADA |
 
 ## Primera escritura (vertical slice) — `noConformidades.seguimiento.crear`
 
@@ -511,6 +511,42 @@ sobre las mismas acciones de No Conformidades con `ambito: "INTERNA"`. La web ad
 - Catálogos `nciAreas`/`nciTiposDesviacion`: solo lectura; `.crear/.desactivar` siguen denegadas (Photino no los crea inline).
 - Hallazgos Recepción R1–R6 (Fase 3q) siguen documentados, sin cambios.
 - Pruebas: `BridgeFase3rTest` (8), E2E CDP NC Internas 24/24 (×3), regresión PNC 3o 20/20 y Recepción 19/19.
+
+## Permisos por módulo — paridad con Photino `fd7f076` (v1.8.14, Fase 3u, 2026-09-30)
+
+Photino `dd147ad → fd7f076` agrega **permisos por módulo** (`PermisosService`, bloqueo server-side en `MessageRouter`):
+nivel `SIN_ACCESO` / `VER` / `EDITAR` por módulo = regla por rol (INNPACK: `EDITAR` en todo) salvo permiso
+personalizado del usuario (`usuario_modulo_permiso`, `GET api/auth/mis-permisos`); `admin_ti` siempre `EDITAR`; Gestión de
+Usuarios solo `admin_ti`; Inicio nunca baja de `VER`. SIN_ACCESO rechaza toda acción, VER rechaza escrituras ("Solo vista")
+y una escritura debe pertenecer al módulo abierto (`_modulo`, lo agrega el bridge JS). La web adopta `fd7f076`.
+
+| Photino | Web (Fase 3u) |
+|---|---|
+| `CargarPermisosInnpackAsync` tras `auth.login`; si falla, anula el login | `AuthController.login` lee `mis-permisos` con el JWT del usuario ANTES de crear la sesión; si falla → 503 con el mismo mensaje, sin sesión, auditoría `LOGIN_ERROR_UPSTREAM` |
+| Permisos en memoria del proceso (`PermisosService`) | en `SessionUser.permisosModulo` (por sesión, server-side) |
+| `ValidarAccion(action, _modulo)` | `PermisosModulo.validar` (port 1:1: mismos módulos, lecturas, sufijos y mensajes) en `BridgeController` tras `ActionPolicy`; 403 con el mensaje de Photino; `_modulo` se quita del payload antes del handler |
+| `permisos.mios` | habilitada (`ROLES_INNPACK`), niveles calculados en el gateway |
+| `usuarios.*` solo `admin_ti` | `usuarios.list` pasa de `admin, admin_ti` a solo `admin_ti` |
+| Selects de estado de gestión (PNC y NCI): Pendiente / Cerrada | `gestion.actualizar` acepta solo `PENDIENTE`, `CERRADA` (la API aún acepta `ASIGNADA`/`EN_GESTION`) |
+
+- **Seguridad transparente (solo web):** en el navegador `_modulo` es manipulable. Además de la regla de Photino, las
+  LECTURAS deben pertenecer al módulo declarado (`PREFIJOS_LECTURA_WEB`, tomado de lo que envía cada pantalla de
+  `fd7f076`; PNC además lee `dashboard.*`, `maquinasSeguimiento.*` y `liberacionCalidad.*`). Sin esto, un usuario con
+  `SIN_ACCESO` en un módulo leería sus datos declarando otro. `_modulo` desconocido o no-texto → "módulo de origen no
+  reconocido".
+- **Residual (igual que Photino, backlog):** PNC y NC Internas comparten el prefijo `noConformidades`; con `EDITAR` en uno
+  y `VER`/`SIN_ACCESO` en el otro, una escritura declarada desde el módulo permitido pasa la regla por prefijo. Cerrar esto
+  exige derivar el ámbito real de la NC en cada escritura (fase propia si el negocio llega a usar esa combinación).
+- **Producción:** `mis-permisos` y `usuarios/{id}/permisos` verificados desplegados (2026-09-30, GET anónimo → 401; rutas
+  vecinas inexistentes → 404). En la copia local de la API siguen sin commitear (como NC Internas en 3r).
+- **Degradado hasta su fase:** columna "Liberación Calidad" (`liberacionCalidad.inspectores`, fps-api). La web no tiene
+  cliente FPS: la acción está registrada y responde lo mismo que Photino en un equipo sin fps-api configurada
+  (`ok:false`, "fps-api no está configurada en este equipo.") → la celda muestra "No disponible", sin aviso 403 en cada
+  carga; lista/exportar/imprimir funcionan. Cuenta como COMPATIBLE en el contract check (81/250) pero es DEGRADADA.
+- **Pendiente (fases propias):** cliente FPS real para "Liberación Calidad"; nuevas acciones de Gestión
+  de Usuarios (`usuarios.activo/eliminarDefinitivo/cambiarRol/permisos.*`, excepción de paridad).
+- Pruebas: `BridgeFase3uTest` (12), tests del shim (`_modulo`), regresión completa; tests del bridge simulan el
+  `_modulo` del navegador (`NavegadorSimuladoMockMvc`).
 
 ## Recepción — `recepcion.muestra.crear` — VALIDADA (Fase 3s, 2026-09-28)
 

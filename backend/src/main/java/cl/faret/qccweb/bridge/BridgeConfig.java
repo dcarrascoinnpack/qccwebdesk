@@ -36,12 +36,15 @@ import tools.jackson.databind.ObjectMapper;
 public class BridgeConfig {
 
     static final Set<String> ROLES_INNPACK = Set.of("admin", "admin_ti", "operador");
-    static final Set<String> ROLES_ADMIN_INNPACK = Set.of("admin", "admin_ti");
+    /** Gestión de Usuarios: solo admin_ti desde Photino 1.8.14 (UsuariosHandler.IsAdmin y PermisosService). */
+    static final Set<String> ROLES_ADMIN_TI_INNPACK = Set.of("admin_ti");
     /**
      * ESCRITURAS operativas aditivas (docs/matriz-escrituras-propuesta.md). Política técnica inicial:
      * estado PENDIENTE_VALIDACION_NEGOCIO hasta que el negocio confirme los permisos funcionales.
      */
     static final Set<String> ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO = Set.of("operador", "admin", "admin_ti");
+    /** Mensaje de LiberacionCalidadHandler de Photino 1.8.14 cuando el equipo no tiene fps-api configurada. */
+    static final String MENSAJE_FPS_NO_CONFIGURADA = "fps-api no está configurada en este equipo.";
     /** Catálogos de NC con `crear` habilitado en la web (por fase, cada uno auditado y validado). */
     static final List<String> CATALOGOS_CREAR_HABILITADOS = List.of(
             "clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas", "familiasProducto",
@@ -139,6 +142,11 @@ public class BridgeConfig {
                 // Fase 1c — Inicio. Solo lectura; no reenvía nada del payload.
                 new ActionPolicy.Regla(
                         "inicio.getDashboard", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), inicio::getDashboard),
+                // Fase 3u — permisos.mios (Photino 1.8.14): niveles efectivos por módulo de la PROPIA sesión, para el
+                // menú y el modo "Solo vista". Calculados en el gateway (rol + personalizados leídos al iniciar sesión).
+                new ActionPolicy.Regla(
+                        PermisosModulo.ACCION_PERMISOS_MIOS, Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        (payload, usuario) -> BridgeResult.ok(PermisosModulo.nivelesEfectivos(usuario))),
                 // Fase 2a — Máquinas y Procesos. Solo lectura; solo maquinaId/sinLimite (sin identidad).
                 // Photino y la API no restringen por rol (cualquier usuario INNPACK autenticado).
                 new ActionPolicy.Regla(
@@ -199,6 +207,12 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "controlDocumental.adjunto.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         controlDocumental::adjuntoAbrir),
+                // Fase 3u — columna "Liberación Calidad" de PNC (Photino 1.8.14, fps-api). La web aún no tiene cliente
+                // FPS: responde lo mismo que Photino en un equipo sin fps-api configurada (la celda muestra "No
+                // disponible", sin aviso 403 en cada carga de la lista). No llama a ninguna API. Cliente real: fase propia.
+                new ActionPolicy.Regla(
+                        "liberacionCalidad.inspectores", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        (payload, usuario) -> BridgeResult.error(MENSAJE_FPS_NO_CONFIGURADA)),
                 // Fase 2i — No Conformidades (solo INNPACK), SOLO LECTURA (payload plano, sin "empresa").
                 // adjuntos.abrir: solo PDF/PNG/JPEG con firma real, la vista lo muestra en la página.
                 // Las 29 escrituras (create/update/eliminar/gestion/cerrar/seguimiento.crear/
@@ -253,12 +267,11 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "recepcion.estado.actualizar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), recepcionCalidad::estadoActualizar, RecepcionCalidadBridgeHandler::recursoEstado),
-                // Fase 2k — Gestión de Usuarios, SOLO LECTURA y SOLO admin/admin_ti (UsuariosHandler.
-                // IsAdmin + [Authorize(Roles)] de la API): primera regla con roles restringidos.
-                // Respuesta reproyectada a los 7 campos PascalCase de Photino. create/delete/
-                // resetPassword fuera (deny-by-default).
+                // Fase 2k — Gestión de Usuarios, SOLO LECTURA. Fase 3u: solo admin_ti como Photino 1.8.14
+                // (antes admin/admin_ti). Respuesta reproyectada a los 7 campos PascalCase de Photino.
+                // Escrituras y matriz de permisos fuera (deny-by-default; se abordan aparte).
                 new ActionPolicy.Regla(
-                        "usuarios.list", Set.of("INNPACK"), ROLES_ADMIN_INNPACK, Map.of(), usuarios::list),
+                        "usuarios.list", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::list),
                 // Fase 2l — Laboratorio - Muestras, SOLO LECTURA contra la API INNPACK (payload en
                 // "data", sin empresa ni rol). adjunto.abrir: validado como Control Documental y
                 // previsualizado/descargado en el navegador. Fuera: consultarNp/consultarRegistroProduccion/
