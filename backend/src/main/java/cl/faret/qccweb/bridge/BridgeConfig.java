@@ -300,6 +300,11 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "recepcion.nc.crear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), recepcionCalidad::ncCrear, RecepcionCalidadBridgeHandler::recursoNc),
+                // Fase 3z — "Nuevo Lote de Inspección" (igual que Photino: cualquier sesión INNPACK). Autor y empresa de sesión,
+                // lista blanca, largos del esquema, selects, foto con firma real ≤ 10 MB (ruta de archivos), doble clic.
+                new ActionPolicy.Regla(
+                        "recepcion.crear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), recepcionCalidad::crear, RecepcionCalidadBridgeHandler::recursoCrear),
                 // Fase 2k — Gestión de Usuarios, SOLO LECTURA. Fase 3u: solo admin_ti como Photino 1.8.14
                 // (antes admin/admin_ti). Respuesta reproyectada a los 7 campos PascalCase de Photino.
                 // Escrituras y matriz de permisos fuera (deny-by-default; se abordan aparte).

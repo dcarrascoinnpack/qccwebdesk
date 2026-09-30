@@ -33,8 +33,8 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * bool/objeto/array en filtros de texto → "Parámetro de filtro inválido." (regla 2e).
  *
- * Escrituras: bobinas.muestrear (Fase 3q), muestra.crear (Fase 3s), estado.actualizar (Fase 3t) y nc.crear (Fase 3x).
- * crear y plan.generar NO habilitadas. sap.consultar/sap.lotes (Fase 3y): apisapfaret con la API key del servidor.
+ * Escrituras: bobinas.muestrear (Fase 3q), muestra.crear (Fase 3s), estado.actualizar (Fase 3t), nc.crear (Fase 3x) y
+ * crear (Fase 3z). plan.generar NO habilitada (rota en la API: R10). sap.consultar/sap.lotes (Fase 3y): apisapfaret.
  */
 public class RecepcionCalidadBridgeHandler {
 
@@ -369,6 +369,306 @@ public class RecepcionCalidadBridgeHandler {
         JsonNode d = detalle instanceof JsonNode n && n.isObject() ? n : null;
         JsonNode m = d == null ? null : d.get("muestraLaboratorioId");
         return (m == null || m.isNull() ? "SIN_MUESTRA" : m.asString()) + "|" + (d == null ? "" : texto(d.get("estado")));
+    }
+
+    // ------------------------------------------------------------------ Fase 3z: recepcion.crear ("Nuevo lote")
+    static final String MENSAJE_TIPO_INVALIDO = "Tipo de materia prima inválido.";
+    static final String MENSAJE_BOBINAS_INVALIDAS = "La lista de bobinas no es válida.";
+    static final String MENSAJE_OPCION_INVALIDA = "Valor no permitido en ";
+    static final String MENSAJE_FECHA_INVALIDA = "La fecha de fabricación/vencimiento no es válida (formato AAAA-MM-DD).";
+    static final String MENSAJE_NUMERO_INVALIDO = "Valor numérico fuera de rango en ";
+    static final String MENSAJE_FOTO_NO_IMAGEN = "La fotografía no es una imagen válida.";
+    /** Opciones del <select id="rcqNlTipo"> de Photino. */
+    private static final Set<String> TIPOS_LOTE = Set.of("Bobina", "PVA", "PliegoFaret");
+    /** Claves de crearLote de Photino (Bobina + manual + PVA + Pliego), todas dentro de "data". */
+    private static final Set<String> CLAVES_DATA_CREAR = Set.of("tipoMateriaPrima", "proveedor", "guia", "itemCode", "descripcion",
+            "loteProveedor", "anchoDeclarado", "gramajeDeclarado", "bobinas", "pvaNombreAdhesivo", "pvaCantidadBins",
+            "pvaFechaFabricacionVencimiento", "pvaCertificadoCalidad", "pvaCondicionGeneral", "pvaObservacion", "pvaFotoBase64",
+            "pfNp", "pfCliente", "pfProducto", "pfCantidadTotal", "pfCantidadVerde", "pfCantidadAzul", "pfCantidadRoja",
+            "pfEstadoCarpeta", "pfCondicionVisual", "pfTipoHallazgo", "pfCantidadAfectada", "pfObservacion", "pfFotoBase64");
+    private static final Set<String> CLAVES_RAIZ_CREAR = Set.of("action", "data");
+    /** Largos de recepcion_lotes_control / recepcion_pva / recepcion_pliego_faret (una línea salvo observaciones). */
+    private static final java.util.Map<String, Integer> LARGOS_CREAR = java.util.Map.ofEntries(
+            java.util.Map.entry("proveedor", 150), java.util.Map.entry("guia", 50), java.util.Map.entry("itemCode", 100),
+            java.util.Map.entry("descripcion", 255), java.util.Map.entry("loteProveedor", 100),
+            java.util.Map.entry("pvaNombreAdhesivo", 150), java.util.Map.entry("pvaObservacion", 500),
+            java.util.Map.entry("pfNp", 50), java.util.Map.entry("pfCliente", 150), java.util.Map.entry("pfProducto", 255),
+            java.util.Map.entry("pfCondicionVisual", 255), java.util.Map.entry("pfObservacion", 500));
+    private static final Set<String> TEXTOS_MULTILINEA = Set.of("pvaObservacion", "pfObservacion");
+    /** Opciones exactas de los <select> de la vista (Photino). "" = sin elegir donde la vista lo ofrece. */
+    private static final java.util.Map<String, Set<String>> OPCIONES_CREAR = java.util.Map.of(
+            "pvaCertificadoCalidad", Set.of("Si", "No", "Pendiente"),
+            "pvaCondicionGeneral", Set.of("Conforme", "ConObservacion", "NoConforme"),
+            "pfEstadoCarpeta", Set.of("Recibida", "Incompleta", "NoRecibida"),
+            "pfTipoHallazgo", Set.of("", "DiferenciaTono", "GotasBarniz", "PiojosSuciedad", "ReservaBarniz", "Rayas", "Repinte",
+                    "DanoBordes", "Otro"));
+    /** DECIMAL(p,2): máximo por columna (10,2 → 99.999.999,99; 12,2 → 9.999.999.999,99). */
+    private static final java.util.Map<String, java.math.BigDecimal> MAXIMOS_CREAR = java.util.Map.of(
+            "anchoDeclarado", new java.math.BigDecimal("99999999.99"), "gramajeDeclarado", new java.math.BigDecimal("99999999.99"),
+            "pvaCantidadBins", new java.math.BigDecimal("99999999.99"),
+            "pfCantidadTotal", new java.math.BigDecimal("9999999999.99"), "pfCantidadVerde", new java.math.BigDecimal("9999999999.99"),
+            "pfCantidadAzul", new java.math.BigDecimal("9999999999.99"), "pfCantidadRoja", new java.math.BigDecimal("9999999999.99"),
+            "pfCantidadAfectada", new java.math.BigDecimal("9999999999.99"));
+    private static final int MAX_BOBINAS = 500;
+    private static final int MAX_NUMERO_BOBINA = 100;
+    private static final Pattern CONTROL_MULTILINEA = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
+    private static final Pattern FECHA_ISO = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}");
+    /** Doble clic: el mismo alta de la misma sesión dentro de esta ventana devuelve el lote ya creado (no crea otro). */
+    static final long VENTANA_REPETIDO_MS = 10_000;
+    private final java.util.concurrent.ConcurrentHashMap<Integer, Object> candadosCrear = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * recepcion.crear → POST api/recepcion-calidad {tipoMateriaPrima, empresa, proveedor, ..., bobinas, pva*, pf*, usuarioNombre}
+     * (Fase 3z), igual que Photino para el usuario: "Nuevo Lote de Inspección" (Bobina desde SAP, o PVA / Pliego manual con
+     * foto opcional). Mismo cuerpo que RecepcionCalidadHandler de Photino (textos ausentes = "", números GetDecimal). La API
+     * valida tipo, bobinas en Bobina y la suma de colores en Pliego, e inserta SIN transacción (R8a) y sin validar la foto
+     * (R8b). Responde {id}; la vista cierra el modal y abre el detalle (hoy roto para PVA/Pliego en la API: R9).
+     *
+     * Seguridad transparente: usuarioNombre y empresa ← sesión; lista blanca de claves; tipo entre las 3 opciones del select;
+     * textos con los largos del esquema (un exceso haría fallar un INSERT intermedio y dejaría un lote huérfano), sin
+     * controles ni marcado HTML; selects con sus opciones exactas; fecha AAAA-MM-DD; números dentro del rango de la columna; bobinas
+     * solo en Bobina (texto ≤ 100, sin repetir); foto base64 estricta, ≤ 10 MB y con firma real de imagen. Doble clic: mismo
+     * alta de la misma sesión en 10 s → devuelve el lote ya creado. Viaja por /api/v1/bridge/archivo (la foto supera el tope
+     * general). Residual: la procedencia SAP de una Bobina no se verifica (igual que Photino).
+     */
+    public BridgeResult crear(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_RAIZ_CREAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_DATA_CREAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        for (String clave : data.propertyNames()) {
+            JsonNode v = data.get(clave);
+            if (!clave.equals("bobinas") && v != null && !v.isNull() && !v.isString() && !v.isNumber()) {
+                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            }
+        }
+        String tipo = texto(data.get("tipoMateriaPrima"));
+        if (!tipo.isEmpty() && !TIPOS_LOTE.contains(tipo)) {
+            return BridgeResult.error(MENSAJE_TIPO_INVALIDO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("tipoMateriaPrima", tipo);
+        cuerpo.put("empresa", usuario.empresa());
+        for (String campo : new String[] {"proveedor", "guia", "itemCode", "descripcion", "loteProveedor"}) {
+            String error = ponerTexto(cuerpo, data, campo);
+            if (error != null) {
+                return BridgeResult.error(error);
+            }
+        }
+        for (String campo : new String[] {"anchoDeclarado", "gramajeDeclarado"}) {
+            String error = ponerNumero(cuerpo, data, campo);
+            if (error != null) {
+                return BridgeResult.error(error);
+            }
+        }
+        // Bobinas: Photino toma los strings no vacíos del arreglo (un no-string lanzaría en GetString → error).
+        ArrayNode bobinas = cuerpo.putArray("bobinas");
+        JsonNode arr = data.get("bobinas");
+        if (arr != null && !arr.isNull()) {
+            if (!arr.isArray() || arr.size() > MAX_BOBINAS) {
+                return BridgeResult.error(MENSAJE_BOBINAS_INVALIDAS);
+            }
+            Set<String> vistas = new HashSet<>();
+            for (JsonNode b : arr) {
+                if (!b.isString()) {
+                    return BridgeResult.error(MENSAJE_BOBINAS_INVALIDAS);
+                }
+                String n = b.asString();
+                if (n.isEmpty()) {
+                    continue;
+                }
+                if (n.length() > MAX_NUMERO_BOBINA || CONTROL_UNA_LINEA.matcher(n).find() || MARCADO_HTML.matcher(n).find()
+                        || !vistas.add(n)) {
+                    return BridgeResult.error(MENSAJE_BOBINAS_INVALIDAS);
+                }
+                bobinas.add(n);
+            }
+        }
+        if ((tipo.equals("PVA") || tipo.equals("PliegoFaret")) && !bobinas.isEmpty()) {
+            return BridgeResult.error(MENSAJE_BOBINAS_INVALIDAS);
+        }
+        String[] textosPva = {"pvaNombreAdhesivo", "pvaCertificadoCalidad", "pvaCondicionGeneral", "pvaObservacion"};
+        String[] textosPf = {"pfNp", "pfCliente", "pfProducto", "pfEstadoCarpeta", "pfCondicionVisual", "pfTipoHallazgo", "pfObservacion"};
+        String error = ponerTexto(cuerpo, data, "pvaNombreAdhesivo");
+        error = error != null ? error : ponerNumero(cuerpo, data, "pvaCantidadBins");
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        String fecha = texto(data.get("pvaFechaFabricacionVencimiento")).trim();
+        if (!fecha.isEmpty()) {
+            if (!FECHA_ISO.matcher(fecha).matches()) {
+                return BridgeResult.error(MENSAJE_FECHA_INVALIDA);
+            }
+            try {
+                java.time.LocalDate.parse(fecha);
+            } catch (java.time.format.DateTimeParseException e) {
+                return BridgeResult.error(MENSAJE_FECHA_INVALIDA);
+            }
+        }
+        cuerpo.put("pvaFechaFabricacionVencimiento", texto(data.get("pvaFechaFabricacionVencimiento")));
+        for (String campo : new String[] {"pvaCertificadoCalidad", "pvaCondicionGeneral", "pvaObservacion"}) {
+            error = ponerTexto(cuerpo, data, campo);
+            if (error != null) {
+                return BridgeResult.error(error);
+            }
+        }
+        error = ponerFoto(cuerpo, data, "pvaFotoBase64");
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        for (String campo : new String[] {"pfNp", "pfCliente", "pfProducto"}) {
+            error = ponerTexto(cuerpo, data, campo);
+            if (error != null) {
+                return BridgeResult.error(error);
+            }
+        }
+        for (String campo : new String[] {"pfCantidadTotal", "pfCantidadVerde", "pfCantidadAzul", "pfCantidadRoja"}) {
+            error = ponerNumero(cuerpo, data, campo);
+            if (error != null) {
+                return BridgeResult.error(error);
+            }
+        }
+        for (String campo : new String[] {"pfEstadoCarpeta", "pfCondicionVisual", "pfTipoHallazgo"}) {
+            error = ponerTexto(cuerpo, data, campo);
+            if (error != null) {
+                return BridgeResult.error(error);
+            }
+        }
+        error = ponerNumero(cuerpo, data, "pfCantidadAfectada");
+        error = error != null ? error : ponerTexto(cuerpo, data, "pfObservacion");
+        error = error != null ? error : ponerFoto(cuerpo, data, "pfFotoBase64");
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        // Opciones de los selects: solo se validan en el tipo que las usa (los demás viajan como Photino y la API los ignora).
+        for (String campo : tipo.equals("PVA") ? textosPva : tipo.equals("PliegoFaret") ? textosPf : new String[0]) {
+            Set<String> opciones = OPCIONES_CREAR.get(campo);
+            if (opciones != null && !opciones.contains(cuerpo.get(campo).asString())) {
+                return BridgeResult.error(MENSAJE_OPCION_INVALIDA + campo + ".");
+            }
+        }
+        cuerpo.put("usuarioNombre", autorDeSesion(usuario));
+
+        String huella = huellaCrear(cuerpo);
+        synchronized (candadosCrear.computeIfAbsent(usuario.userId(), k -> new Object())) {
+            String previo = LecturasDeSesion.huella(RECURSO_ULTIMO_ALTA);
+            if (previo != null) {
+                String[] partes = previo.split("\\|");
+                if (partes.length == 3 && partes[0].equals(huella)
+                        && System.currentTimeMillis() - Long.parseLong(partes[1]) < VENTANA_REPETIDO_MS) {
+                    ObjectNode mismo = mapper.createObjectNode();
+                    mismo.put("id", Integer.parseInt(partes[2]));
+                    return BridgeResult.ok(mismo);
+                }
+            }
+            BridgeResult resultado = InnpackRespuestas.reenviar(api.postJson(usuario, BASE, cuerpo), mapper);
+            if (resultado.ok() && resultado.data() instanceof JsonNode d && d.path("id").canConvertToInt()) {
+                LecturasDeSesion.registrar(RECURSO_ULTIMO_ALTA, huella + "|" + System.currentTimeMillis() + "|" + d.path("id").asInt());
+            }
+            return resultado;
+        }
+    }
+
+    private static final String RECURSO_ULTIMO_ALTA = "recepcion-crear:ultimo";
+
+    /** Recurso auditado: "recepcion:<id>:crear:<tipo>" (sin datos del formulario). */
+    public static String recursoCrear(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        String tipo = data == null ? "" : texto(data.get("tipoMateriaPrima"));
+        JsonNode id = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("id") : null;
+        return "recepcion:" + (id != null && id.canConvertToInt() ? id.asInt() : "?") + ":crear"
+                + (TIPOS_LOTE.contains(tipo) ? ":" + tipo : "");
+    }
+
+    /** GetString de Photino con los controles de la web; null = ok. */
+    private String ponerTexto(ObjectNode cuerpo, JsonNode data, String campo) {
+        String v = texto(data.get(campo));
+        Integer max = LARGOS_CREAR.get(campo);
+        if (max != null && v.length() > max) {
+            return "El campo " + campo + " supera el máximo de " + max + " caracteres.";
+        }
+        Pattern control = TEXTOS_MULTILINEA.contains(campo) ? CONTROL_MULTILINEA : CONTROL_UNA_LINEA;
+        if (control.matcher(v).find()) {
+            return MENSAJE_TEXTO_CARACTERES;
+        }
+        if (MARCADO_HTML.matcher(v).find()) {
+            return MENSAJE_TEXTO_HTML;
+        }
+        cuerpo.put(campo, v);
+        return null;
+    }
+
+    /** GetDecimal de Photino (número o texto convertible; si no, null) acotado al rango de la columna; null = ok. */
+    private static String ponerNumero(ObjectNode cuerpo, JsonNode data, String campo) {
+        java.math.BigDecimal v = decimal(data, campo);
+        if (v == null) {
+            cuerpo.putNull(campo);
+            return null;
+        }
+        // Photino admite negativos y más de 2 decimales (SQL Server redondea): solo se acota al rango de la columna.
+        if (v.abs().compareTo(MAXIMOS_CREAR.get(campo)) > 0) {
+            return MENSAJE_NUMERO_INVALIDO + campo + ".";
+        }
+        cuerpo.put(campo, v);
+        return null;
+    }
+
+    /** Foto opcional: base64 estricto, ≤ 10 MB, firma real de imagen (lo que el input accept="image/*" entrega). */
+    private static String ponerFoto(ObjectNode cuerpo, JsonNode data, String campo) {
+        String b64 = texto(data.get(campo)).trim();
+        if (b64.isEmpty()) {
+            cuerpo.put(campo, "");
+            return null;
+        }
+        if (b64.length() > MAX_BASE64_CHARS) {
+            return MENSAJE_TAMANO;
+        }
+        byte[] bytes;
+        try {
+            bytes = java.util.Base64.getDecoder().decode(b64);
+        } catch (IllegalArgumentException e) {
+            return MENSAJE_FOTO_NO_IMAGEN;
+        }
+        if (bytes.length == 0 || bytes.length > MAX_FOTO_BYTES || !esImagen(bytes)) {
+            return bytes.length > MAX_FOTO_BYTES ? MENSAJE_TAMANO : MENSAJE_FOTO_NO_IMAGEN;
+        }
+        cuerpo.put(campo, b64);
+        return null;
+    }
+
+    /** JPEG/PNG/GIF/WEBP (visibles) + BMP, TIFF, HEIC/HEIF/AVIF (una cámara/celular puede entregarlas; Photino las guarda). */
+    static boolean esImagen(byte[] b) {
+        if (mimeImagen(b) != null) {
+            return true;
+        }
+        if (b.length >= 2 && b[0] == 'B' && b[1] == 'M') {
+            return true;
+        }
+        if (b.length >= 4 && ((b[0] == 'I' && b[1] == 'I' && b[2] == 42 && b[3] == 0) || (b[0] == 'M' && b[1] == 'M' && b[2] == 0 && b[3] == 42))) {
+            return true;
+        }
+        if (b.length >= 12 && b[4] == 'f' && b[5] == 't' && b[6] == 'y' && b[7] == 'p') {
+            String marca = new String(b, 8, 4, java.nio.charset.StandardCharsets.US_ASCII);
+            return Set.of("heic", "heix", "hevc", "hevx", "mif1", "msf1", "heif", "avif", "avis").contains(marca);
+        }
+        return false;
+    }
+
+    /** SHA-256 del cuerpo (incluida la foto): identifica "el mismo alta" para el doble clic. */
+    private static String huellaCrear(ObjectNode cuerpo) {
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256").digest(cuerpo.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(h);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     static final String MENSAJE_NC_SIN_LEER = "Abre el detalle del lote antes de crear la No Conformidad.";

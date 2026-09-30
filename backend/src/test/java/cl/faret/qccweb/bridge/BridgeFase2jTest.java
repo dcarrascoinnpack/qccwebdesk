@@ -53,7 +53,7 @@ class BridgeFase2jTest {
     private static final String LIST = "recepcion.list";
     private static final String DETALLE = "recepcion.detalle";
     private static final String FOTO = "recepcion.foto.abrir";
-    private static final List<String> NO_HABILITADAS = List.of("recepcion.crear", "recepcion.plan.generar");
+    private static final List<String> NO_HABILITADAS = List.of("recepcion.plan.generar");
     private static final String BASE = "GET /api/recepcion-calidad";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();

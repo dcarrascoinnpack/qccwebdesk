@@ -14,12 +14,12 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **24** (`recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **25** (`recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-mismos roles que Photino). Las otras 57 siguen denegadas por `ActionPolicy`
+mismos roles que Photino). Las otras 56 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -165,7 +165,7 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | `recepcion.bobinas.muestrear` | POST `api/recepcion-calidad/{id}/bobinas-muestreadas` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | genera plan AQL / registra bobinas muestreadas | sí: regenerar / volver a guardar | **BAJO** | operativo; sin autor en plan | VALIDADA (Fase 3q, gateway 0.4.0) |
-| `recepcion.crear` | POST `api/recepcion-calidad` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea un lote de recepción (con foto opcional) | no hay eliminar en la UI | **BAJO** | registro operativo; empresa y autor desde sesión | APROBADA |
+| `recepcion.crear` | POST `api/recepcion-calidad` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea un lote de recepción (con foto opcional) | no hay eliminar en la UI | **BAJO** | registro operativo; empresa y autor desde sesión | APROBADA | VALIDADA (Fase 3z, gateway 0.4.0; roles = Photino) 
 | `recepcion.muestra.crear` | POST `api/recepcion-calidad/{id}/muestra-laboratorio` | INNPACK de sesión (el handler la fija) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | crea muestra de laboratorio / NC desde el lote | sí: anular/eliminar en su módulo (admin) | **BAJO** | aditivo; autor y empresa desde sesión | VALIDADA (Fase 3s, gateway 0.4.0; roles = Photino) |
 | `recepcion.nc.crear` | POST `api/recepcion-calidad/{id}/nc` | lote de la empresa de sesión (la API no filtra empresa) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea la NC del lote No conforme y la vincula | sí: gestionar/eliminar la NC en su módulo | **BAJO** | aditivo; autor desde sesión; candado + huella contra duplicados | VALIDADA (Fase 3x, gateway 0.4.0; roles = Photino) |
 | `recepcion.plan.generar` | POST `api/recepcion-calidad/{id}/plan` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | genera plan AQL / registra bobinas muestreadas | sí: regenerar / volver a guardar | **BAJO** | operativo; sin autor en plan | APROBADA |
@@ -558,6 +558,30 @@ y una escritura debe pertenecer al módulo abierto (`_modulo`, lo agrega el brid
   de Usuarios (`usuarios.activo/eliminarDefinitivo/cambiarRol/permisos.*`, excepción de paridad).
 - Pruebas: `BridgeFase3uTest` (12), tests del shim (`_modulo`), regresión completa; tests del bridge simulan el
   `_modulo` del navegador (`NavegadorSimuladoMockMvc`).
+
+## Recepción — `recepcion.crear` ("Nuevo Lote de Inspección") — VALIDADA (Fase 3z, 2026-09-30)
+
+Photino: modal "Nuevo Lote" → Bobina (línea de SAP + bobinas marcadas) o PVA / Pliego Faret manual con foto opcional
+(`<input type="file" accept="image/*">` → base64) → `recepcion.crear` → cierra el modal y abre el detalle. El handler C#
+reenvía TODOS los campos (textos ausentes = `""`, números con `GetDecimal`), `empresa` del payload (default INNPACK) y
+`UsuarioNombre` de su sesión. La API valida tipo obligatorio, bobinas en Bobina, empresa FARET solo Bobina y la suma de
+colores en Pliego; inserta sin transacción (R8a) y guarda la foto como `image/jpeg` sin validar (R8b).
+
+- Web: mismo cuerpo; `usuarioNombre` y `empresa` ← sesión; lista blanca de las 29 claves de Photino; tipo ∈ opciones del
+  select; textos con los largos del esquema (`recepcion_lotes_control` / `recepcion_pva` / `recepcion_pliego_faret`; un
+  exceso haría fallar un INSERT intermedio y dejaría un lote huérfano), sin controles (observaciones multilínea) ni marcado
+  HTML; selects de PVA/Pliego con sus opciones exactas; fecha AAAA-MM-DD; números dentro del rango de la columna (negativos
+  y más de 2 decimales se aceptan como en Photino); bobinas solo en Bobina (texto ≤ 100, sin repetir, sin HTML: un número
+  de bobina con marcado se rechaza — Photino lo guardaría y el detalle lo pinta con `innerHTML`); foto base64 estricta,
+  ≤ 10 MB y con firma real de imagen (JPEG/PNG/GIF/WEBP/BMP/TIFF/HEIC/HEIF/AVIF); doble clic: el mismo alta de la misma
+  sesión en 10 s devuelve el lote ya creado. Viaja por `/api/v1/bridge/archivo` (la foto supera el tope general).
+- Residual: la procedencia SAP de una Bobina no se verifica contra apisapfaret (igual que Photino).
+- Pruebas: `BridgeFase3zTest` (6), E2E `e2e_cdp_3z.mjs` 13/13 (Bobina desde SAP con doble clic real → un lote; PVA con foto
+  JPEG real vía `DOM.setFileInputFiles`; archivo no imagen rechazado; Solo vista) + regresión 3y/3x/3w/3u.
+- **Correcciones R9/R10 en la API (2026-09-30):** aplicadas SIN commit en `qualitycontrolinnpack_sqlserver_port`
+  (`RecepcionCalidadRepository.cs`: `CAST(CASE WHEN foto IS NOT NULL THEN 1 ELSE 0 END AS bit) AS tiene_foto` en
+  PVA/Pliego y `UPDATE ... IF @@ROWCOUNT = 0 INSERT` en `GenerarPlan`; build OK); pendientes de commit/deploy del equipo
+  de la API. Con eso el detalle de PVA/Pliego y `recepcion.plan.generar` quedan utilizables en ambos clientes.
 
 ## Recepción — consultas SAP del "Nuevo lote" (Fase 3y, 2026-09-30) y backlog de la API de Recepción
 

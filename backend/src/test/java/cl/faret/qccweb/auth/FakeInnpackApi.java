@@ -140,6 +140,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         modoFps = "NORMAL";
         sapConsultas.clear();
         modoSap = "NORMAL";
+        lotesCreados.clear();
+        siguienteLote.set(1000);
         ncPorLote.clear();
         ncRecepcionRecibidas.clear();
         siguienteNcRecepcion.set(900);
@@ -1479,6 +1481,41 @@ public final class FakeInnpackApi implements AutoCloseable {
         this.demoraEstadoMs = ms;
     }
 
+    // ------------------------------------------------------------------ Fase 3z: POST api/recepcion-calidad (alta de lote)
+    private final java.util.List<SeguimientoRecibido> lotesCreados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.concurrent.atomic.AtomicInteger siguienteLote = new java.util.concurrent.atomic.AtomicInteger(1000);
+
+    /** Cuerpos EXACTOS de POST api/recepcion-calidad (ncId = id asignado). */
+    public java.util.List<SeguimientoRecibido> lotesCreados() {
+        return java.util.List.copyOf(lotesCreados);
+    }
+
+    /** Como RecepcionCalidadService.CrearLoteAsync: tipo obligatorio, Bobina con bobinas, suma de colores en Pliego. */
+    private void crearLoteRecepcion(HttpExchange ex, int sub) throws IOException {
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        JsonNode b = mapper.readTree(cuerpo);
+        String tipo = b.path("tipoMateriaPrima").asString("");
+        if (tipo.isBlank()) {
+            responder(ex, 400, fallo("Falta el tipo de materia prima"));
+            return;
+        }
+        if (tipo.equals("Bobina") && b.path("bobinas").isEmpty()) {
+            responder(ex, 400, fallo("Debes seleccionar al menos una bobina desde SAP"));
+            return;
+        }
+        if (tipo.equals("PliegoFaret") && b.path("pfCantidadTotal").isNumber()) {
+            java.math.BigDecimal suma = b.path("pfCantidadVerde").decimalValue().add(b.path("pfCantidadAzul").decimalValue())
+                    .add(b.path("pfCantidadRoja").decimalValue());
+            if (suma.compareTo(b.path("pfCantidadTotal").decimalValue()) != 0) {
+                responder(ex, 400, fallo("Cantidad verde + azul + roja debe ser igual a la cantidad total"));
+                return;
+            }
+        }
+        int id = siguienteLote.getAndIncrement();
+        lotesCreados.add(new SeguimientoRecibido(id, sub, cuerpo, ex.getRequestHeaders().getFirst("Content-Type")));
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + "},\"errors\":null}");
+    }
+
     // ------------------------------------------------------------------ Fase 3x: POST api/recepcion-calidad/{id}/nc
     private final Map<Integer, Integer> ncPorLote = new ConcurrentHashMap<>();
     private final java.util.List<SeguimientoRecibido> ncRecepcionRecibidas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
@@ -1647,6 +1684,10 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         java.util.regex.Matcher est = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(\\d+)/estado$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/recepcion-calidad")) {
+            crearLoteRecepcion(ex, sub);
+            return;
+        }
         java.util.regex.Matcher ncr = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(\\d+)/nc$").matcher(path);
         if (ex.getRequestMethod().equals("POST") && ncr.matches()) {
             crearNcRecepcion(ex, Integer.parseInt(ncr.group(1)), sub);

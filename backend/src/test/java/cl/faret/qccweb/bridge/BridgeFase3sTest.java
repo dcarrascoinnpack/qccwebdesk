@@ -165,7 +165,7 @@ class BridgeFase3sTest {
         Map<String, Object> d = policy.describir().stream().filter(x -> x.get("accion").equals(CREAR)).findFirst().orElseThrow();
         assertThat(d.get("escritura")).isEqualTo(true);
         assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti", "operador"));
-        for (String otra : List.of("recepcion.crear", "recepcion.plan.generar")) {
+        for (String otra : List.of("recepcion.plan.generar")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);
         }
     }
