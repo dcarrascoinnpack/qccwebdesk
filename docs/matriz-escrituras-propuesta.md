@@ -14,12 +14,12 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **23** (`recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **24** (`recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-mismos roles que Photino). Las otras 58 siguen denegadas por `ActionPolicy`
+mismos roles que Photino). Las otras 57 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -167,7 +167,7 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | `recepcion.bobinas.muestrear` | POST `api/recepcion-calidad/{id}/bobinas-muestreadas` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | genera plan AQL / registra bobinas muestreadas | sí: regenerar / volver a guardar | **BAJO** | operativo; sin autor en plan | VALIDADA (Fase 3q, gateway 0.4.0) |
 | `recepcion.crear` | POST `api/recepcion-calidad` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea un lote de recepción (con foto opcional) | no hay eliminar en la UI | **BAJO** | registro operativo; empresa y autor desde sesión | APROBADA |
 | `recepcion.muestra.crear` | POST `api/recepcion-calidad/{id}/muestra-laboratorio` | INNPACK de sesión (el handler la fija) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | crea muestra de laboratorio / NC desde el lote | sí: anular/eliminar en su módulo (admin) | **BAJO** | aditivo; autor y empresa desde sesión | VALIDADA (Fase 3s, gateway 0.4.0; roles = Photino) |
-| `recepcion.nc.crear` | POST `api/recepcion-calidad/{id}/nc` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea muestra de laboratorio / NC desde el lote | sí: anular/eliminar en su módulo (admin) | **BAJO** | aditivo; autor y empresa desde sesión | APROBADA |
+| `recepcion.nc.crear` | POST `api/recepcion-calidad/{id}/nc` | lote de la empresa de sesión (la API no filtra empresa) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea la NC del lote No conforme y la vincula | sí: gestionar/eliminar la NC en su módulo | **BAJO** | aditivo; autor desde sesión; candado + huella contra duplicados | VALIDADA (Fase 3x, gateway 0.4.0; roles = Photino) |
 | `recepcion.plan.generar` | POST `api/recepcion-calidad/{id}/plan` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | genera plan AQL / registra bobinas muestreadas | sí: regenerar / volver a guardar | **BAJO** | operativo; sin autor en plan | APROBADA |
 | `recepcion.estado.actualizar` | PATCH `api/recepcion-calidad/{id}/estado` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | decide el estado del lote (conforme / no conforme) | sí: volver a cambiar | **MEDIO** | decisión de calidad; sin autor en API; estado restringido a los 3 valores del select, conflicto por huella del detalle (R5 sin corregir en la API) | VALIDADA (Fase 3t, gateway 0.4.0; roles = Photino) |
 
@@ -558,6 +558,25 @@ y una escritura debe pertenecer al módulo abierto (`_modulo`, lo agrega el brid
   de Usuarios (`usuarios.activo/eliminarDefinitivo/cambiarRol/permisos.*`, excepción de paridad).
 - Pruebas: `BridgeFase3uTest` (12), tests del shim (`_modulo`), regresión completa; tests del bridge simulan el
   `_modulo` del navegador (`NavegadorSimuladoMockMvc`).
+
+## Recepción — `recepcion.nc.crear` — VALIDADA (Fase 3x, 2026-09-30)
+
+Botón "Crear No Conformidad" del detalle de un lote "No conforme" sin NC (Photino: `confirm` → `recepcion.nc.crear
+{loteId}` → alerta con el código → reabre el detalle). API (`RecepcionCalidadRepository.CrearNoConformidad`): lee el lote
+SIN filtro de empresa, exige estado `NoConforme` y `nc_id` NULL, CREA la NC (`tipo` INTERNA, `origen` AUDITORIA_INTERNA,
+severidad MEDIA, proceso "Recepción de Materia Prima", `codigoProducto` = item del lote, creada por `usuarioNombre`, sin
+empresa/ámbito como el alta PNC) y DESPUÉS hace `UPDATE recepcion_lotes_control SET nc_id`. Sin transacción ni bloqueo.
+
+- Web: `usuarioNombre` ← sesión; lista blanca `{loteId}`; lote confirmado con el detalle de la empresa de sesión; exige
+  haber abierto el detalle (huella `ncId|estado`), candado por lote y relectura antes del POST → doble clic, dos sesiones
+  y reintento tras un timeout que sí creó NO duplican la NC (conflicto; reabrir resuelve). Las reglas de la API (solo No
+  conforme, una NC por lote) se muestran con sus mensajes, igual que Photino.
+- **Hallazgos API (R7, backlog, no corregidos):** (a) verificación sin bloqueo: dos creaciones simultáneas desde Photino u
+  otra instancia pueden crear dos NC y dejar vinculada la última; (b) fallo parcial: NC creada y vinculación fallida → el
+  lote sigue sin NC y un reintento crea otra (la web no puede distinguirlo de un fallo sin efecto); (c) sin filtro de
+  empresa ni de eliminado (como R5).
+- Pruebas: `BridgeFase3xTest` (7), E2E CDP `e2e_cdp_3x.mjs` 12/12 (doble clic real sobre el botón → una sola NC, alerta y
+  detalle vinculado; Solo vista rechaza) + regresión 3w 9/9 y 3u/3v 31/31.
 
 ## Recepción — `recepcion.muestra.crear` — VALIDADA (Fase 3s, 2026-09-28)
 

@@ -137,6 +137,10 @@ public final class FakeInnpackApi implements AutoCloseable {
         misPermisosConsultados.clear();
         fpsConsultas.clear();
         modoFps = "NORMAL";
+        ncPorLote.clear();
+        ncRecepcionRecibidas.clear();
+        siguienteNcRecepcion.set(900);
+        demoraNcRecepcionMs = 0;
     }
 
     // ------------------------------------------------------------------ Fase 3v: fps-api GET liberaciones/inspectores
@@ -1297,7 +1301,7 @@ public final class FakeInnpackApi implements AutoCloseable {
     /** Tipo de materia prima de cada lote de prueba (el resto de ids → 404 en el detalle). */
     private static String tipoLote(int id) {
         return switch (id) {
-            case 1, 3, 4, 5, 6, 7, 8, 9 -> "PVA";
+            case 1, 3, 4, 5, 6, 7, 8, 9, 24 -> "PVA"; // 24: fallo parcial de recepcion.nc.crear (Fase 3x)
             case 2 -> "PliegoFaret";
             case 10, 20, 21, 22, 23 -> "Bobina";
             default -> null;
@@ -1395,6 +1399,72 @@ public final class FakeInnpackApi implements AutoCloseable {
     /** Demora de la API al actualizar el estado (para superponer doble clic / sesiones concurrentes). */
     public void demoraEstado(long ms) {
         this.demoraEstadoMs = ms;
+    }
+
+    // ------------------------------------------------------------------ Fase 3x: POST api/recepcion-calidad/{id}/nc
+    private final Map<Integer, Integer> ncPorLote = new ConcurrentHashMap<>();
+    private final java.util.List<SeguimientoRecibido> ncRecepcionRecibidas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.concurrent.atomic.AtomicInteger siguienteNcRecepcion = new java.util.concurrent.atomic.AtomicInteger(900);
+    private volatile long demoraNcRecepcionMs;
+
+    /** Cuerpos EXACTOS de POST api/recepcion-calidad/{id}/nc (ncId = loteId). */
+    public java.util.List<SeguimientoRecibido> ncRecepcionRecibidas() {
+        return java.util.List.copyOf(ncRecepcionRecibidas);
+    }
+
+    /** No Conformidades creadas en total (la API crea la NC antes de vincularla: un fallo parcial deja una suelta). */
+    public int ncRecepcionCreadas() {
+        return siguienteNcRecepcion.get() - 900;
+    }
+
+    public void demoraNcRecepcion(long ms) {
+        this.demoraNcRecepcionMs = ms;
+    }
+
+    /** Simula que otra persona (Photino u otra sesión) creó la NC del lote. */
+    public void crearNcRecepcionPorOtro(int loteId) {
+        ncPorLote.put(loteId, siguienteNcRecepcion.getAndIncrement());
+    }
+
+    private String ncDetalle(int loteId) {
+        Integer nc = ncPorLote.get(loteId);
+        return ",\"ncId\":" + nc + ",\"ncCodigo\":" + (nc == null ? "null" : "\"NC-2026-" + nc + "\"");
+    }
+
+    /**
+     * Como RecepcionCalidadRepository.CrearNoConformidad (sin transacción): lee el lote SIN filtro de empresa, exige estado
+     * NoConforme y sin NC vinculada, crea la NC y DESPUÉS la vincula. Lote 24: la NC se crea pero la vinculación falla (500).
+     */
+    private void crearNcRecepcion(HttpExchange ex, int loteId, int sub) throws IOException {
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        ncRecepcionRecibidas.add(new SeguimientoRecibido(loteId, sub, cuerpo, ex.getRequestHeaders().getFirst("Content-Type")));
+        if (demoraNcRecepcionMs > 0) {
+            try {
+                Thread.sleep(demoraNcRecepcionMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (tipoLote(loteId) == null) {
+            responder(ex, 400, fallo("Lote no encontrado"));
+            return;
+        }
+        if (!estadoLote(loteId).equals("NoConforme")) {
+            responder(ex, 400, fallo("Solo se puede crear una No Conformidad cuando el lote quedó \\\"No conforme\\\""));
+            return;
+        }
+        if (ncPorLote.containsKey(loteId)) {
+            responder(ex, 400, fallo("Este lote ya tiene una No Conformidad vinculada"));
+            return;
+        }
+        int nc = siguienteNcRecepcion.getAndIncrement();
+        if (loteId == 24) {
+            responder(ex, 500, "{\"title\":\"error interno\"}");
+            return;
+        }
+        ncPorLote.put(loteId, nc);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"ncId\":" + nc + ",\"codigo\":\"NC-2026-" + nc
+                + "\"},\"errors\":null}");
     }
 
     /** Simula que otra persona (Photino u otra sesión) actualizó el estado del lote. */
@@ -1499,6 +1569,11 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         java.util.regex.Matcher est = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(\\d+)/estado$").matcher(path);
+        java.util.regex.Matcher ncr = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(\\d+)/nc$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && ncr.matches()) {
+            crearNcRecepcion(ex, Integer.parseInt(ncr.group(1)), sub);
+            return;
+        }
         if (ex.getRequestMethod().equals("PATCH") && est.matches()) {
             actualizarEstado(ex, Integer.parseInt(est.group(1)), sub);
             return;
@@ -1549,11 +1624,11 @@ public final class FakeInnpackApi implements AutoCloseable {
                 responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"Bobina\",\"proveedor\":\"Papeles Ñuble\",\"estado\":\"" + estadoLote(id)
                         + "\",\"totalBobinas\":" + bobinasLote(id).size() + ",\"bobinas\":" + mapper.writeValueAsString(bobinasLote(id))
                         + ",\"plan\":null,\"muestreadas\":" + muestreadasPorLote.getOrDefault(id, "[]")
-                        + ",\"muestraLaboratorioId\":" + muestraPorLote.get(id) + ",\"usuarioDelToken\":" + sub + "}" + fin);
+                        + ",\"muestraLaboratorioId\":" + muestraPorLote.get(id) + ncDetalle(id) + ",\"usuarioDelToken\":" + sub + "}" + fin);
                 return;
             }
             responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"" + tipo + "\",\"proveedor\":\"Adhesivos Ñuñoa\",\"estado\":\"" + estadoLote(id)
-                    + "\",\"totalBobinas\":0,\"bobinas\":[],\"pva\":{\"tieneFoto\":true},\"usuarioDelToken\":" + sub + "}" + fin);
+                    + "\",\"totalBobinas\":0,\"bobinas\":[],\"pva\":{\"tieneFoto\":true}" + ncDetalle(id) + ",\"usuarioDelToken\":" + sub + "}" + fin);
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");

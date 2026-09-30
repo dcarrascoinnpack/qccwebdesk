@@ -281,6 +281,11 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "recepcion.estado.actualizar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), recepcionCalidad::estadoActualizar, RecepcionCalidadBridgeHandler::recursoEstado),
+                // Fase 3x — "Crear No Conformidad" del lote No conforme (igual que Photino: cualquier sesión INNPACK). Autor de
+                // sesión, lote de la empresa de sesión, candado por lote + huella ncId|estado contra NC duplicadas.
+                new ActionPolicy.Regla(
+                        "recepcion.nc.crear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), recepcionCalidad::ncCrear, RecepcionCalidadBridgeHandler::recursoNc),
                 // Fase 2k — Gestión de Usuarios, SOLO LECTURA. Fase 3u: solo admin_ti como Photino 1.8.14
                 // (antes admin/admin_ti). Respuesta reproyectada a los 7 campos PascalCase de Photino.
                 // Escrituras y matriz de permisos fuera (deny-by-default; se abordan aparte).

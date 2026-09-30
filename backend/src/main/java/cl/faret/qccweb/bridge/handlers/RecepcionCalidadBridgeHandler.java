@@ -91,6 +91,7 @@ public class RecepcionCalidadBridgeHandler {
             LecturasDeSesion.registrar(recursoLecturaMuestreo(id), huellaMuestreadas(upstream.data()));
             LecturasDeSesion.registrar(recursoLecturaMuestra(id), huellaMuestra(upstream.data()));
             LecturasDeSesion.registrar(recursoLecturaEstado(id), huellaEstado(upstream.data()));
+            LecturasDeSesion.registrar(recursoLecturaNc(id), huellaNc(upstream.data()));
         }
         return upstream;
     }
@@ -184,6 +185,91 @@ public class RecepcionCalidadBridgeHandler {
         JsonNode d = detalle instanceof JsonNode n && n.isObject() ? n : null;
         JsonNode m = d == null ? null : d.get("muestraLaboratorioId");
         return (m == null || m.isNull() ? "SIN_MUESTRA" : m.asString()) + "|" + (d == null ? "" : texto(d.get("estado")));
+    }
+
+    static final String MENSAJE_NC_SIN_LEER = "Abre el detalle del lote antes de crear la No Conformidad.";
+    static final String MENSAJE_NC_CONFLICTO = "El lote fue modificado por otra persona desde que lo abriste (No Conformidad "
+            + "vinculada o estado). Vuelve a abrirlo para ver los cambios.";
+    /** Claves de crearNoConformidad de Photino INNPACK ({action, data:{loteId}}). */
+    private static final Set<String> CLAVES_RAIZ_NC = Set.of("action", "data");
+    private static final Set<String> CLAVES_DATA_NC = Set.of("loteId");
+    /** Un candado por lote: serializa en este gateway las creaciones de NC del mismo lote (doble clic, dos sesiones). */
+    private final java.util.concurrent.ConcurrentHashMap<Integer, Object> candadosNc = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * recepcion.nc.crear → POST api/recepcion-calidad/{loteId}/nc {usuarioNombre} (Fase 3x), igual que Photino para el
+     * usuario: botón "Crear No Conformidad" del detalle de un lote "No conforme" sin NC; la API lee el lote (SIN filtro de
+     * empresa), exige estado NoConforme y sin NC vinculada, CREA la NC (tipo INTERNA, origen AUDITORIA_INTERNA, severidad
+     * MEDIA, creada por usuarioNombre) y DESPUÉS la vincula (sin transacción). Responde {ncId, codigo}.
+     *
+     * Seguridad transparente: usuarioNombre ← sesión (Photino: NombreCompleto de su sesión C#); lista blanca {loteId}; el
+     * lote se confirma con el detalle de la EMPRESA DE SESIÓN. Duplicados: la API verifica sin bloqueo (dos creaciones
+     * simultáneas pasan ambas); la web exige haber abierto el detalle, serializa por lote y relee: si la NC vinculada o el
+     * estado cambiaron desde la apertura (otra sesión, doble clic, reintento tras un timeout que sí creó) rechaza en vez
+     * de crear otra. Residual: creaciones desde Photino u otra instancia entre la relectura y el POST, y el fallo parcial
+     * de la API (NC creada sin vincular: el lote sigue sin NC y un reintento crea otra) — documentados en la matriz.
+     */
+    public BridgeResult ncCrear(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_RAIZ_NC.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_DATA_NC.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer loteId = entero(data.get("loteId"));
+        if (loteId == null || loteId <= 0) {
+            return BridgeResult.error(MENSAJE_FALTA_LOTE);
+        }
+        String leida = LecturasDeSesion.huella(recursoLecturaNc(loteId));
+        if (leida == null) {
+            return BridgeResult.error(MENSAJE_NC_SIN_LEER);
+        }
+        synchronized (candadosNc.computeIfAbsent(loteId, k -> new Object())) {
+            // Una petición en espera (doble clic) ve aquí la huella ya olvidada por la anterior.
+            if (!leida.equals(LecturasDeSesion.huella(recursoLecturaNc(loteId)))) {
+                return BridgeResult.error(MENSAJE_NC_SIN_LEER);
+            }
+            BridgeResult vigente = detalleLote(loteId, usuario); // empresa de sesión: un lote ajeno no existe para esta sesión
+            if (!vigente.ok()) {
+                return vigente;
+            }
+            if (!huellaNc(vigente.data()).equals(leida)) {
+                return BridgeResult.error(MENSAJE_NC_CONFLICTO);
+            }
+            ObjectNode cuerpo = mapper.createObjectNode();
+            cuerpo.put("usuarioNombre", autorDeSesion(usuario));
+            BridgeResult resultado = InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + loteId + "/nc", cuerpo), mapper);
+            if (resultado.ok()) {
+                // La vista vuelve a abrir el detalle enseguida y registra la huella nueva.
+                LecturasDeSesion.olvidar(recursoLecturaNc(loteId));
+            }
+            return resultado;
+        }
+    }
+
+    /** Recurso auditado: "recepcion:<loteId>:nc[:<ncId>]". */
+    public static String recursoNc(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer loteId = data == null ? null : entero(data.get("loteId"));
+        JsonNode id = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("ncId") : null;
+        return "recepcion:" + (loteId != null && loteId > 0 ? loteId : "?") + ":nc"
+                + (id != null && id.canConvertToInt() ? ":" + id.asInt() : "");
+    }
+
+    static String recursoLecturaNc(int loteId) {
+        return "recepcion-nc:" + loteId;
+    }
+
+    /** Lo que decide nc.crear en el detalle: NC vinculada y estado del lote. */
+    static String huellaNc(Object detalle) {
+        JsonNode d = detalle instanceof JsonNode n && n.isObject() ? n : null;
+        JsonNode nc = d == null ? null : d.get("ncId");
+        return (nc == null || nc.isNull() ? "SIN_NC" : nc.asString()) + "|" + (d == null ? "" : texto(d.get("estado")));
     }
 
     static final String MENSAJE_FALTA_LOTE_ESTADO = "Falta el lote o el estado";

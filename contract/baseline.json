@@ -658,6 +658,14 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-09-30T13:04:45Z"
+    },
+    "recepcion.nc.crear": {
+      "huella": "0f36d694f6c2385de7107a99aa67dcb8793e5cf8f02b4045ecc36357efc40148",
+      "huellaFrontend": "573af01b83f7d774c34396990c80a703763e40f5efc706dc628d56800116020c",
+      "handler": "RecepcionCalidadHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-09-30T13:20:33Z"
     }
   }
 }
