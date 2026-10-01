@@ -34,7 +34,7 @@ import tools.jackson.databind.node.ObjectNode;
  * bool/objeto/array en filtros de texto → "Parámetro de filtro inválido." (regla 2e).
  *
  * Escrituras: bobinas.muestrear (Fase 3q), muestra.crear (Fase 3s), estado.actualizar (Fase 3t), nc.crear (Fase 3x) y
- * crear (Fase 3z). plan.generar NO habilitada (rota en la API: R10). sap.consultar/sap.lotes (Fase 3y): apisapfaret.
+ * crear (Fase 3z) y plan.generar (Fase 4a, tras corregirse R10 en la API). sap.consultar/sap.lotes (Fase 3y): apisapfaret.
  */
 public class RecepcionCalidadBridgeHandler {
 
@@ -276,6 +276,7 @@ public class RecepcionCalidadBridgeHandler {
             LecturasDeSesion.registrar(recursoLecturaMuestra(id), huellaMuestra(upstream.data()));
             LecturasDeSesion.registrar(recursoLecturaEstado(id), huellaEstado(upstream.data()));
             LecturasDeSesion.registrar(recursoLecturaNc(id), huellaNc(upstream.data()));
+            LecturasDeSesion.registrar(recursoLecturaPlan(id), huellaPlan(upstream.data()));
         }
         return upstream;
     }
@@ -845,6 +846,90 @@ public class RecepcionCalidadBridgeHandler {
     static String huellaEstado(Object detalle) {
         JsonNode d = detalle instanceof JsonNode n && n.isObject() ? n : null;
         return d == null ? "" : texto(d.get("estado"));
+    }
+
+    static final String MENSAJE_PLAN_SIN_LEER = "Abre el detalle del lote antes de generar el plan de muestreo.";
+    /** Únicas opciones de los <select id="rcqPlanNivel"> y <select id="rcqPlanAql"> de Photino (tabla NCh44 cargada). */
+    private static final Set<String> NIVELES_PLAN = Set.of("II");
+    private static final java.math.BigDecimal AQL_PLAN = new java.math.BigDecimal("2.5");
+    /** Claves de generarPlan de Photino INNPACK ({action, data:{loteId, nivelInspeccion, aql}}). */
+    private static final Set<String> CLAVES_RAIZ_PLAN = Set.of("action", "data");
+    private static final Set<String> CLAVES_DATA_PLAN = Set.of("loteId", "nivelInspeccion", "aql");
+    /** Un candado por lote: serializa en este gateway las generaciones del mismo lote (doble clic, dos sesiones). */
+    private final java.util.concurrent.ConcurrentHashMap<Integer, Object> candadosPlan = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * recepcion.plan.generar → POST api/recepcion-calidad/{loteId}/plan {nivelInspeccion, aql} (Fase 4a), igual que Photino
+     * para el usuario: botón "Generar plan" del detalle; nivel vacío → "II" y aql ausente → 2.5 (defaults del handler C#).
+     * La API calcula el plan NCh44 con el tamaño del lote y lo guarda (UPDATE, o INSERT si no había — R10): volver a
+     * generarlo lo recalcula y reemplaza, sin preguntar, como Photino. No registra autor.
+     *
+     * Seguridad transparente: lista blanca; nivel/aql restringidos a las opciones de los selects de Photino (lo único
+     * alcanzable por uso normal); lote confirmado con el detalle de la EMPRESA DE SESIÓN (la API no filtra empresa ni
+     * eliminado — R5); exige haber abierto el detalle en esta sesión. Sin detección de conflicto: el plan es determinista
+     * (mismo lote, nivel y AQL → mismo plan), así que regenerarlo sobre el de otra sesión no pierde nada. El candado por
+     * lote evita, desde este gateway, dos INSERT simultáneos de un lote sin plan (la PK rechazaría el segundo: R10).
+     */
+    public BridgeResult planGenerar(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_RAIZ_PLAN.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_DATA_PLAN.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer loteId = entero(data.get("loteId"));
+        if (loteId == null || loteId <= 0) {
+            return BridgeResult.error(MENSAJE_FALTA_LOTE);
+        }
+        String nivel = texto(data.get("nivelInspeccion"));
+        if (nivel.isBlank()) {
+            nivel = "II";
+        }
+        if (!NIVELES_PLAN.contains(nivel)) {
+            return BridgeResult.error(MENSAJE_OPCION_INVALIDA + "nivelInspeccion.");
+        }
+        java.math.BigDecimal aql = decimal(data, "aql");
+        if (aql != null && aql.compareTo(AQL_PLAN) != 0) {
+            return BridgeResult.error(MENSAJE_OPCION_INVALIDA + "aql.");
+        }
+        if (LecturasDeSesion.huella(recursoLecturaPlan(loteId)) == null) {
+            return BridgeResult.error(MENSAJE_PLAN_SIN_LEER);
+        }
+        synchronized (candadosPlan.computeIfAbsent(loteId, k -> new Object())) {
+            BridgeResult vigente = detalleLote(loteId, usuario); // empresa de sesión: un lote ajeno no existe para esta sesión
+            if (!vigente.ok()) {
+                return vigente;
+            }
+            ObjectNode cuerpo = mapper.createObjectNode();
+            cuerpo.put("nivelInspeccion", nivel);
+            cuerpo.put("aql", AQL_PLAN);
+            return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + loteId + "/plan", cuerpo), mapper);
+        }
+    }
+
+    /** Recurso auditado: "recepcion:<loteId>:plan[:<letraCodigo>]". */
+    public static String recursoPlan(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer loteId = data == null ? null : entero(data.get("loteId"));
+        String letra = dataRespuesta instanceof JsonNode d && d.isObject() ? texto(d.get("letraCodigo")) : "";
+        return "recepcion:" + (loteId != null && loteId > 0 ? loteId : "?") + ":plan"
+                + (letra.matches("[A-Z]{1,2}") ? ":" + letra : "");
+    }
+
+    static String recursoLecturaPlan(int loteId) {
+        return "recepcion-plan:" + loteId;
+    }
+
+    /** Plan que la sesión vio en el detalle (solo marca la apertura; no se compara: el plan es determinista). */
+    static String huellaPlan(Object detalle) {
+        JsonNode d = detalle instanceof JsonNode n && n.isObject() ? n : null;
+        JsonNode plan = d == null ? null : d.get("plan");
+        return plan == null || plan.isNull() ? "SIN_PLAN" : plan.toString();
     }
 
     static final String MENSAJE_FALTA_LOTE_BOBINAS = "Falta el lote o la lista de bobinas muestreadas";

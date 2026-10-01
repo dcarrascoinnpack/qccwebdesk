@@ -690,6 +690,14 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-09-30T13:50:20Z"
+    },
+    "recepcion.plan.generar": {
+      "huella": "432393fa46360ea9e2632e89c7e2d2256bacba1bbbdf4e419583159c529d92f8",
+      "huellaFrontend": "cd46342d5ce5273849da3052e5fa71c53ddded2dc7b0d3dca495cb19c53e7db4",
+      "handler": "RecepcionCalidadHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-09-30T20:00:31Z"
     }
   }
 }

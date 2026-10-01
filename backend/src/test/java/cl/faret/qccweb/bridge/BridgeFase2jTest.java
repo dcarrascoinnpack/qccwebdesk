@@ -53,7 +53,8 @@ class BridgeFase2jTest {
     private static final String LIST = "recepcion.list";
     private static final String DETALLE = "recepcion.detalle";
     private static final String FOTO = "recepcion.foto.abrir";
-    private static final List<String> NO_HABILITADAS = List.of("recepcion.plan.generar");
+    /** Fase 4a: las 11 acciones de Recepción de Photino están habilitadas; una acción fuera de la política sigue denegada. */
+    private static final List<String> NO_HABILITADAS = List.of("recepcion.eliminar");
     private static final String BASE = "GET /api/recepcion-calidad";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();

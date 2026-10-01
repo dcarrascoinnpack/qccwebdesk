@@ -128,6 +128,10 @@ public final class FakeInnpackApi implements AutoCloseable {
         demoraMuestraMs = 0;
         estadosRecibidos.clear();
         demoraEstadoMs = 0;
+        planPorLote.clear();
+        planesRecibidos.clear();
+        planesInsertados.set(0);
+        demoraPlanMs = 0;
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
         peticionesTalleres.clear();
@@ -1582,6 +1586,87 @@ public final class FakeInnpackApi implements AutoCloseable {
                 + "\"},\"errors\":null}");
     }
 
+    // ------------------------------------------------------------------ Fase 4a: POST api/recepcion-calidad/{id}/plan
+    private final Map<Integer, String> planPorLote = new ConcurrentHashMap<>();
+    private final java.util.List<SeguimientoRecibido> planesRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.concurrent.atomic.AtomicInteger planesInsertados = new java.util.concurrent.atomic.AtomicInteger();
+    private volatile long demoraPlanMs;
+
+    /** Cuerpos EXACTOS de POST api/recepcion-calidad/{id}/plan (ncId = loteId). */
+    public java.util.List<SeguimientoRecibido> planesRecibidos() {
+        return java.util.List.copyOf(planesRecibidos);
+    }
+
+    /** Filas insertadas en recepcion_plan_muestreo (la PK lote_id rechaza un segundo INSERT simultáneo: R10). */
+    public int planesInsertados() {
+        return planesInsertados.get();
+    }
+
+    /** Demora de la API entre el UPDATE y el INSERT (para superponer doble clic / sesiones concurrentes). */
+    public void demoraPlan(long ms) {
+        this.demoraPlanMs = ms;
+    }
+
+    /** Simula que otra persona (Photino u otra sesión) generó el plan del lote. */
+    public void generarPlanPorOtro(int loteId) {
+        planPorLote.put(loteId, planNch44(bobinasLote(loteId).size(), new java.math.BigDecimal("2.5")));
+    }
+
+    /** Plan del lote tal como lo devuelve el detalle (null si no tiene). */
+    public String planDelLote(int loteId) {
+        return planPorLote.get(loteId);
+    }
+
+    /** NCh44 nivel II mínima de la simulación: 2-8 → A (n=2), 9-15 → B (n=3); AQL 2.5 → Ac 0 / Re 1; otro AQL → sin Ac/Re. */
+    private static String planNch44(int tamanoLote, java.math.BigDecimal aql) {
+        String letra = tamanoLote >= 2 && tamanoLote <= 8 ? "A" : "B";
+        int muestra = letra.equals("A") ? 2 : 3;
+        boolean conAcRe = aql.compareTo(new java.math.BigDecimal("2.5")) == 0;
+        return "{\"norma\":\"NCh44\",\"tamanoLote\":" + tamanoLote + ",\"nivelInspeccion\":\"II\",\"aql\":" + aql.toPlainString()
+                + ",\"letraCodigo\":\"" + letra + "\",\"tamanoMuestra\":" + muestra + ",\"numeroAceptacion\":" + (conAcRe ? "0" : "null")
+                + ",\"numeroRechazo\":" + (conAcRe ? "1" : "null") + "}";
+    }
+
+    /**
+     * Como RecepcionCalidadRepository.GenerarPlan (R10): lee el tamaño del lote SIN filtro de empresa, busca la letra NCh44
+     * del nivel (sin letra → error de negocio: PVA/Pliego tienen tamaño 0), UPDATE del plan y, si no había, INSERT. Dos
+     * INSERT simultáneos del mismo lote: la PK rechaza el segundo (500), como SQL Server.
+     */
+    private void generarPlan(HttpExchange ex, int loteId, int sub) throws IOException {
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        planesRecibidos.add(new SeguimientoRecibido(loteId, sub, cuerpo, ex.getRequestHeaders().getFirst("Content-Type")));
+        if (tipoLote(loteId) == null) {
+            responder(ex, 400, fallo("Lote no encontrado"));
+            return;
+        }
+        JsonNode b = mapper.readTree(cuerpo);
+        String nivel = b.path("nivelInspeccion").asString("");
+        java.math.BigDecimal aql = b.path("aql").isNumber() ? b.path("aql").decimalValue() : new java.math.BigDecimal("2.5");
+        int tamano = bobinasLote(loteId).size();
+        if (!nivel.equals("II") || tamano < 2) {
+            responder(ex, 400, fallo("No hay tabla de muestreo NCh44 cargada para nivel " + nivel + " y tamaño de lote " + tamano));
+            return;
+        }
+        String plan = planNch44(tamano, aql);
+        boolean existia = planPorLote.containsKey(loteId);
+        if (demoraPlanMs > 0) {
+            try {
+                Thread.sleep(demoraPlanMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+        if (existia) {
+            planPorLote.put(loteId, plan);
+        } else if (planPorLote.putIfAbsent(loteId, plan) != null) {
+            responder(ex, 500, "{\"title\":\"Violation of PRIMARY KEY constraint\"}");
+            return;
+        } else {
+            planesInsertados.incrementAndGet();
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + plan + ",\"errors\":null}");
+    }
+
     /** Simula que otra persona (Photino u otra sesión) actualizó el estado del lote. */
     public void cambiarEstadoPorOtro(int loteId, String estado) {
         estadoLote.put(loteId, estado);
@@ -1697,6 +1782,11 @@ public final class FakeInnpackApi implements AutoCloseable {
             actualizarEstado(ex, Integer.parseInt(est.group(1)), sub);
             return;
         }
+        java.util.regex.Matcher pln = java.util.regex.Pattern.compile("^/api/recepcion-calidad/(\\d+)/plan$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && pln.matches()) {
+            generarPlan(ex, Integer.parseInt(pln.group(1)), sub);
+            return;
+        }
         if (!ex.getRequestMethod().equals("GET")) {
             responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
             return;
@@ -1742,7 +1832,7 @@ public final class FakeInnpackApi implements AutoCloseable {
             if (!bobinasLote(id).isEmpty()) {
                 responder(ex, 200, ok + "{\"id\":" + id + ",\"tipoMateriaPrima\":\"Bobina\",\"proveedor\":\"Papeles Ñuble\",\"estado\":\"" + estadoLote(id)
                         + "\",\"totalBobinas\":" + bobinasLote(id).size() + ",\"bobinas\":" + mapper.writeValueAsString(bobinasLote(id))
-                        + ",\"plan\":null,\"muestreadas\":" + muestreadasPorLote.getOrDefault(id, "[]")
+                        + ",\"plan\":" + planPorLote.getOrDefault(id, "null") + ",\"muestreadas\":" + muestreadasPorLote.getOrDefault(id, "[]")
                         + ",\"muestraLaboratorioId\":" + muestraPorLote.get(id) + ncDetalle(id) + ",\"usuarioDelToken\":" + sub + "}" + fin);
                 return;
             }

@@ -263,7 +263,7 @@ public class BridgeConfig {
                         noConformidades::adjuntosAbrir),
                 // Fase 2j — Recepción Calidad, SOLO LECTURA (payload en "data"). "empresa" = sesión.
                 // foto.abrir: lote confirmado con el detalle de la empresa de sesión y MIME por firma
-                // real. Escrituras crear/nc.crear/plan.generar y sap.* (otra API externa) fuera (deny-by-default).
+                // real. Escrituras y sap.* habilitadas más abajo, cada una en su fase.
                 new ActionPolicy.Regla(
                         "recepcion.list", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, recepcionCalidad::list),
                 new ActionPolicy.Regla(
@@ -305,6 +305,11 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "recepcion.crear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), recepcionCalidad::crear, RecepcionCalidadBridgeHandler::recursoCrear),
+                // Fase 4a — "Generar plan" de muestreo NCh44 (igual que Photino: cualquier sesión INNPACK; regenerar reemplaza).
+                // Nivel/AQL = opciones de los selects de Photino, lote de la empresa de sesión, candado por lote (R10).
+                new ActionPolicy.Regla(
+                        "recepcion.plan.generar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), recepcionCalidad::planGenerar, RecepcionCalidadBridgeHandler::recursoPlan),
                 // Fase 2k — Gestión de Usuarios, SOLO LECTURA. Fase 3u: solo admin_ti como Photino 1.8.14
                 // (antes admin/admin_ti). Respuesta reproyectada a los 7 campos PascalCase de Photino.
                 // Escrituras y matriz de permisos fuera (deny-by-default; se abordan aparte).

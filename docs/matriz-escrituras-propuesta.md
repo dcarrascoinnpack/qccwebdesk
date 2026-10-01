@@ -14,12 +14,12 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **25** (`recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **26** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-mismos roles que Photino). Las otras 56 siguen denegadas por `ActionPolicy`
+mismos roles que Photino). Las otras 55 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -64,7 +64,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 59 APROBADA · 22 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 55 APROBADA · 26 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -168,7 +168,7 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | `recepcion.crear` | POST `api/recepcion-calidad` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea un lote de recepción (con foto opcional) | no hay eliminar en la UI | **BAJO** | registro operativo; empresa y autor desde sesión | APROBADA | VALIDADA (Fase 3z, gateway 0.4.0; roles = Photino) 
 | `recepcion.muestra.crear` | POST `api/recepcion-calidad/{id}/muestra-laboratorio` | INNPACK de sesión (el handler la fija) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | crea muestra de laboratorio / NC desde el lote | sí: anular/eliminar en su módulo (admin) | **BAJO** | aditivo; autor y empresa desde sesión | VALIDADA (Fase 3s, gateway 0.4.0; roles = Photino) |
 | `recepcion.nc.crear` | POST `api/recepcion-calidad/{id}/nc` | lote de la empresa de sesión (la API no filtra empresa) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea la NC del lote No conforme y la vincula | sí: gestionar/eliminar la NC en su módulo | **BAJO** | aditivo; autor desde sesión; candado + huella contra duplicados | VALIDADA (Fase 3x, gateway 0.4.0; roles = Photino) |
-| `recepcion.plan.generar` | POST `api/recepcion-calidad/{id}/plan` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | genera plan AQL / registra bobinas muestreadas | sí: regenerar / volver a guardar | **BAJO** | operativo; sin autor en plan | APROBADA |
+| `recepcion.plan.generar` | POST `api/recepcion-calidad/{id}/plan` | INNPACK (sin parámetro; lote confirmado con el detalle de la empresa de sesión) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | genera/regenera el plan NCh44 del lote (reemplaza sin preguntar) | sí: regenerar | **BAJO** | operativo; sin autor en plan | VALIDADA (Fase 4a; roles = Photino) |
 | `recepcion.estado.actualizar` | PATCH `api/recepcion-calidad/{id}/estado` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | decide el estado del lote (conforme / no conforme) | sí: volver a cambiar | **MEDIO** | decisión de calidad; sin autor en API; estado restringido a los 3 valores del select, conflicto por huella del detalle (R5 sin corregir en la API) | VALIDADA (Fase 3t, gateway 0.4.0; roles = Photino) |
 
 ### registrosControl (3)
@@ -559,6 +559,30 @@ y una escritura debe pertenecer al módulo abierto (`_modulo`, lo agrega el brid
 - Pruebas: `BridgeFase3uTest` (12), tests del shim (`_modulo`), regresión completa; tests del bridge simulan el
   `_modulo` del navegador (`NavegadorSimuladoMockMvc`).
 
+## Recepción — `recepcion.plan.generar` ("Generar plan") — VALIDADA (Fase 4a, 2026-09-30)
+
+Photino: detalle del lote → selects "Nivel de inspección" (solo `II`) y "AQL" (solo `2.5`) → "Generar plan" →
+`recepcion.plan.generar {loteId, nivelInspeccion, aql}` → reabre el detalle ("Plan vigente: ..."); un error se muestra con
+`alert`. El handler C# usa `"II"` si el nivel viene vacío y `2.5` si el AQL no es numérico, y reenvía solo
+`{nivelInspeccion, aql}` (sin empresa ni autor). La API (R10 corregido y desplegado; permisos de `recepcion_plan_muestreo`
+aplicados, OPERACION.md 5.2) calcula el plan NCh44 con el tamaño del lote y lo guarda con UPDATE, o INSERT si no había:
+**regenerar reemplaza sin preguntar**. Sin letra NCh44 para el tamaño (p. ej. PVA/Pliego, tamaño 0) responde el error de
+negocio "No hay tabla de muestreo NCh44 cargada para nivel II y tamaño de lote N".
+
+- Web: mismo cuerpo `{nivelInspeccion, aql}` y mismos defaults; lista blanca `{loteId, nivelInspeccion, aql}`; nivel/AQL
+  restringidos a las opciones de los selects (otro valor solo llega por payload manipulado → "Valor no permitido en ...");
+  lote confirmado con el detalle de la EMPRESA DE SESIÓN (la API no filtra empresa ni eliminado — R5) y detalle abierto en
+  la sesión; candado por lote. **Sin detección de conflicto** (a diferencia de 3t/3x): el plan es determinista (lote, nivel
+  y AQL) y regenerarlo sobre el de otra sesión no pierde nada; doble clic = dos generaciones con el mismo resultado, como
+  Photino. El candado evita desde el gateway dos INSERT simultáneos de un lote sin plan (la PK rechazaría el segundo:
+  residual de R10 para clientes que no pasan por la web, p. ej. Photino). Auditoría `recurso=recepcion:<lote>:plan[:<letra>]`.
+- Pruebas: `BridgeFase4aTest` (16: cuerpo exacto, defaults, plan existente/otra sesión, doble clic y dos sesiones
+  simultáneas sin violar la PK, roles/empresa/Solo vista, lista blanca, lote/nivel/AQL inválidos, error de negocio, sin
+  lectura previa, lote ajeno, sin sesión/CSRF/401, auditoría sin tokens); E2E `e2e_cdp_4a.mjs` 26/26 (doble clic real,
+  regenerar, selección aleatoria según plan, error PVA como alert, Solo vista, sin sesión) + regresión 3u/3x/3y/3z.
+- Con esto Recepción queda **11/11** acciones de Photino habilitadas. Validación funcional con datos reales pendiente del
+  primer lote de Recepción en `calidad_db` (hoy 0 lotes).
+
 ## Recepción — `recepcion.crear` ("Nuevo Lote de Inspección") — VALIDADA (Fase 3z, 2026-09-30)
 
 Photino: modal "Nuevo Lote" → Bobina (línea de SAP + bobinas marcadas) o PVA / Pliego Faret manual con foto opcional
@@ -602,7 +626,7 @@ del deploy (hoy se probó con la de Photino, por decisión del usuario). Pruebas
 | # | Severidad | Dónde | Problema | Corrección sugerida |
 |---|---|---|---|---|
 | R9 | **CRÍTICA** | `ObtenerDetalle` L331 (PVA) y L358 (Pliego) | `(foto IS NOT NULL) AS tiene_foto` es sintaxis MySQL: en SQL Server la consulta falla → el detalle de todo lote PVA/Pliego responde 500 (Photino y web) | `CAST(CASE WHEN foto IS NOT NULL THEN 1 ELSE 0 END AS bit) AS tiene_foto` en ambas consultas |
-| R10 | **CRÍTICA** | `GenerarPlan` L534 | `REPLACE INTO` no existe en SQL Server → `recepcion.plan.generar` falla siempre | `MERGE recepcion_plan_muestreo ... ON lote_id` (o UPDATE + INSERT) en una transacción |
+| R10 | **CRÍTICA** — CORREGIDA y desplegada (API `fbac4ba`, 2026-09-30: `UPDATE ... IF @@ROWCOUNT = 0 INSERT`) | `GenerarPlan` L534 | `REPLACE INTO` no existe en SQL Server → `recepcion.plan.generar` falla siempre | `MERGE recepcion_plan_muestreo ... ON lote_id` (o UPDATE + INSERT) en una transacción |
 | R8a | MEDIA | `CrearLote` | varios INSERT sin transacción; base64 inválido (`Convert.FromBase64String`) o fallo intermedio deja un lote huérfano | transacción + validar base64 antes de insertar |
 | R8b | MEDIA | `CrearLote` | foto guardada siempre como `image/jpeg`, sin validar tipo ni tamaño | detectar tipo por firma, MIME real, tope de tamaño |
 | R7a/b | MEDIA | `CrearNoConformidad` | verificación sin bloqueo (dos NC en paralelo) y creación + vinculación sin transacción (NC suelta) | transacción con `UPDLOCK, HOLDLOCK` o `UPDATE ... WHERE nc_id IS NULL` y validar filas afectadas |
