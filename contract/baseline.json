@@ -850,6 +850,46 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-10-01T14:30:18Z"
+    },
+    "controlDocumental.create": {
+      "huella": "4f36ac8dcee1ad2837793e48f5f8b1c2b40346f3c520a2052fda5297f954f6c3",
+      "huellaFrontend": "b68095610d94292b56baf5ed7a90fb96aa95ff57980050adb064cf83491c9859",
+      "handler": "ControlDocumentalHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T15:15:20Z"
+    },
+    "controlDocumental.update": {
+      "huella": "a326b337242dab4dbd3a7048b39d9c6db93b957f457bfa1df73820c51a7a7299",
+      "huellaFrontend": "4c1d3585eb059cc62520975a74abdff597fc32980f556e72fdeaaa79853d8149",
+      "handler": "ControlDocumentalHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T15:15:20Z"
+    },
+    "controlDocumental.version.crear": {
+      "huella": "c03a42a931e4dbf1c95da916f899629128fced3b6f12368aaa2c2ae732b0b5fb",
+      "huellaFrontend": "dcaf6f36a045af2c8cdf5e140bb5572f0edcb673795c80cca5b5837a46960bff",
+      "handler": "ControlDocumentalHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T15:15:20Z"
+    },
+    "controlDocumental.eliminar": {
+      "huella": "6d7de12f322068eece8c2d699f0a97d070bc3b7babce39fbcae265242aba2050",
+      "huellaFrontend": "b78117c222458584d879cb999fce7a9404b7b87237e64a81cc4b228f678045ef",
+      "handler": "ControlDocumentalHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T15:15:20Z"
+    },
+    "controlDocumental.adjunto.subir": {
+      "huella": "c34ba353c486dc857782ba2ff8aa4310936a6c19b99e7852b33a539e855a4c35",
+      "huellaFrontend": "2cc328be581b4e405bfc9a96fae0ba5480cd31625a8153b80a1aa464f489e075",
+      "handler": "ControlDocumentalHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T15:15:20Z"
     }
   }
 }

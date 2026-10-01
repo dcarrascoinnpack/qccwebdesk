@@ -167,6 +167,11 @@ public final class FakeInnpackApi implements AutoCloseable {
         talleresInactivos.clear();
         procesosInactivos.clear();
         modoSincronizarFps = "NORMAL";
+        documentosCreados.clear();
+        estadoDocumento.clear();
+        documentosEliminados.clear();
+        siguienteDocumento.set(50000);
+        siguienteVersionDoc.set(60000);
     }
 
     // ------------------------------------------------------------------ Fase 3y: apisapfaret GET api/recepcion/bobinas[/lotes]
@@ -1019,10 +1024,21 @@ public final class FakeInnpackApi implements AutoCloseable {
     }
 
     private final java.util.List<String> peticionesControlDocumental = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /** Fase 4d: documentos creados, estado mutado por update (simula "otra persona"), eliminados. */
+    private final java.util.Set<Integer> documentosCreados = ConcurrentHashMap.newKeySet();
+    private final Map<Integer, String> estadoDocumento = new ConcurrentHashMap<>();
+    private final java.util.Set<Integer> documentosEliminados = ConcurrentHashMap.newKeySet();
+    private final java.util.concurrent.atomic.AtomicInteger siguienteDocumento = new java.util.concurrent.atomic.AtomicInteger(50000);
+    private final java.util.concurrent.atomic.AtomicInteger siguienteVersionDoc = new java.util.concurrent.atomic.AtomicInteger(60000);
 
     /** "<método> <ruta>[?<query cruda>]" recibidos en api/control-documental* (para verificar el mapeo). */
     public java.util.List<String> peticionesControlDocumental() {
         return java.util.List.copyOf(peticionesControlDocumental);
+    }
+
+    /** Fase 4d: simula que otra persona (Photino u otra sesión) ya cambió el estado de este documento. */
+    public void estadoDocumentoPorOtro(int id, String estado) {
+        estadoDocumento.put(id, estado);
     }
 
     private static String documento(int i) {
@@ -1080,6 +1096,30 @@ public final class FakeInnpackApi implements AutoCloseable {
             ex.close();
             return;
         }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/control-documental")) {
+            crearDocumento(ex, sub);
+            return;
+        }
+        java.util.regex.Matcher updDoc = java.util.regex.Pattern.compile("^/api/control-documental/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && updDoc.matches()) {
+            actualizarDocumento(ex, Integer.parseInt(updDoc.group(1)));
+            return;
+        }
+        if (ex.getRequestMethod().equals("DELETE") && updDoc.matches()) {
+            documentosEliminados.add(Integer.parseInt(updDoc.group(1)));
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + updDoc.group(1) + "},\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher verDoc = java.util.regex.Pattern.compile("^/api/control-documental/(\\d+)/version$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && verDoc.matches()) {
+            crearVersionDocumento(ex);
+            return;
+        }
+        java.util.regex.Matcher subAdj = java.util.regex.Pattern.compile("^/api/control-documental/adjunto/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && subAdj.matches()) {
+            subirAdjuntoDocumento(ex, Integer.parseInt(subAdj.group(1)));
+            return;
+        }
         if (!ex.getRequestMethod().equals("GET")) {
             responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
             return;
@@ -1119,14 +1159,127 @@ public final class FakeInnpackApi implements AutoCloseable {
         java.util.regex.Matcher doc = java.util.regex.Pattern.compile("^/api/control-documental/(\\d+)$").matcher(path);
         if (doc.matches()) {
             int id = Integer.parseInt(doc.group(1));
-            if (id == 404) {
+            if (id == 404 || documentosEliminados.contains(id)) {
                 responder(ex, 404, fallo("Documento no encontrado"));
                 return;
             }
-            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataControlDocumentalGet(id, sub) + ",\"errors\":null}");
+            String data = aplicarEstadoDocumento(dataControlDocumentalGet(id, sub), id);
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+    }
+
+    /** Fase 4d: aplica el estado mutado por update/estadoDocumentoPorOtro sobre el JSON de dataControlDocumentalGet. */
+    private String aplicarEstadoDocumento(String dataJson, int id) {
+        String estado = estadoDocumento.get(id);
+        if (estado == null) {
+            return dataJson;
+        }
+        try {
+            JsonNode raiz = mapper.readTree(dataJson);
+            if (raiz instanceof tools.jackson.databind.node.ObjectNode obj) {
+                obj.put("estado", estado);
+            }
+            return raiz.toString();
+        } catch (RuntimeException e) {
+            return dataJson;
+        }
+    }
+
+    private void crearDocumento(HttpExchange ex, int sub) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        String error = validarCrearDocumento(b);
+        if (error != null) {
+            responder(ex, 400, fallo(error));
+            return;
+        }
+        int id = siguienteDocumento.getAndIncrement();
+        documentosCreados.add(id);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    /** Como ControlDocumentalService.CrearAsync: campos/versión/fecha obligatorios, enums de los selects. */
+    private static String validarCrearDocumento(JsonNode b) {
+        if (b.path("codigoBase").asString("").isBlank()) {
+            return "Falta el código base del documento";
+        }
+        if (b.path("tipoDocumento").asString("").isBlank()) {
+            return "Falta el tipo de documento";
+        }
+        if (b.path("nombre").asString("").isBlank()) {
+            return "Falta el nombre del documento";
+        }
+        if (b.path("version").asString("").isBlank()) {
+            return "Falta la versión inicial";
+        }
+        if (b.path("fechaActualizacion").asString("").isBlank()) {
+            return "Falta la fecha de actualización de la versión inicial";
+        }
+        return validarEstadoAlcance(b);
+    }
+
+    /** Como LeerCamposDocumento: IsNullOrWhiteSpace(str) ? null : str — un valor en blanco se normaliza a null ANTES de
+     * validar el enum (se salta la validación), igual que el resto de los 9 campos. */
+    private static String validarEstadoAlcance(JsonNode b) {
+        JsonNode estado = b.get("estado");
+        if (estado != null && !estado.isNull() && !estado.asString("").isBlank()
+                && !java.util.Set.of("VIGENTE", "EN_REVISION", "OBSOLETO").contains(estado.asString(""))) {
+            return "Estado inválido. Valores permitidos: VIGENTE, EN_REVISION, OBSOLETO";
+        }
+        JsonNode alcance = b.get("alcanceEmpresa");
+        if (alcance != null && !alcance.isNull() && !alcance.asString("").isBlank()
+                && !java.util.Set.of("INNPACK", "FARET", "AMBAS").contains(alcance.asString(""))) {
+            return "Alcance inválido. Valores permitidos: INNPACK, FARET, AMBAS";
+        }
+        return null;
+    }
+
+    private void actualizarDocumento(HttpExchange ex, int id) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        String error = validarEstadoAlcance(b);
+        if (error != null) {
+            responder(ex, 400, fallo(error));
+            return;
+        }
+        java.util.List<String> campos = java.util.List.of("codigoBase", "tipoDocumento", "area", "nombre", "alcanceEmpresa", "estado",
+                "responsable", "ubicacion", "observaciones");
+        if (campos.stream().noneMatch(b::has)) {
+            responder(ex, 400, fallo("No se recibió ningún campo para actualizar"));
+            return;
+        }
+        JsonNode estado = b.get("estado");
+        if (estado != null && !estado.isNull() && !estado.asString("").isBlank()) {
+            estadoDocumento.put(id, estado.asString(""));
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + "},\"errors\":null}");
+    }
+
+    private void crearVersionDocumento(HttpExchange ex) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        if (b.path("version").asString("").isBlank()) {
+            responder(ex, 400, fallo("Falta la versión"));
+            return;
+        }
+        if (b.path("fechaActualizacion").asString("").isBlank()) {
+            responder(ex, 400, fallo("Falta la fecha de actualización"));
+            return;
+        }
+        int versionId = siguienteVersionDoc.getAndIncrement();
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + versionId + "},\"errors\":null}");
+    }
+
+    private void subirAdjuntoDocumento(HttpExchange ex, int versionId) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        if (b.path("nombreArchivo").asString("").isBlank()) {
+            responder(ex, 400, fallo("Falta el nombre del archivo"));
+            return;
+        }
+        if (b.path("contenidoBase64").asString("").isBlank()) {
+            responder(ex, 400, fallo("Falta el contenido del archivo"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"documentoVersionId\":" + versionId + "},\"errors\":null}");
     }
 
     private final java.util.List<String> peticionesNoConformidades = java.util.Collections.synchronizedList(new java.util.ArrayList<>());

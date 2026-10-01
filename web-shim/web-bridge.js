@@ -26,7 +26,11 @@
     // Acciones con archivo en base64 (Fase 3k): ruta propia con tope de cuerpo mayor en el gateway.
     var BRIDGE_ARCHIVO_URL = "api/v1/bridge/archivo";
     // Fase 3z: el alta de lote de Recepción lleva la foto (PVA/Pliego) en base64 en el mismo payload.
-    var ACCIONES_ARCHIVO = { "noConformidades.adjuntos.subir": true, "recepcion.crear": true };
+    // Fase 4d: alta de documento/versión de Control Documental lleva el adjunto inicial opcional en base64.
+    var ACCIONES_ARCHIVO = {
+        "noConformidades.adjuntos.subir": true, "recepcion.crear": true,
+        "controlDocumental.create": true, "controlDocumental.version.crear": true, "controlDocumental.adjunto.subir": true,
+    };
     var AUTH_URL = "api/v1/auth/";
     var TIMEOUT_MS = 35000; // > read-timeout del gateway (30 s, = Photino): el gateway responde primero
     var EMPRESA_WEB = "INNPACK"; // Fase 1b: solo login INNPACK

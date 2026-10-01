@@ -2,6 +2,7 @@ package cl.faret.qccweb.bridge.handlers;
 
 import cl.faret.qccweb.auth.SessionUser;
 import cl.faret.qccweb.bridge.BridgeResult;
+import cl.faret.qccweb.bridge.LecturasDeSesion;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.InnpackRespuestas;
 import cl.faret.qccweb.upstream.UriEscape;
@@ -9,12 +10,13 @@ import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.regex.Pattern;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
- * Módulo "Control Documental" (compartido INNPACK/FARET) — SOLO LECTURA. Port de Photino
+ * Módulo "Control Documental" (compartido INNPACK/FARET). Port de Photino
  * src/Backend/Modules/ControlDocumental/ControlDocumentalHandler.cs +
  * InnpackControlDocumentalApiService. El payload de este módulo viaja PLANO (sin "data").
  *
@@ -29,7 +31,12 @@ import tools.jackson.databind.node.ObjectNode;
  * Diferencia DEFENSIVA (misma regla que Registros de Control): bool/objeto/array en filtros de texto
  * → "Parámetro de filtro inválido." (Photino reenviaría ToString()).
  *
- * Escrituras (create, update, version.crear, eliminar, adjunto.subir) NO habilitadas.
+ * Fase 4d — escrituras (create, update, version.crear, eliminar, adjunto.subir): la API NO tiene
+ * columna de versión (a diferencia de Talleres Externos); `update` es un UPDATE directo sin
+ * verificar existencia, igual que noConformidades.update — mismo patrón: huella de sesión (de
+ * `get`) + relectura + comparación de huella antes del PUT. `eliminar`/`version.crear` solo relee
+ * para convertir el "no existe" silencioso de la API en un error real, sin exigir huella (igual
+ * criterio que noConformidades.eliminar: Photino tampoco protege esto).
  */
 public class ControlDocumentalBridgeHandler {
 
@@ -105,13 +112,43 @@ public class ControlDocumentalBridgeHandler {
         return InnpackRespuestas.reenviar(api.get(usuario, path.toString()), mapper);
     }
 
-    /** controlDocumental.get → GET api/control-documental/{id} */
+    /**
+     * controlDocumental.get → GET api/control-documental/{id}. Registra la huella del documento en la
+     * sesión (Fase 4d: exige esto antes de editarlo, detecta si cambió desde que se abrió).
+     */
     public BridgeResult get(ObjectNode payload, SessionUser usuario) {
         Integer id = entero(payload.get("id"));
         if (id == null) {
             return BridgeResult.error(MENSAJE_ID_DOCUMENTO);
         }
-        return InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+        BridgeResult resultado = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+        if (resultado.ok()) {
+            LecturasDeSesion.registrar(recursoLecturaDocumento(id), huellaDocumento(resultado.data()));
+        }
+        return resultado;
+    }
+
+    static String recursoLecturaDocumento(int id) {
+        return "controlDocumental-detalle:" + id;
+    }
+
+    /** SHA-256 del detalle vigente del documento (claves ordenadas): cualquier cambio lo altera. */
+    static String huellaDocumento(Object data) {
+        JsonNode d = data instanceof JsonNode n && n.isObject() ? n : null;
+        if (d == null) {
+            return "SIN_DOCUMENTO";
+        }
+        StringBuilder sb = new StringBuilder();
+        for (String campo : d.propertyNames().stream().sorted().toList()) {
+            sb.append(campo).append('=').append(d.get(campo).toString()).append('\n');
+        }
+        try {
+            byte[] h = java.security.MessageDigest.getInstance("SHA-256")
+                    .digest(sb.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            return java.util.HexFormat.of().formatHex(h);
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IllegalStateException(e);
+        }
     }
 
     /** controlDocumental.adjunto.abrir → GET api/control-documental/adjunto/{documentoVersionId} */
@@ -122,6 +159,444 @@ public class ControlDocumentalBridgeHandler {
         }
         BridgeResult upstream = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/adjunto/" + versionId), mapper);
         return adjuntoParaNavegador(upstream, "adjunto_" + versionId, MAX_BASE64_CHARS, mapper);
+    }
+
+    // ------------------------------------------------------------------ Fase 4d: escrituras
+
+    static final String MENSAJE_CAMPO_NO_PERMITIDO = "Campo no permitido: ";
+    static final String MENSAJE_PARAMETRO_INVALIDO = "Parámetro inválido.";
+    static final String MENSAJE_TEXTO_CARACTERES = "El texto contiene caracteres no permitidos.";
+    static final String MENSAJE_TEXTO_HTML = "El texto no puede contener etiquetas HTML (por ejemplo \"<b>\" o \"<script>\").";
+    static final String MENSAJE_OPCION_INVALIDA = "Valor no permitido en ";
+    static final String MENSAJE_FECHA_INVALIDA = "La fecha no es válida (formato AAAA-MM-DD).";
+    static final String MENSAJE_DOCUMENTO_SIN_LEER = "Abre el documento antes de editarlo.";
+    static final String MENSAJE_DOCUMENTO_CONFLICTO = "El documento fue modificado por otra persona desde que lo abriste. "
+            + "Vuelve a abrirlo para ver los cambios.";
+    static final String MENSAJE_TIPO_ARCHIVO = "Tipo de archivo no permitido. Formatos válidos: .pdf, .doc, .docx, .jpg, .jpeg, .png, .webp";
+    static final String MENSAJE_FALTA_NOMBRE_ARCHIVO = "Falta el nombre del archivo";
+    static final String MENSAJE_FALTA_CONTENIDO_ARCHIVO = "Falta el contenido del archivo";
+    static final String MENSAJE_ARCHIVO_INVALIDO = "El contenido del archivo no es válido";
+    static final String MENSAJE_ARCHIVO_TAMANO = "El archivo supera el tamaño máximo permitido (10 MB)";
+    static final String MENSAJE_ARCHIVO_FIRMA = "El archivo no corresponde al tipo declarado por su extensión.";
+    /** 10 MB: límite real de la API (ControlDocumentalService.MaxTamanoBytesAdjunto), no los 25 MB de adjunto.abrir. */
+    static final int MAX_SUBIDA_BYTES = 10 * 1024 * 1024;
+    static final int MAX_SUBIDA_BASE64 = ((MAX_SUBIDA_BYTES + 2) / 3) * 4;
+
+    private static final Pattern CONTROL_UNA_LINEA = Pattern.compile("[\\x00-\\x1F\\x7F]");
+    private static final Pattern CONTROL_MULTILINEA = Pattern.compile("[\\x00-\\x08\\x0B\\x0C\\x0E-\\x1F\\x7F]");
+    private static final Pattern MARCADO_HTML = Pattern.compile("<[A-Za-z/!?]");
+    private static final Pattern FECHA_ISO = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}");
+    private static final Set<String> ESTADOS = Set.of("VIGENTE", "EN_REVISION", "OBSOLETO");
+    /** Mismas 9 claves de LeerCamposDocumento/ControlDocumentalService.cs; el formulario de Photino siempre las manda todas. */
+    private static final Set<String> CAMPOS_DOCUMENTO = Set.of("codigoBase", "nombre", "tipoDocumento", "area", "alcanceEmpresa",
+            "estado", "responsable", "ubicacion", "observaciones");
+    private static final Set<String> CLAVES_CREAR = concat(CAMPOS_DOCUMENTO,
+            "action", "creadoPor", "version", "fechaActualizacion", "proximaRevision", "adjuntoNombreArchivo", "adjuntoContenidoBase64");
+    private static final Set<String> CLAVES_ACTUALIZAR = concat(CAMPOS_DOCUMENTO, "action", "id", "actualizadoPor");
+    private static final Set<String> CLAVES_VERSION_CREAR = Set.of("action", "documentoId", "version", "fechaActualizacion",
+            "proximaRevision", "creadoPor", "adjuntoNombreArchivo", "adjuntoContenidoBase64");
+    private static final Set<String> CLAVES_ELIMINAR = Set.of("action", "id", "actualizadoPor");
+    private static final Set<String> CLAVES_ADJUNTO_SUBIR = Set.of("action", "documentoVersionId", "nombreArchivo",
+            "contenidoBase64", "subidoPor");
+
+    /** Mismo diccionario que ControlDocumentalService.MimePorExtension (orden = el de la vista/API). */
+    private static final Map<String, String> MIME_POR_EXTENSION_SUBIDA = Map.ofEntries(
+            Map.entry(".pdf", "application/pdf"), Map.entry(".doc", "application/msword"),
+            Map.entry(".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            Map.entry(".jpg", "image/jpeg"), Map.entry(".jpeg", "image/jpeg"), Map.entry(".png", "image/png"),
+            Map.entry(".webp", "image/webp"));
+    private static final byte[] FIRMA_OLE2 = {(byte) 0xd0, (byte) 0xcf, 0x11, (byte) 0xe0, (byte) 0xa1, (byte) 0xb1, 0x1a, (byte) 0xe1};
+    private static final byte[] FIRMA_ZIP = {0x50, 0x4b, 0x03, 0x04};
+
+    private static Set<String> concat(Set<String> base, String... extra) {
+        java.util.LinkedHashSet<String> s = new java.util.LinkedHashSet<>(base);
+        s.addAll(List.of(extra));
+        return java.util.Collections.unmodifiableSet(s);
+    }
+
+    /**
+     * controlDocumental.create → POST api/control-documental {codigoBase, nombre, ..., version,
+     * fechaActualizacion, proximaRevision, adjuntoNombreArchivo, adjuntoContenidoBase64, creadoPor}
+     * (Fase 4d), igual que Photino: un solo modal crea el documento y su primera versión (adjunto
+     * inicial opcional) en una transacción de la API. Campos obligatorios (NV/tipo/nombre/versión/
+     * fecha) y enums los valida la API con mensajes propios; el gateway valida seguridad (lista
+     * blanca, caracteres, firma real del adjunto) y deja pasar el resto tal cual.
+     *
+     * Seguridad transparente: creadoPor ← sesión; textos sin controles ni marcado HTML (sin largo
+     * propio: no se pudo confirmar el de la columna real — residual documentado); fechas AAAA-MM-DD
+     * si vienen, null si no; estado/alcanceEmpresa restringidos a los `<select>` de Photino; adjunto
+     * opcional con firma real de archivo (no solo extensión, a diferencia de Photino/la API).
+     */
+    public BridgeResult crear(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_CREAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarCamposDocumento(cuerpo, payload);
+        error = error != null ? error : ponerTextoUnaLinea(cuerpo, payload, "version");
+        error = error != null ? error : ponerFecha(cuerpo, payload, "fechaActualizacion");
+        error = error != null ? error : ponerFechaOpcional(cuerpo, payload, "proximaRevision");
+        error = error != null ? error : ponerAdjuntoOpcional(cuerpo, payload, "adjuntoNombreArchivo", "adjuntoContenidoBase64");
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        cuerpo.put("creadoPor", autorDeSesion(usuario));
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE, cuerpo), mapper);
+    }
+
+    /** Recurso auditado: "controlDocumental:<id>:crear". */
+    public static String recursoCrear(ObjectNode payload, Object dataRespuesta) {
+        JsonNode id = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("id") : null;
+        return "controlDocumental:" + (id != null && id.canConvertToInt() ? id.asInt() : "?") + ":crear";
+    }
+
+    /**
+     * controlDocumental.update → PUT api/control-documental/{id} {codigoBase, ..., actualizadoPor}
+     * (Fase 4d), igual que Photino: mismo formulario que create, sin versión ni adjunto. La API hace
+     * un UPDATE directo sin verificar existencia ni comparar nada (sobrescribe sin historial).
+     *
+     * Seguridad transparente: igual que create + {id}; exige haber abierto el documento en esta
+     * sesión (huella de `get`), lo relee antes del PUT (404/eliminado → error en vez de un OK que
+     * no cambió nada) y rechaza si cambió desde que se abrió (lost update) — mismo patrón que
+     * noConformidades.update, la API tampoco tiene versión acá.
+     */
+    public BridgeResult actualizar(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_ACTUALIZAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(payload.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_ID_DOCUMENTO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarCamposDocumento(cuerpo, payload);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        String leida = LecturasDeSesion.huella(recursoLecturaDocumento(id));
+        if (leida == null) {
+            return BridgeResult.error(MENSAJE_DOCUMENTO_SIN_LEER);
+        }
+        BridgeResult vigente = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+        if (!vigente.ok()) {
+            return vigente;
+        }
+        if (!huellaDocumento(vigente.data()).equals(leida)) {
+            return BridgeResult.error(MENSAJE_DOCUMENTO_CONFLICTO);
+        }
+        cuerpo.put("actualizadoPor", autorDeSesion(usuario));
+        BridgeResult resultado = InnpackRespuestas.reenviar(api.putJson(usuario, BASE + "/" + id, cuerpo), mapper);
+        if (resultado.ok()) {
+            // La vista cierra el formulario; para editar de nuevo relee el documento (y la huella).
+            LecturasDeSesion.olvidar(recursoLecturaDocumento(id));
+        }
+        return resultado;
+    }
+
+    /** Recurso auditado: "controlDocumental:<id>:actualizar". */
+    public static String recursoActualizar(ObjectNode payload, Object dataRespuesta) {
+        Integer id = entero(payload.get("id"));
+        return "controlDocumental:" + (id != null ? id : "?") + ":actualizar";
+    }
+
+    /** Arma los 9 campos de LeerCamposDocumento; devuelve el mensaje de error, o null si quedó ok. */
+    private String armarCamposDocumento(ObjectNode cuerpo, ObjectNode payload) {
+        for (String campo : List.of("codigoBase", "nombre", "tipoDocumento", "area", "responsable", "ubicacion")) {
+            String error = ponerTextoUnaLinea(cuerpo, payload, campo);
+            if (error != null) {
+                return error;
+            }
+        }
+        String error = ponerTextoMultilinea(cuerpo, payload, "observaciones");
+        if (error != null) {
+            return error;
+        }
+        String alcance = texto(payload.get("alcanceEmpresa"));
+        if (!alcance.isEmpty() && !ALCANCES.contains(alcance)) {
+            return MENSAJE_OPCION_INVALIDA + "alcanceEmpresa.";
+        }
+        cuerpo.put("alcanceEmpresa", alcance);
+        String estado = texto(payload.get("estado"));
+        if (!estado.isEmpty() && !ESTADOS.contains(estado)) {
+            return MENSAJE_OPCION_INVALIDA + "estado.";
+        }
+        cuerpo.put("estado", estado);
+        return null;
+    }
+
+    private String ponerTextoUnaLinea(ObjectNode cuerpo, ObjectNode payload, String campo) {
+        return ponerTexto(cuerpo, payload, campo, CONTROL_UNA_LINEA);
+    }
+
+    private String ponerTextoMultilinea(ObjectNode cuerpo, ObjectNode payload, String campo) {
+        return ponerTexto(cuerpo, payload, campo, CONTROL_MULTILINEA);
+    }
+
+    /** GetString de Photino: string o número → texto; null/ausente → ""; presente no texto/número → inválido. */
+    private String ponerTexto(ObjectNode cuerpo, ObjectNode payload, String campo, Pattern control) {
+        JsonNode v = payload.get(campo);
+        if (v != null && !v.isNull() && !v.isString() && !v.isNumber()) {
+            return MENSAJE_PARAMETRO_INVALIDO;
+        }
+        String valor = texto(v);
+        if (control.matcher(valor).find()) {
+            return MENSAJE_TEXTO_CARACTERES;
+        }
+        if (MARCADO_HTML.matcher(valor).find()) {
+            return MENSAJE_TEXTO_HTML;
+        }
+        cuerpo.put(campo, valor);
+        return null;
+    }
+
+    /** Fecha del &lt;input type="date"&gt; de Photino, obligatoria aquí: ausente/vacía igual se manda "" (la API la rechaza). */
+    private String ponerFecha(ObjectNode cuerpo, ObjectNode payload, String campo) {
+        String valor = texto(payload.get(campo));
+        if (valor.isEmpty()) {
+            cuerpo.put(campo, "");
+            return null;
+        }
+        if (!FECHA_ISO.matcher(valor).matches()) {
+            return MENSAJE_FECHA_INVALIDA;
+        }
+        try {
+            java.time.LocalDate.parse(valor);
+        } catch (java.time.format.DateTimeParseException e) {
+            return MENSAJE_FECHA_INVALIDA;
+        }
+        cuerpo.put(campo, valor);
+        return null;
+    }
+
+    /** proximaRevision: Photino manda null si está vacía (la API la autocalcula a +365 días). */
+    private String ponerFechaOpcional(ObjectNode cuerpo, ObjectNode payload, String campo) {
+        JsonNode v = payload.get(campo);
+        if (v == null || v.isNull() || texto(v).isEmpty()) {
+            cuerpo.putNull(campo);
+            return null;
+        }
+        return ponerFecha(cuerpo, payload, campo);
+    }
+
+    /**
+     * controlDocumental.version.crear → POST api/control-documental/{documentoId}/version {version,
+     * fechaActualizacion, proximaRevision, adjuntoNombreArchivo, adjuntoContenidoBase64, creadoPor}
+     * (Fase 4d), igual que Photino: agrega una versión y la deja vigente (demueve a las anteriores),
+     * con adjunto inicial opcional; actualiza `documentos.actualizado_por`.
+     *
+     * Seguridad transparente: creadoPor ← sesión; version sin controles/HTML; fechas AAAA-MM-DD;
+     * adjunto con firma real; confirma que el documento existe releyéndolo antes de escribir (la API
+     * no lo valida — crearía una versión huérfana). Sin huella: Photino tampoco protege el doble
+     * envío de una nueva versión más allá del confirm() del navegador.
+     */
+    public BridgeResult versionCrear(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_VERSION_CREAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer documentoId = entero(payload.get("documentoId"));
+        if (documentoId == null || documentoId <= 0) {
+            return BridgeResult.error(MENSAJE_ID_DOCUMENTO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = ponerTextoUnaLinea(cuerpo, payload, "version");
+        error = error != null ? error : ponerFecha(cuerpo, payload, "fechaActualizacion");
+        error = error != null ? error : ponerFechaOpcional(cuerpo, payload, "proximaRevision");
+        error = error != null ? error : ponerAdjuntoOpcional(cuerpo, payload, "adjuntoNombreArchivo", "adjuntoContenidoBase64");
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        BridgeResult vigente = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + documentoId), mapper);
+        if (!vigente.ok()) {
+            return vigente;
+        }
+        cuerpo.put("creadoPor", autorDeSesion(usuario));
+        BridgeResult resultado = InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + documentoId + "/version", cuerpo), mapper);
+        if (resultado.ok()) {
+            // Cambió la versión vigente del documento: fuerza a releer antes de un siguiente guardado.
+            LecturasDeSesion.olvidar(recursoLecturaDocumento(documentoId));
+        }
+        return resultado;
+    }
+
+    /** Recurso auditado: "controlDocumental:<documentoId>:version[:<versionId>]". */
+    public static String recursoVersionCrear(ObjectNode payload, Object dataRespuesta) {
+        Integer documentoId = entero(payload.get("documentoId"));
+        JsonNode id = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("id") : null;
+        return "controlDocumental:" + (documentoId != null ? documentoId : "?") + ":version"
+                + (id != null && id.canConvertToInt() ? ":" + id.asInt() : "");
+    }
+
+    /**
+     * controlDocumental.eliminar → DELETE api/control-documental/{id}?actualizadoPor=.. (Fase 4d),
+     * igual que Photino: borrado lógico, la API no verifica existencia previa (UPDATE sin WHERE de
+     * existencia real, responde 200 igual si el id no existe).
+     *
+     * Seguridad transparente: lista blanca {id, actualizadoPor}; actualizadoPor ← sesión; relee el
+     * documento antes de borrar (404/ya eliminado → error real en vez del OK vacío de la API).
+     */
+    public BridgeResult eliminar(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_ELIMINAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(payload.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_ID_DOCUMENTO);
+        }
+        BridgeResult vigente = InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + id), mapper);
+        if (!vigente.ok()) {
+            return vigente;
+        }
+        BridgeResult resultado = InnpackRespuestas.reenviar(
+                api.delete(usuario, BASE + "/" + id + "?actualizadoPor=" + UriEscape.dataString(autorDeSesion(usuario))), mapper);
+        if (resultado.ok()) {
+            LecturasDeSesion.olvidar(recursoLecturaDocumento(id));
+        }
+        return resultado;
+    }
+
+    /** Recurso auditado: "controlDocumental:<id>:eliminar". */
+    public static String recursoEliminar(ObjectNode payload, Object dataRespuesta) {
+        Integer id = entero(payload.get("id"));
+        return "controlDocumental:" + (id != null ? id : "?") + ":eliminar";
+    }
+
+    /**
+     * controlDocumental.adjunto.subir → POST api/control-documental/adjunto/{documentoVersionId}
+     * {nombreArchivo, contenidoBase64, subidoPor} (Fase 4d), igual que Photino: reemplaza el adjunto
+     * de esa versión (upsert con candado de fila en la API, evita duplicados por subidas paralelas).
+     * La API no valida que `documentoVersionId` exista antes de escribir.
+     *
+     * Seguridad transparente: subidoPor ← sesión; nombre saneado; extensión restringida a las 7 del
+     * `accept` de Photino (.pdf/.doc/.docx/.jpg/.jpeg/.png/.webp); además de la extensión (único
+     * control de Photino/la API), el gateway valida la FIRMA real de los primeros bytes contra el
+     * tipo declarado — diferencia defensiva, un archivo renombrado no pasa. Tope 10 MB (el real de
+     * la API, no los 25 MB de adjunto.abrir). Viaja por /api/v1/bridge/archivo (supera el tope general).
+     */
+    public BridgeResult adjuntoSubir(ObjectNode payload, SessionUser usuario) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_ADJUNTO_SUBIR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer versionId = entero(payload.get("documentoVersionId"));
+        if (versionId == null) {
+            return BridgeResult.error(MENSAJE_ID_VERSION);
+        }
+        String nombre = texto(payload.get("nombreArchivo"));
+        String contenidoBase64 = texto(payload.get("contenidoBase64"));
+        if (nombre.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_NOMBRE_ARCHIVO);
+        }
+        if (contenidoBase64.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_CONTENIDO_ARCHIVO);
+        }
+        String error = validarArchivo(nombre, contenidoBase64);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("nombreArchivo", nombreArchivoSeguro(nombre, "adjunto"));
+        cuerpo.put("contenidoBase64", contenidoBase64);
+        cuerpo.put("subidoPor", autorDeSesion(usuario));
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/adjunto/" + versionId, cuerpo), mapper);
+    }
+
+    /** Recurso auditado: "controlDocumental:adjunto:<documentoVersionId>:subido". */
+    public static String recursoAdjuntoSubir(ObjectNode payload, Object dataRespuesta) {
+        Integer versionId = entero(payload.get("documentoVersionId"));
+        return "controlDocumental:adjunto:" + (versionId != null ? versionId : "?") + ":subido";
+    }
+
+    /** {adjuntoNombreArchivo, adjuntoContenidoBase64} opcionales de create/version.crear: ambos vacíos = sin adjunto. */
+    private String ponerAdjuntoOpcional(ObjectNode cuerpo, ObjectNode payload, String claveNombre, String claveContenido) {
+        String nombre = texto(payload.get(claveNombre));
+        String contenido = texto(payload.get(claveContenido));
+        if (nombre.isBlank() || contenido.isBlank()) {
+            cuerpo.putNull(claveNombre);
+            cuerpo.putNull(claveContenido);
+            return null;
+        }
+        String error = validarArchivo(nombre, contenido);
+        if (error != null) {
+            return error;
+        }
+        cuerpo.put(claveNombre, nombreArchivoSeguro(nombre, "adjunto"));
+        cuerpo.put(claveContenido, contenido);
+        return null;
+    }
+
+    /** Extensión conocida + base64 decodificable ≤ 10 MB + firma real de los primeros bytes coincidente. */
+    private static String validarArchivo(String nombreArchivo, String base64) {
+        String extension = extension(nombreArchivo);
+        String mimeEsperado = MIME_POR_EXTENSION_SUBIDA.get(extension);
+        if (mimeEsperado == null) {
+            return MENSAJE_TIPO_ARCHIVO;
+        }
+        if (base64.length() > MAX_SUBIDA_BASE64) {
+            return MENSAJE_ARCHIVO_TAMANO;
+        }
+        byte[] contenido;
+        try {
+            contenido = Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            return MENSAJE_ARCHIVO_INVALIDO;
+        }
+        if (contenido.length > MAX_SUBIDA_BYTES) {
+            return MENSAJE_ARCHIVO_TAMANO;
+        }
+        if (!firmaArchivoCoincide(mimeEsperado, contenido)) {
+            return MENSAJE_ARCHIVO_FIRMA;
+        }
+        return null;
+    }
+
+    private static String extension(String nombreArchivo) {
+        int punto = nombreArchivo.lastIndexOf('.');
+        return punto < 0 ? "" : nombreArchivo.substring(punto).toLowerCase(java.util.Locale.ROOT);
+    }
+
+    /** PDF/JPEG/PNG/WEBP reutilizan firmaCoincide (adjunto.abrir); DOC/DOCX no están en ese mapa (no son previsualizables). */
+    private static boolean firmaArchivoCoincide(String mime, byte[] contenido) {
+        return switch (mime) {
+            case "application/msword" -> coincidePrefijo(contenido, FIRMA_OLE2);
+            case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> coincidePrefijo(contenido, FIRMA_ZIP);
+            default -> firmaCoincide(mime, contenido);
+        };
+    }
+
+    private static boolean coincidePrefijo(byte[] contenido, byte[] firma) {
+        if (contenido.length < firma.length) {
+            return false;
+        }
+        for (int i = 0; i < firma.length; i++) {
+            if (contenido[i] != firma[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static String nombreCampoSeguro(String clave) {
+        return clave != null && clave.matches("[A-Za-z0-9_]{1,40}") ? clave : "?";
+    }
+
+    /** Mismo criterio que la sesión C# de Photino (nombre completo; si no, el código). */
+    private static String autorDeSesion(SessionUser usuario) {
+        String nombre = usuario.nombreCompleto();
+        return nombre != null && !nombre.isBlank() ? nombre : usuario.codigoUsuario();
+    }
+
+    /** GetString de Photino: string o número → texto; null/ausente → "". */
+    private static String texto(JsonNode nodo) {
+        return nodo != null && (nodo.isString() || nodo.isNumber()) ? nodo.asString() : "";
     }
 
     /**

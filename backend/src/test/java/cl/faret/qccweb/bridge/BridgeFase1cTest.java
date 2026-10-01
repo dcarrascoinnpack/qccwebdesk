@@ -191,6 +191,8 @@ class BridgeFase1cTest {
                 "productoTerminado.detalle", "productoTerminado.exportarDetalle",
                 "certificadosLiberacion.buscar", "certificadosLiberacion.calidadPdf.descargar",
                 "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
+                "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
+                "controlDocumental.eliminar", "controlDocumental.adjunto.subir",
                 "noConformidades.list", "noConformidades.resumen", "noConformidades.filtrosOpciones",
                 "noConformidades.get", "noConformidades.seguimiento.list", "noConformidades.analisis.get",
                 "noConformidades.acciones.list", "noConformidades.adjuntos.list", "noConformidades.adjuntos.abrir",

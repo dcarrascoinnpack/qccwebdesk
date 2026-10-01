@@ -276,8 +276,7 @@ public class BridgeConfig {
                         certificados::calidadPdfDescargar),
                 // Fase 2h — Control Documental, SOLO LECTURA (payload plano). "alcanceEmpresa" es filtro
                 // de negocio validado en el handler. adjunto.abrir: previsualiza o descarga en el
-                // navegador, sin archivos temporales. Escrituras (create/update/version.crear/eliminar/
-                // adjunto.subir) fuera (deny-by-default).
+                // navegador, sin archivos temporales.
                 new ActionPolicy.Regla(
                         "controlDocumental.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), controlDocumental::list),
                 new ActionPolicy.Regla(
@@ -285,6 +284,26 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "controlDocumental.adjunto.abrir", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         controlDocumental::adjuntoAbrir),
+                // Fase 4d — escrituras de Control Documental: roles = Photino (cualquier sesión INNPACK); autor
+                // (creadoPor/actualizadoPor/subidoPor) ← sesión; update usa huella+relectura (la API no tiene
+                // versión, a diferencia de Talleres Externos); eliminar/version.crear solo relee para convertir el
+                // "no existe" silencioso de la API en error real; adjunto.subir con firma real de archivo (no solo
+                // extensión como Photino/la API) y 10 MB (el tope real de la API).
+                new ActionPolicy.Regla(
+                        "controlDocumental.create", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), controlDocumental::crear, ControlDocumentalBridgeHandler::recursoCrear),
+                new ActionPolicy.Regla(
+                        "controlDocumental.update", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), controlDocumental::actualizar, ControlDocumentalBridgeHandler::recursoActualizar),
+                new ActionPolicy.Regla(
+                        "controlDocumental.version.crear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), controlDocumental::versionCrear, ControlDocumentalBridgeHandler::recursoVersionCrear),
+                new ActionPolicy.Regla(
+                        "controlDocumental.eliminar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), controlDocumental::eliminar, ControlDocumentalBridgeHandler::recursoEliminar),
+                new ActionPolicy.Regla(
+                        "controlDocumental.adjunto.subir", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), controlDocumental::adjuntoSubir, ControlDocumentalBridgeHandler::recursoAdjuntoSubir),
                 // Fase 3v — columna "Liberación Calidad" de PNC (Photino 1.8.14): GET fps-api liberaciones/inspectores con
                 // la API key del servidor. Solo lectura; sin fps-api configurada responde como Photino (celda "No
                 // disponible"). Photino no restringe por rol (cualquier sesión que abra No Conformidades).

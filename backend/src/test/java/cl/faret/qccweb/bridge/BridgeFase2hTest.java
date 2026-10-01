@@ -54,8 +54,6 @@ class BridgeFase2hTest {
     private static final String LIST = "controlDocumental.list";
     private static final String GET = "controlDocumental.get";
     private static final String ADJUNTO = "controlDocumental.adjunto.abrir";
-    private static final List<String> ESCRITURAS = List.of("controlDocumental.create", "controlDocumental.update",
-            "controlDocumental.version.crear", "controlDocumental.eliminar", "controlDocumental.adjunto.subir");
     private static final String BASE = "GET /api/control-documental";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
@@ -299,18 +297,6 @@ class BridgeFase2hTest {
     }
 
     // ------------------------------------------------------------- escrituras / roles / empresa
-
-    @Test
-    void escriturasDelModuloSiguenBloqueadas() throws Exception {
-        MockHttpSession admin = login("admin1");
-        for (String escritura : ESCRITURAS) {
-            accion(admin, "{\"action\":\"" + escritura + "\",\"id\":301,\"documentoId\":301,\"documentoVersionId\":1,\"titulo\":\"x\"}")
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
-            assertThat(policy.accionesRegistradas()).doesNotContain(escritura);
-        }
-        assertThat(API.peticionesControlDocumental()).isEmpty();
-    }
 
     @Test
     void rolPermitidoYNoPermitido() throws Exception {

@@ -14,16 +14,17 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **45** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **50** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar`, `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`,
 `dashboard.{validarRegistro,rechazarRegistro,eliminarRegistro,validarTodo,rechazarTodo}`,
 `registrosProduccion.{validarRegistro,rechazarRegistro,eliminarRegistro,validarTodo,rechazarTodo}`,
-`registrosControl.{validarRegistro,rechazarRegistro,eliminarRegistro}` y
-`talleresExternos.{create,update,eliminar,catalogos.eliminarTaller,catalogos.eliminarProceso,sincronizarFps}`, estado
-VALIDADA; mismos roles que Photino). Las otras 36 siguen denegadas por `ActionPolicy`
+`registrosControl.{validarRegistro,rechazarRegistro,eliminarRegistro}`,
+`talleresExternos.{create,update,eliminar,catalogos.eliminarTaller,catalogos.eliminarProceso,sincronizarFps}` y
+`controlDocumental.{create,update,version.crear,eliminar,adjunto.subir}`, estado
+VALIDADA; mismos roles que Photino). Las otras 31 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -68,7 +69,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 36 APROBADA · 45 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 31 APROBADA · 50 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -80,11 +81,11 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `controlDocumental.adjunto.subir` | POST `api/control-documental/adjunto/{versionId}` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `subidoPor` | `subidoPor` ← nombreCompleto | adjunta archivo a una versión (≤ 25 MB) | sí: reemplazar/nueva versión | **MEDIO** | cambia el documento vigente que ven todos; validar tipo/tamaño en gateway | APROBADA |
-| `controlDocumental.create` | POST `api/control-documental` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | crea documento/versión controlada | sí: nueva versión o eliminar (admin) | **MEDIO** | documentos del sistema de calidad: solo quien administra el control documental | APROBADA |
-| `controlDocumental.update` | PUT `api/control-documental/{id}` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | edita metadatos del documento | sí: volver a editar | **MEDIO** | documento controlado | APROBADA |
-| `controlDocumental.version.crear` | POST `api/control-documental/{documentoId}/version` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | crea documento/versión controlada | sí: nueva versión o eliminar (admin) | **MEDIO** | documentos del sistema de calidad: solo quien administra el control documental | APROBADA |
-| `controlDocumental.eliminar` | DELETE `api/control-documental/{id}` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto | elimina el documento (lógico, por verificar) | no desde la UI | **ALTO** | destructivo sobre registro controlado | APROBADA |
+| `controlDocumental.adjunto.subir` | POST `api/control-documental/adjunto/{versionId}` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `subidoPor` | `subidoPor` ← nombreCompleto | adjunta archivo a una versión (≤ 25 MB) | sí: reemplazar/nueva versión | **MEDIO** | cambia el documento vigente que ven todos; validar tipo/tamaño en gateway | VALIDADA (Fase 4d, gateway 0.4.0; roles = Photino; subidoPor ← sesión, firma real de archivo ademas de la extension, tope 10 MB real de la API) |
+| `controlDocumental.create` | POST `api/control-documental` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | crea documento/versión controlada | sí: nueva versión o eliminar (admin) | **MEDIO** | documentos del sistema de calidad: solo quien administra el control documental | VALIDADA (Fase 4d, gateway 0.4.0; roles = Photino; creadoPor ← sesión, lista blanca de los 18 campos del formulario) |
+| `controlDocumental.update` | PUT `api/control-documental/{id}` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto; payload completo pasa a la API → lista blanca de campos | edita metadatos del documento | sí: volver a editar | **MEDIO** | documento controlado | VALIDADA (Fase 4d, gateway 0.4.0; roles = Photino; actualizadoPor ← sesión, huella de `get` + relectura + comparacion antes del PUT -la API no tiene version, igual que noConformidades.update-) |
+| `controlDocumental.version.crear` | POST `api/control-documental/{documentoId}/version` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `creadoPor` | `creadoPor` ← nombreCompleto | crea documento/versión controlada | sí: nueva versión o eliminar (admin) | **MEDIO** | documentos del sistema de calidad: solo quien administra el control documental | VALIDADA (Fase 4d, gateway 0.4.0; roles = Photino; creadoPor ← sesión, relee el documento antes de escribir -la API no valida que exista-) |
+| `controlDocumental.eliminar` | DELETE `api/control-documental/{id}` | INNPACK; `alcanceEmpresa` = dato de negocio (validar valores) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `actualizadoPor` | `actualizadoPor` ← nombreCompleto | elimina el documento (lógico, por verificar) | no desde la UI | **ALTO** | destructivo sobre registro controlado | VALIDADA (Fase 4d, gateway 0.4.0; roles = Photino; actualizadoPor ← sesión, relee antes de borrar -convierte el OK vacio de la API en 404 real-) |
 
 ### dashboard (5)
 
@@ -629,6 +630,49 @@ del usuario de paridad exacta con el riesgo aceptado); `registrosProduccion.vali
   `BridgeFase1cTest`/`BridgeFase3aTest` (listas exhaustivas de acciones) y `BridgeFase2cTest`/`BridgeFase2dTest`/
   `BridgeFase2eTest` (las 13 acciones salen de "escrituras bloqueadas"; `registrosControl` no tenía ese test, no aplica).
   Suite completa 719/720 (solo `QccApiApplicationTests.contextLoads` legacy, esperado).
+
+## Control Documental — create/update/version.crear/eliminar/adjunto.subir — VALIDADA (Fase 4d, 2026-10-01)
+
+Photino: un modal crea el documento y su primera versión en un solo paso (`create`, con adjunto inicial opcional);
+editar (`update`) usa el mismo formulario pero solo los 9 campos de metadatos, sin versión ni adjunto; "Agregar nueva
+versión" (`version.crear`) vive en el detalle de un documento ya existente, con adjunto opcional; "Eliminar" hace un
+borrado lógico con `confirm()`; el botón "Adjuntar"/"Reemplazar" por fila sube un archivo a una versión puntual
+(`adjunto.subir`). El handler C# es passthrough puro (sin validación de negocio del lado de Photino, todo vive en
+`ControlDocumentalService.cs` de la API), sin gating de rol ni de empresa (dato 100% compartido INNPACK/Faret). A
+diferencia de Talleres Externos, **la API NO tiene columna de versión**: `update` es un `UPDATE` directo sin
+verificar existencia ni comparar nada (sobrescribe sin historial, last-write-wins); `eliminar`/`version.crear`
+tampoco verifican que el documento exista antes de escribir. El archivo viaja como base64 en el mismo JSON (nunca
+multipart); Photino/la API validan el tipo SOLO por la extensión del nombre (`.pdf/.doc/.docx/.jpg/.jpeg/.png/.webp`)
+y el tamaño real tope es **10 MB** (`ControlDocumentalService.MaxTamanoBytesAdjunto`) — el dato "≤25MB" que traía la
+matriz correspondía al tope de **adjunto.abrir** (previsualizar/descargar lo ya subido), no al de subir.
+
+- Web: a diferencia de Talleres Externos (donde la concurrencia la resuelve la API con `version`/404/409), acá
+  `update` usa el mismo patrón que `noConformidades.update` porque la API tampoco tiene versión: exige haber abierto
+  el documento en esta sesión (huella SHA-256 del `get`, registrada ahí mismo), lo relee antes del PUT y rechaza si
+  cambió desde que se abrió (lost update); sin candado (mismo criterio que noConformidades.update). `eliminar` y
+  `version.crear` no exigen huella (Photino tampoco los protege así) pero SÍ relaen el documento antes de escribir,
+  convirtiendo el "no existe" silencioso de la API (`eliminar` responde 200 igual si el id no existe; `version.crear`
+  insertaría una versión huérfana) en un error real con el mensaje de la API. `creadoPor`/`actualizadoPor`/`subidoPor`
+  ← SIEMPRE sesión (si el payload trae uno distinto, se ignora: no se rechaza, igual que noConformidades). Lista
+  blanca de los 9 campos de metadatos + los propios de cada acción; textos sin controles ni marcado HTML (sin largo
+  propio: no se pudo confirmar el de la columna real en la BD — residual documentado, igual que en Talleres
+  Externos); fechas AAAA-MM-DD si vienen, `null` si no (como el `<input type="date">`); estado/alcanceEmpresa
+  restringidos a las opciones exactas de los `<select>` de Photino. El adjunto, además de la extensión (único control
+  de Photino/la API), valida la **firma real** de los primeros bytes contra el tipo declarado — diferencia defensiva:
+  PDF/JPEG/PNG/WEBP reutilizan `firmaCoincide` de `adjunto.abrir`; DOC (OLE2, `D0 CF 11 E0...`) y DOCX (ZIP,
+  `PK\x03\x04`) son firmas nuevas (no están en el mapa de tipos previsualizables). Tope 10 MB (el real de la API).
+  `create`/`version.crear`/`adjunto.subir` viajan por `/api/v1/bridge/archivo` (el adjunto supera el tope general de
+  256 KB); se agregó al `ACCIONES_ARCHIVO` del gateway y del shim (`web-bridge.js`).
+- Pruebas: `BridgeFase4dTest` (19: cuerpo mínimo y creadoPor manipulado ignorado, campos obligatorios y enums
+  inválidos, fecha inválida y texto con HTML, campo no permitido, adjunto PDF válido/firma falsa rechazada/extensión
+  no permitida, adjunto DOCX válido por firma ZIP, huella exigida antes de editar + conflicto detectado y resuelto al
+  reabrir, enum inválido y campo no permitido en update, version.crear exitosa y con documento inexistente, falta
+  versión/fecha, eliminar exitoso e idempotente con el 404 real de la API en el segundo intento, campo no permitido,
+  adjunto.subir válido y con contenido faltante, adjunto excesivo rechazado, roles/empresa, auditoría con recurso por
+  acción, CSRF/401); ajustes en `BridgeFase2hTest` (ya no hay escrituras bloqueadas que probar), `BridgeFase1cTest`/
+  `BridgeFase3aTest` (listas exhaustivas) y `web-bridge.test.mjs` (19/19, las 3 acciones nuevas van por la ruta de
+  archivos). Suite completa 754/755 (solo `QccApiApplicationTests.contextLoads` legacy, esperado).
+- Con esto Control Documental queda **8/8** acciones de Photino habilitadas.
 
 ## Talleres Externos — create/update/eliminar/catalogos.eliminar*/sincronizarFps — VALIDADA (Fase 4c, 2026-10-01)
 
