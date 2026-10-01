@@ -802,6 +802,54 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-10-01T13:59:27Z"
+    },
+    "talleresExternos.create": {
+      "huella": "1088190f00cab105dbd763d6e3e0fd1363bf7d5ed675cbc48b020766bcda594e",
+      "huellaFrontend": "ab3f996e045158aa7fdfbd8052a1515e8ea0bab1fb8c7f417bd6acab492013a4",
+      "handler": "TalleresExternosHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T14:30:18Z"
+    },
+    "talleresExternos.update": {
+      "huella": "c38911b55966324d25305123adb58a12cd8707341a781c0975f07ed9c072fb8c",
+      "huellaFrontend": "ab3f996e045158aa7fdfbd8052a1515e8ea0bab1fb8c7f417bd6acab492013a4",
+      "handler": "TalleresExternosHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T14:30:18Z"
+    },
+    "talleresExternos.eliminar": {
+      "huella": "e2d89bbedc4358e67d08ebb54e8eb9df6e728e566784f08894bd2b7180e9d58a",
+      "huellaFrontend": "cd350e71d0c4f604de0f071d11838c7c8ad4e80b35ca99b3bdddac1c029a3e03",
+      "handler": "TalleresExternosHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T14:30:18Z"
+    },
+    "talleresExternos.catalogos.eliminarTaller": {
+      "huella": "def883333a69884a1c04d0229a62e8a7d6cce80764bc067b4396828fb71b83d7",
+      "huellaFrontend": "33d90b4dd51783c5137b3659a8a1213a710c09e67593d592b0e6d2985984c5f7",
+      "handler": "TalleresExternosHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T14:30:18Z"
+    },
+    "talleresExternos.catalogos.eliminarProceso": {
+      "huella": "f12374efc388aef6dd017650bfdd5d6a5840647ab1f8b2c04cbfc93376e52d10",
+      "huellaFrontend": "58662796ce5d26bb9596c08682ea7918874f05aadf8dd05ea387ee67c728cde1",
+      "handler": "TalleresExternosHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T14:30:18Z"
+    },
+    "talleresExternos.sincronizarFps": {
+      "huella": "5fe3f2e328f82da85502dbd99b08e3b53b0639911671af7759e39eaf9ec5040e",
+      "huellaFrontend": "344a95c36187dcc7e385493438268523193f4b4bbb09558d05dbd92f7690aa16",
+      "handler": "TalleresExternosHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-01T14:30:18Z"
     }
   }
 }

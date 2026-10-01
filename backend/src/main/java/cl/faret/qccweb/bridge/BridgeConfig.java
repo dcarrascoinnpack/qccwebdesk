@@ -393,14 +393,38 @@ public class BridgeConfig {
                 // solo el proceso FPS de una muestra abierta en la sesión.
                 new ActionPolicy.Regla(
                         "muestraLab.materialesFps", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::materialesFps),
-                // Fase 2m — Talleres Externos, SOLO LECTURA (payload en "data", sin empresa ni rol).
-                // Escrituras (create/update/eliminar/catalogos.eliminar*/sincronizarFps) fuera.
+                // Fase 2m — Talleres Externos (payload en "data", sin empresa ni rol propio).
                 new ActionPolicy.Regla("talleresExternos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::list),
                 new ActionPolicy.Regla(
                         "talleresExternos.catalogos", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::catalogos),
                 new ActionPolicy.Regla(
                         "talleresExternos.historialLiberaciones", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         talleres::historialLiberaciones),
+                // Fase 4c — escrituras de Talleres Externos: roles = Photino (cualquier sesión INNPACK);
+                // usuarioId ← sesión; concurrencia optimista real por "version" (404/409 de la propia API,
+                // el gateway no la reimplementa); huella de sesión como piso mínimo (haber cargado la
+                // lista/catálogo antes de escribir).
+                new ActionPolicy.Regla(
+                        "talleresExternos.create", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), talleres::crear, TalleresExternosBridgeHandler::recursoCrear),
+                new ActionPolicy.Regla(
+                        "talleresExternos.update", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), talleres::actualizar, TalleresExternosBridgeHandler::recursoActualizar),
+                new ActionPolicy.Regla(
+                        "talleresExternos.eliminar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), talleres::eliminar, TalleresExternosBridgeHandler::recursoEliminar),
+                new ActionPolicy.Regla(
+                        "talleresExternos.catalogos.eliminarTaller", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), talleres::catalogoEliminarTaller,
+                        (p, data) -> TalleresExternosBridgeHandler.recursoCatalogoEliminar("taller", p, data)),
+                new ActionPolicy.Regla(
+                        "talleresExternos.catalogos.eliminarProceso", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), talleres::catalogoEliminarProceso,
+                        (p, data) -> TalleresExternosBridgeHandler.recursoCatalogoEliminar("proceso", p, data)),
+                new ActionPolicy.Regla(
+                        "talleresExternos.sincronizarFps", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), talleres::sincronizarFps,
+                        TalleresExternosBridgeHandler::recursoSincronizarFps),
                 // Fase 3a — PRIMERA ESCRITURA (vertical slice, patrón oficial de escrituras):
                 // - roles: ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO (matriz; falta validar negocio);
                 // - identidad: "autor" = SIEMPRE el usuario de la sesión (el handler además arma el cuerpo

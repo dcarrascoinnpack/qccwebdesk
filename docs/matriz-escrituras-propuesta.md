@@ -14,15 +14,16 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **39** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **45** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar`, `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`,
 `dashboard.{validarRegistro,rechazarRegistro,eliminarRegistro,validarTodo,rechazarTodo}`,
-`registrosProduccion.{validarRegistro,rechazarRegistro,eliminarRegistro,validarTodo,rechazarTodo}`
-y `registrosControl.{validarRegistro,rechazarRegistro,eliminarRegistro}`, estado VALIDADA;
-mismos roles que Photino). Las otras 42 siguen denegadas por `ActionPolicy`
+`registrosProduccion.{validarRegistro,rechazarRegistro,eliminarRegistro,validarTodo,rechazarTodo}`,
+`registrosControl.{validarRegistro,rechazarRegistro,eliminarRegistro}` y
+`talleresExternos.{create,update,eliminar,catalogos.eliminarTaller,catalogos.eliminarProceso,sincronizarFps}`, estado
+VALIDADA; mismos roles que Photino). Las otras 36 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -67,7 +68,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 42 APROBADA · 39 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 36 APROBADA · 45 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -196,12 +197,12 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `talleresExternos.create` | POST `api/talleres-externos` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id | inyectar userId (Photino lo toma de su sesión); payload completo pasa a la API → lista blanca de campos | crea un trabajo de taller externo | sí: editar/eliminar (admin) | **BAJO** | operativo; usuarioId desde sesión | APROBADA |
-| `talleresExternos.sincronizarFps` | POST `api/talleres-externos/sincronizar-fps` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id | inyectar userId (Photino lo toma de su sesión) | sincroniza liberaciones desde FPS (API → FPS) y actualiza cantidades | idempotente según la API (por verificar) | **MEDIO** | operación masiva disparada contra un sistema externo | APROBADA |
-| `talleresExternos.update` | PUT `api/talleres-externos/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id | inyectar userId (Photino lo toma de su sesión); payload completo pasa a la API → lista blanca de campos | edita un trabajo (concurrencia optimista: version → 409) | sí: volver a editar | **MEDIO** | precios/cantidades; usuarioId desde sesión | APROBADA |
-| `talleresExternos.catalogos.eliminarProceso` | DELETE `api/talleres-externos/catalogos/procesos/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un taller/proceso del catálogo | no desde la UI | **ALTO** | maestro compartido; sin autor | APROBADA |
-| `talleresExternos.catalogos.eliminarTaller` | DELETE `api/talleres-externos/catalogos/talleres/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un taller/proceso del catálogo | no desde la UI | **ALTO** | maestro compartido; sin autor | APROBADA |
-| `talleresExternos.eliminar` | DELETE `api/talleres-externos/{id}?version=&usuarioId=` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id | inyectar userId (Photino lo toma de su sesión) | elimina un trabajo (con version) | no desde la UI | **ALTO** | destructivo | APROBADA |
+| `talleresExternos.create` | POST `api/talleres-externos` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id | inyectar userId (Photino lo toma de su sesión); payload completo pasa a la API → lista blanca de campos | crea un trabajo de taller externo | sí: editar/eliminar (admin) | **BAJO** | operativo; usuarioId desde sesión | VALIDADA (Fase 4c, gateway 0.4.0; roles = Photino; usuarioId ← sesión, lista blanca de las 18 claves del formulario) |
+| `talleresExternos.sincronizarFps` | POST `api/talleres-externos/sincronizar-fps` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id | inyectar userId (Photino lo toma de su sesión) | sincroniza liberaciones desde FPS (API → FPS) y actualiza cantidades | idempotente según la API (por verificar) | **MEDIO** | operación masiva disparada contra un sistema externo | VALIDADA (Fase 4c, gateway 0.4.0; roles = Photino; usuarioId ← sesión, sin id ni parámetros propios) |
+| `talleresExternos.update` | PUT `api/talleres-externos/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id | inyectar userId (Photino lo toma de su sesión); payload completo pasa a la API → lista blanca de campos | edita un trabajo (concurrencia optimista: version → 409) | sí: volver a editar | **MEDIO** | precios/cantidades; usuarioId desde sesión | VALIDADA (Fase 4c, gateway 0.4.0; roles = Photino; usuarioId ← sesión, version reenviada tal cual, 404/409 reales de la API) |
+| `talleresExternos.catalogos.eliminarProceso` | DELETE `api/talleres-externos/catalogos/procesos/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un taller/proceso del catálogo | no desde la UI | **ALTO** | maestro compartido; sin autor | VALIDADA (Fase 4c, gateway 0.4.0; roles = Photino; huella del catálogo cargado) |
+| `talleresExternos.catalogos.eliminarTaller` | DELETE `api/talleres-externos/catalogos/talleres/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un taller/proceso del catálogo | no desde la UI | **ALTO** | maestro compartido; sin autor | VALIDADA (Fase 4c, gateway 0.4.0; roles = Photino; huella del catálogo cargado) |
+| `talleresExternos.eliminar` | DELETE `api/talleres-externos/{id}?version=&usuarioId=` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id | inyectar userId (Photino lo toma de su sesión) | elimina un trabajo (con version) | no desde la UI | **ALTO** | destructivo | VALIDADA (Fase 4c, gateway 0.4.0; roles = Photino; usuarioId ← sesión, version reenviada tal cual, 404/409 reales de la API) |
 
 ### usuarios (3)
 
@@ -628,6 +629,47 @@ del usuario de paridad exacta con el riesgo aceptado); `registrosProduccion.vali
   `BridgeFase1cTest`/`BridgeFase3aTest` (listas exhaustivas de acciones) y `BridgeFase2cTest`/`BridgeFase2dTest`/
   `BridgeFase2eTest` (las 13 acciones salen de "escrituras bloqueadas"; `registrosControl` no tenía ese test, no aplica).
   Suite completa 719/720 (solo `QccApiApplicationTests.contextLoads` legacy, esperado).
+
+## Talleres Externos — create/update/eliminar/catalogos.eliminar*/sincronizarFps — VALIDADA (Fase 4c, 2026-10-01)
+
+Photino: un modal sirve para crear y editar (`talleresExternos.create`/`.update`); el handler C# arma siempre el mismo
+payload de 18 campos (taller/proceso/responsable se resuelven o crean por NOMBRE en la API, nunca por id).
+`update`/`eliminar` usan concurrencia optimista real por columna `version`: la API relee con `UPDLOCK/ROWLOCK` dentro de
+su propia transacción y responde **404** si no existe/ya está eliminado o **409** con un mensaje humano si `version` no
+coincide — Photino distingue el conflicto por el código HTTP real, no por texto (`ForwardWithStatus`), y el JS solo
+muestra `res.error` tal cual (no consume el campo `conflict`). `eliminar` es borrado lógico (ANULADO) con el mismo
+control de versión, vía querystring (`?version=&usuarioId=`, sin cuerpo). `catalogos.eliminarTaller/eliminarProceso`
+desactivan (`activo=0`) un valor del catálogo por id, sin versión; los trabajos ya guardados conservan su copia de
+texto. `sincronizarFps` recorre los trabajos activos con código de producto, consulta fps-api por cada uno e inserta
+sus liberaciones nuevas en su propia transacción (idempotente: una liberación repetida se ignora por su folio único);
+un error de un trabajo no aborta el resto (queda en `data.errores`). Ninguna de las 6 acciones exige rol específico en
+Photino ni en la API (`[Authorize]` solo exige sesión).
+
+- Web: a diferencia de `recepcion.estado.actualizar` (donde la API no tiene versión y el gateway debía inventar la
+  detección de conflicto comparando un campo), aquí la API YA resuelve la concurrencia: el gateway no la reimplementa,
+  solo reenvía el `version` que trae el payload (el que la sesión vio en la última lista) y deja que la API arbitre con
+  su propio 404/409. Lista blanca de las 18 claves del formulario (`create`/`update`) o `{id, version}` (`eliminar`) o
+  `{id}` (`catalogos.eliminar*`); `usuarioId` NUNCA se acepta del payload (se rechaza como campo no permitido), siempre
+  sale de la sesión. Textos sin controles ni marcado HTML (sin largo propio verificado contra la BD real para
+  nv/producto/item/cliente/tallerExternoNombre/procesoNombre/responsableInternoNombre — residual documentado; sí se
+  conocen y se validan precioCotizacion/precioTaller ≤200, cantidadFaltanteJustificacion ≤500, observaciones ≤2000,
+  igual que `TalleresExternosService.ValidarCampos`); fechas AAAA-MM-DD si vienen, `null` si no (como el
+  `<input type="date">` de Photino); prioridad/estado restringidos a las opciones exactas de los `<select>` de Photino
+  (BAJA/MEDIA/ALTA; PENDIENTE_ASIGNACION/ASIGNADO/EN_PROCESO/ENTREGADO/ANULADO). Huella de sesión (haber cargado la
+  lista o el catálogo antes de escribir) como piso mínimo independiente de lo que la API ya resuelva, igual criterio
+  que el resto del sistema — sin candado por id: la API ya serializa con `UPDLOCK/ROWLOCK` dentro de su propia
+  transacción, un candado en el gateway sería redundante. `sincronizarFps` no tiene id ni huella posible (no referencia
+  ningún trabajo en particular) y tampoco candado (cada trabajo se sincroniza en su propia transacción en la API, un
+  folio repetido no duplica nada). Auditoría `recurso=talleresExternos:<id>:<crear|actualizar|eliminar>`,
+  `talleresExternos:catalogo:<taller|proceso>:<id>:eliminar` o `talleresExternos:sincronizarFps` (sin id).
+- Pruebas: `BridgeFase4cTest` (19: cuerpo mínimo y usuarioId manipulado rechazado, campos obligatorios y opciones
+  inválidas, fecha inválida y texto con HTML, campo no permitido, huella exigida antes de editar/eliminar, conflicto de
+  versión detectado y resuelto al reabrir la lista, 404 real de la API sobre un trabajo ya eliminado, catálogo
+  desactivado dos veces (ok → 404), sincronizarFps normal/con errores/sin configurar y su wrapper `{action,data:{}}`
+  real de la vista, roles/empresa, auditoría con recurso por acción, CSRF/401); ajustes en `BridgeFase2mTest` (ya no
+  hay escrituras bloqueadas que probar) y `BridgeFase1cTest`/`BridgeFase3aTest` (listas exhaustivas). Suite completa
+  736/737 (solo `QccApiApplicationTests.contextLoads` legacy, esperado).
+- Con esto Talleres Externos queda **9/9** acciones de Photino habilitadas (las 3 lecturas de la Fase 2m + estas 6).
 
 ## Recepción — `recepcion.crear` ("Nuevo Lote de Inspección") — VALIDADA (Fase 3z, 2026-09-30)
 

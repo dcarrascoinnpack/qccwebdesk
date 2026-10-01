@@ -51,9 +51,6 @@ class BridgeFase2mTest {
     private static final String LIST = "talleresExternos.list";
     private static final String CATALOGOS = "talleresExternos.catalogos";
     private static final String HISTORIAL = "talleresExternos.historialLiberaciones";
-    private static final List<String> NO_HABILITADAS = List.of("talleresExternos.create", "talleresExternos.update",
-            "talleresExternos.eliminar", "talleresExternos.catalogos.eliminarTaller", "talleresExternos.catalogos.eliminarProceso",
-            "talleresExternos.sincronizarFps");
     private static final String BASE = "GET /api/talleres-externos";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
@@ -166,18 +163,6 @@ class BridgeFase2mTest {
         for (String a : List.of(LIST, CATALOGOS)) {
             accion(sesion, "{\"action\":\"" + a + "\",\"data\":{}}").andExpect(jsonPath("$.error").value("Filtro de fecha inválido"));
         }
-    }
-
-    @Test
-    void escriturasSiguenBloqueadas() throws Exception {
-        MockHttpSession admin = login("admin1");
-        for (String accion : NO_HABILITADAS) {
-            accion(admin, "{\"action\":\"" + accion + "\",\"data\":{\"id\":9001,\"version\":1,\"nv\":\"x\",\"usuarioId\":20}}")
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
-            assertThat(policy.accionesRegistradas()).doesNotContain(accion);
-        }
-        assertThat(API.peticionesTalleres()).isEmpty();
     }
 
     @Test

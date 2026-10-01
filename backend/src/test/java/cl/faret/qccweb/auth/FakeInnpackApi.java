@@ -160,6 +160,13 @@ public final class FakeInnpackApi implements AutoCloseable {
         estadoGlobalProduccion = null;
         estadoValidacionControl.clear();
         eliminadosControl.clear();
+        trabajosCreados.clear();
+        versionTrabajo.clear();
+        trabajosEliminados.clear();
+        siguienteTrabajo.set(20000);
+        talleresInactivos.clear();
+        procesosInactivos.clear();
+        modoSincronizarFps = "NORMAL";
     }
 
     // ------------------------------------------------------------------ Fase 3y: apisapfaret GET api/recepcion/bobinas[/lotes]
@@ -2252,10 +2259,36 @@ public final class FakeInnpackApi implements AutoCloseable {
     }
 
     private final java.util.List<String> peticionesTalleres = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /** Fase 4c: estado de los trabajos (sintéticos 9000-9449 de dataTalleresList + los creados vía POST). */
+    private final java.util.Set<Long> trabajosCreados = ConcurrentHashMap.newKeySet();
+    private final Map<Long, Integer> versionTrabajo = new ConcurrentHashMap<>();
+    private final java.util.Set<Long> trabajosEliminados = ConcurrentHashMap.newKeySet();
+    private final java.util.concurrent.atomic.AtomicLong siguienteTrabajo = new java.util.concurrent.atomic.AtomicLong(20000);
+    private final java.util.Set<Integer> talleresInactivos = ConcurrentHashMap.newKeySet();
+    private final java.util.Set<Integer> procesosInactivos = ConcurrentHashMap.newKeySet();
+    private volatile String modoSincronizarFps = "NORMAL";
 
     /** "<método> <ruta>[?<query cruda>]" recibidos en api/talleres-externos*. */
     public java.util.List<String> peticionesTalleres() {
         return java.util.List.copyOf(peticionesTalleres);
+    }
+
+    /** Fase 4c: estado_validacion... versión vigente de un trabajo (sintético o creado), o null si no existe/fue eliminado. */
+    public Integer versionTrabajo(long id) {
+        if (trabajosEliminados.contains(id) || (id < 9000 || id >= 9450) && !trabajosCreados.contains(id)) {
+            return null;
+        }
+        return versionTrabajo.getOrDefault(id, 1);
+    }
+
+    /** Fase 4c: simula que otra persona (Photino u otra sesión) ya actualizó este trabajo (sube su versión). */
+    public void avanzarVersionTrabajoPorOtro(long id) {
+        versionTrabajo.put(id, versionTrabajo.getOrDefault(id, 1) + 1);
+    }
+
+    /** NORMAL | CON_ERRORES | NO_CONFIGURADO. */
+    public void modoSincronizarFps(String modo) {
+        this.modoSincronizarFps = modo;
     }
 
     /** Página de trabajos: 450 en total; items de la página pedida (máx. 200 por página, como la API ≤ 500). */
@@ -2286,6 +2319,53 @@ public final class FakeInnpackApi implements AutoCloseable {
             ex.close();
             return;
         }
+        String ok = "{\"success\":true,\"message\":null,\"data\":";
+        String fin = ",\"errors\":null}";
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/talleres-externos")) {
+            crearTrabajo(ex, sub);
+            return;
+        }
+        java.util.regex.Matcher upd = java.util.regex.Pattern.compile("^/api/talleres-externos/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && upd.matches()) {
+            actualizarTrabajo(ex, Long.parseLong(upd.group(1)), sub);
+            return;
+        }
+        if (ex.getRequestMethod().equals("DELETE") && upd.matches()) {
+            eliminarTrabajo(ex, Long.parseLong(upd.group(1)), query);
+            return;
+        }
+        java.util.regex.Matcher catT = java.util.regex.Pattern.compile("^/api/talleres-externos/catalogos/talleres/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && catT.matches()) {
+            int id = Integer.parseInt(catT.group(1));
+            if (!talleresInactivos.add(id)) {
+                responder(ex, 404, fallo("No existe un taller externo activo con id " + id + "."));
+            } else {
+                responder(ex, 200, ok + "{}" + fin);
+            }
+            return;
+        }
+        java.util.regex.Matcher catP = java.util.regex.Pattern.compile("^/api/talleres-externos/catalogos/procesos/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && catP.matches()) {
+            int id = Integer.parseInt(catP.group(1));
+            if (!procesosInactivos.add(id)) {
+                responder(ex, 404, fallo("No existe un proceso externo activo con id " + id + "."));
+            } else {
+                responder(ex, 200, ok + "{}" + fin);
+            }
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/talleres-externos/sincronizar-fps")) {
+            ex.getRequestBody().readAllBytes();
+            switch (modoSincronizarFps) {
+                case "NO_CONFIGURADO" -> responder(ex, 400,
+                        fallo("La integración con FPS no está configurada (revisa la sección \\\"FpsApi\\\" en appsettings)."));
+                case "CON_ERRORES" -> responder(ex, 200, ok + "{\"trabajosRevisados\":3,\"trabajosActualizados\":1,"
+                        + "\"liberacionesNuevas\":2,\"errores\":[\"NV NV-1 ítem X: fps-api no respondió\"]}" + fin);
+                default -> responder(ex, 200,
+                        ok + "{\"trabajosRevisados\":3,\"trabajosActualizados\":2,\"liberacionesNuevas\":5,\"errores\":[]}" + fin);
+            }
+            return;
+        }
         if (!ex.getRequestMethod().equals("GET")) {
             responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
             return;
@@ -2294,8 +2374,6 @@ public final class FakeInnpackApi implements AutoCloseable {
             responder(ex, 400, fallo("Filtro de fecha inválido"));
             return;
         }
-        String ok = "{\"success\":true,\"message\":null,\"data\":";
-        String fin = ",\"errors\":null}";
         if (path.equals("/api/talleres-externos")) {
             java.util.regex.Matcher p = java.util.regex.Pattern.compile("page=(-?\\d+)&pageSize=(-?\\d+)").matcher(String.valueOf(query));
             int page = p.find() ? Integer.parseInt(p.group(1)) : 1;
@@ -2321,6 +2399,88 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+    }
+
+    private boolean existeTrabajo(long id) {
+        boolean sintetico = id >= 9000 && id < 9450;
+        return (sintetico || trabajosCreados.contains(id)) && !trabajosEliminados.contains(id);
+    }
+
+    /** Como TalleresExternosService.ValidarCampos: NV/Ítem/Producto obligatorios, prioridad/estado de los selects. */
+    private static String validarCamposTrabajo(JsonNode b) {
+        java.util.List<String> errores = new java.util.ArrayList<>();
+        if (b.path("nv").asString("").isBlank()) {
+            errores.add("NV es obligatorio.");
+        }
+        if (b.path("item").asString("").isBlank()) {
+            errores.add("Ítem es obligatorio.");
+        }
+        if (b.path("producto").asString("").isBlank()) {
+            errores.add("Producto no puede estar vacío.");
+        }
+        String prioridad = b.path("prioridad").asString("MEDIA");
+        if (!java.util.Set.of("BAJA", "MEDIA", "ALTA").contains(prioridad)) {
+            errores.add("Prioridad inválida: '" + prioridad + "'. Valores permitidos: BAJA, MEDIA, ALTA.");
+        }
+        String estado = b.path("estado").asString("PENDIENTE_ASIGNACION");
+        if (!java.util.Set.of("PENDIENTE_ASIGNACION", "ASIGNADO", "EN_PROCESO", "ENTREGADO", "ANULADO").contains(estado)) {
+            errores.add("Estado inválido: '" + estado + "'. Valores permitidos: PENDIENTE_ASIGNACION, ASIGNADO, EN_PROCESO, "
+                    + "ENTREGADO, ANULADO.");
+        }
+        return errores.isEmpty() ? null : String.join(" ", errores);
+    }
+
+    private void crearTrabajo(HttpExchange ex, int sub) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        String error = validarCamposTrabajo(b);
+        if (error != null) {
+            responder(ex, 400, fallo(error));
+            return;
+        }
+        long id = siguienteTrabajo.getAndIncrement();
+        trabajosCreados.add(id);
+        versionTrabajo.put(id, 1);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"nv\":"
+                + mapper.writeValueAsString(b.path("nv").asString("")) + ",\"version\":1,\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    private void actualizarTrabajo(HttpExchange ex, long id, int sub) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        if (!existeTrabajo(id)) {
+            responder(ex, 404, fallo("No existe un trabajo con id " + id + "."));
+            return;
+        }
+        String error = validarCamposTrabajo(b);
+        if (error != null) {
+            responder(ex, 400, fallo(error));
+            return;
+        }
+        int versionActual = versionTrabajo.getOrDefault(id, 1);
+        int versionPedida = b.path("version").asInt(0);
+        if (versionPedida != versionActual) {
+            responder(ex, 409, fallo("El registro fue modificado por otro usuario. Vuelve a cargarlo antes de guardar."));
+            return;
+        }
+        versionTrabajo.put(id, versionActual + 1);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"version\":" + (versionActual + 1)
+                + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    private void eliminarTrabajo(HttpExchange ex, long id, String query) throws IOException {
+        if (!existeTrabajo(id)) {
+            responder(ex, 404, fallo("No existe un trabajo con id " + id + "."));
+            return;
+        }
+        int versionActual = versionTrabajo.getOrDefault(id, 1);
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:^|&)version=(-?\\d+)").matcher(query == null ? "" : query);
+        int versionPedida = m.find() ? Integer.parseInt(m.group(1)) : 0;
+        if (versionPedida != versionActual) {
+            responder(ex, 409, fallo("El registro fue modificado por otro usuario. Vuelve a cargarlo antes de guardar."));
+            return;
+        }
+        trabajosEliminados.add(id);
+        versionTrabajo.put(id, versionActual + 1);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{},\"errors\":null}");
     }
 
     private Integer subDeBearer(String authorization) {
