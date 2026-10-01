@@ -175,7 +175,10 @@ class BridgeFase3aTest {
                         "noConformidades.adjuntos.subir", "noConformidades.update", "noConformidades.gestion.actualizar",
                         "noConformidades.cerrar", "noConformidades.acciones.actualizar", "recepcion.bobinas.muestrear", "recepcion.muestra.crear",
                         "recepcion.estado.actualizar", "recepcion.nc.crear", "recepcion.crear", "recepcion.plan.generar",
-                        "noConformidades.eliminar", "noConformidades.adjuntos.eliminar");
+                        "noConformidades.eliminar", "noConformidades.adjuntos.eliminar",
+                        "dashboard.validarRegistro", "dashboard.rechazarRegistro", "dashboard.eliminarRegistro",
+                        "registrosProduccion.validarRegistro", "registrosProduccion.rechazarRegistro", "registrosProduccion.eliminarRegistro",
+                        "registrosControl.validarRegistro", "registrosControl.rechazarRegistro", "registrosControl.eliminarRegistro");
         for (String otra : List.of("noConformidades.catalogos.clientes.desactivar",
                 "noConformidades.catalogos.nciAreas.crear")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);

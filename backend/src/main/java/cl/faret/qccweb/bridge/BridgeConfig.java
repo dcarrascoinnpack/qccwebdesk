@@ -174,27 +174,65 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "maquinasSeguimiento.obtenerResumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         maquinas::obtenerResumen),
-                // Fase 2c — Inspecciones Calidad, SOLO LECTURA (filtros + resumen). Las escrituras
-                // dashboard.validarRegistro/rechazarRegistro/eliminarRegistro/validarTodo/rechazarTodo
-                // quedan deliberadamente fuera (deny-by-default).
+                // Fase 2c — Inspecciones Calidad (filtros + resumen). Fase 4b: valida/rechaza/elimina
+                // individual (igual que Photino: UPDATE directo sin autor real, API hardcodea
+                // usuario_validacion='SUPERVISOR'); exige haber visto el registro en una lista cargada
+                // de esta sesión; candado por id. validarTodo/rechazarTodo (sin WHERE en la API) quedan
+                // fuera por ahora (deny-by-default).
                 new ActionPolicy.Regla(
                         "dashboard.obtenerFiltros", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), dashboard::obtenerFiltros),
                 new ActionPolicy.Regla(
                         "dashboard.obtenerResumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), dashboard::obtenerResumen),
-                // Fase 2d — Inspecciones Producción, SOLO LECTURA (filtros + resumen). Mismo criterio
-                // que 2c: las 5 escrituras registrosProduccion.* quedan fuera (deny-by-default).
+                new ActionPolicy.Regla(
+                        "dashboard.validarRegistro", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), dashboard::validarRegistro, (p, data) -> DashboardBridgeHandler.recursoRegistro(p, "validar")),
+                new ActionPolicy.Regla(
+                        "dashboard.rechazarRegistro", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), dashboard::rechazarRegistro, (p, data) -> DashboardBridgeHandler.recursoRegistro(p, "rechazar")),
+                new ActionPolicy.Regla(
+                        "dashboard.eliminarRegistro", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), dashboard::eliminarRegistro, (p, data) -> DashboardBridgeHandler.recursoRegistro(p, "eliminar")),
+                // Fase 2d — Inspecciones Producción (filtros + resumen). Fase 4b: mismo criterio que
+                // Dashboard (la API filtra estas 3 por area='PRODUCCION'). validarTodo/rechazarTodo
+                // quedan fuera por ahora.
                 new ActionPolicy.Regla(
                         "registrosProduccion.obtenerFiltros", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         registrosProduccion::obtenerFiltros),
                 new ActionPolicy.Regla(
                         "registrosProduccion.obtenerResumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         registrosProduccion::obtenerResumen),
-                // Fase 2e — Registros de Control, SOLO LECTURA (grilla paginada + "traer todo" de
-                // Exportar/Imprimir). Las escrituras registrosControl.validarRegistro/rechazarRegistro/
-                // eliminarRegistro quedan fuera (deny-by-default).
+                new ActionPolicy.Regla(
+                        "registrosProduccion.validarRegistro", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosProduccion::validarRegistro,
+                        (p, data) -> RegistrosProduccionBridgeHandler.recursoRegistro(p, "validar")),
+                new ActionPolicy.Regla(
+                        "registrosProduccion.rechazarRegistro", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosProduccion::rechazarRegistro,
+                        (p, data) -> RegistrosProduccionBridgeHandler.recursoRegistro(p, "rechazar")),
+                new ActionPolicy.Regla(
+                        "registrosProduccion.eliminarRegistro", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosProduccion::eliminarRegistro,
+                        (p, data) -> RegistrosProduccionBridgeHandler.recursoRegistro(p, "eliminar")),
+                // Fase 2e — Registros de Control (grilla paginada + "traer todo" de Exportar/Imprimir).
+                // Fase 4b: valida/rechaza/elimina individual; a diferencia de Dashboard/Producción, el
+                // filtro ?id= de la API permite releer el registro antes de escribir (detección de
+                // conflicto real, no solo "haber visto la fila"). Este módulo no tiene validarTodo/
+                // rechazarTodo ni en Photino ni en la API.
                 new ActionPolicy.Regla(
                         "registrosControl.obtenerRegistros", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         registrosControl::obtenerRegistros),
+                new ActionPolicy.Regla(
+                        "registrosControl.validarRegistro", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosControl::validarRegistro,
+                        (p, data) -> RegistrosControlBridgeHandler.recursoRegistro(p, "validar")),
+                new ActionPolicy.Regla(
+                        "registrosControl.rechazarRegistro", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosControl::rechazarRegistro,
+                        (p, data) -> RegistrosControlBridgeHandler.recursoRegistro(p, "rechazar")),
+                new ActionPolicy.Regla(
+                        "registrosControl.eliminarRegistro", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosControl::eliminarRegistro,
+                        (p, data) -> RegistrosControlBridgeHandler.recursoRegistro(p, "eliminar")),
                 // Fase 2f — Producto Terminado, SOLO LECTURA (5 acciones). Escrituras
                 // productoTerminado.eliminar / actualizarFecha fuera (deny-by-default). Solo INNPACK:
                 // no existe login FARET en la web todavía.

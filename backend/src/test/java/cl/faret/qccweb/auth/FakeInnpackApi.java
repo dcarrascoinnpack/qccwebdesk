@@ -50,8 +50,10 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
         server.createContext("/api/dashboard/filtros", ex -> dashboardLectura(ex, true));
         server.createContext("/api/dashboard/resumen", ex -> dashboardLectura(ex, false));
+        server.createContext("/api/dashboard", this::dashboardEscritura);
         server.createContext("/api/registros-produccion/filtros", ex -> registrosProduccionLectura(ex, true));
         server.createContext("/api/registros-produccion/resumen", ex -> registrosProduccionLectura(ex, false));
+        server.createContext("/api/registros-produccion", this::registrosProduccionEscritura);
         server.createContext("/api/registros-control", this::registrosControl);
         server.createContext("/api/producto-terminado", this::productoTerminado);
         server.createContext("/api/certificados-liberacion", this::certificadosLiberacion);
@@ -150,6 +152,12 @@ public final class FakeInnpackApi implements AutoCloseable {
         ncRecepcionRecibidas.clear();
         siguienteNcRecepcion.set(900);
         demoraNcRecepcionMs = 0;
+        estadoValidacionDashboard.clear();
+        eliminadosDashboard.clear();
+        estadoValidacionProduccion.clear();
+        eliminadosProduccion.clear();
+        estadoValidacionControl.clear();
+        eliminadosControl.clear();
     }
 
     // ------------------------------------------------------------------ Fase 3y: apisapfaret GET api/recepcion/bobinas[/lotes]
@@ -410,10 +418,23 @@ public final class FakeInnpackApi implements AutoCloseable {
     }
 
     private final java.util.List<String> peticionesDashboard = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /** Fase 4b: estado_validacion mutado por validar/rechazar (id → VALIDADO|RECHAZADO), eliminado lógico por id. */
+    private final Map<Integer, String> estadoValidacionDashboard = new ConcurrentHashMap<>();
+    private final java.util.Set<Integer> eliminadosDashboard = ConcurrentHashMap.newKeySet();
 
-    /** "filtros" o "resumen?<query cruda>" recibidos en api/dashboard/* (para verificar el mapeo). */
+    /** "filtros", "resumen?<query cruda>" o "validar:<id>"/"rechazar:<id>"/"eliminar:<id>" recibidos en api/dashboard/*. */
     public java.util.List<String> peticionesDashboard() {
         return java.util.List.copyOf(peticionesDashboard);
+    }
+
+    /** Fase 4b: estado_validacion vigente de un registro de Dashboard (lo que mutó validar/rechazar). */
+    public String estadoValidacionDashboard(int id) {
+        return estadoValidacionDashboard.get(id);
+    }
+
+    /** Fase 4b: simula que otra persona (Photino u otra sesión) ya validó/rechazó este registro. */
+    public void estadoValidacionDashboardPorOtro(int id, String estado) {
+        estadoValidacionDashboard.put(id, estado);
     }
 
     public static String dataDashboardFiltros() {
@@ -471,14 +492,101 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         String data = filtros ? dataDashboardFiltros() : dataDashboardResumen(sub, query);
+        if (!filtros) {
+            data = aplicarEstados(data, "ultimosRegistros", estadoValidacionDashboard, eliminadosDashboard);
+        }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 
-    private final java.util.List<String> peticionesProduccion = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /**
+     * Fase 4b: aplica sobre el JSON de una lista/resumen el estado_validacion mutado por validar/rechazar
+     * y quita las filas marcadas como eliminadas, simulando el efecto de los 3 endpoints de escritura en
+     * la siguiente lectura (como lo vería la API real contra registros_control).
+     */
+    private String aplicarEstados(String dataJson, String campoFilas, Map<Integer, String> estados, java.util.Set<Integer> eliminados) {
+        try {
+            JsonNode raiz = mapper.readTree(dataJson);
+            if (!(raiz instanceof tools.jackson.databind.node.ObjectNode obj)) {
+                return dataJson;
+            }
+            JsonNode filas = obj.get(campoFilas);
+            if (filas != null && filas.isArray()) {
+                tools.jackson.databind.node.ArrayNode nuevo = mapper.createArrayNode();
+                for (JsonNode fila : filas) {
+                    int id = fila.path("id").asInt();
+                    if (eliminados.contains(id)) {
+                        continue;
+                    }
+                    tools.jackson.databind.node.ObjectNode f = (tools.jackson.databind.node.ObjectNode) fila;
+                    String estado = estados.get(id);
+                    if (estado != null) {
+                        f.put("estadoValidacion", estado);
+                    }
+                    nuevo.add(f);
+                }
+                obj.set(campoFilas, nuevo);
+            }
+            return obj.toString();
+        } catch (RuntimeException e) {
+            return dataJson;
+        }
+    }
 
-    /** "filtros" o "resumen?<query cruda>" recibidos en api/registros-produccion/* (para verificar el mapeo). */
+    /**
+     * Fase 4b: PUT api/dashboard/{id}/validar|rechazar y DELETE api/dashboard/{id}, igual que
+     * DashboardRepository.cs real (UPDATE/UPDATE lógico directo por id, sin autor ni validación de
+     * existencia: responde success:true aunque el id no exista).
+     */
+    private void dashboardEscritura(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        java.util.regex.Matcher val = java.util.regex.Pattern.compile("^/api/dashboard/(\\d+)/validar$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && val.matches()) {
+            int id = Integer.parseInt(val.group(1));
+            peticionesDashboard.add("validar:" + id);
+            estadoValidacionDashboard.put(id, "VALIDADO");
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"actualizado\":true},\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher rec = java.util.regex.Pattern.compile("^/api/dashboard/(\\d+)/rechazar$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && rec.matches()) {
+            int id = Integer.parseInt(rec.group(1));
+            peticionesDashboard.add("rechazar:" + id);
+            estadoValidacionDashboard.put(id, "RECHAZADO");
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"actualizado\":true},\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher del = java.util.regex.Pattern.compile("^/api/dashboard/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && del.matches()) {
+            int id = Integer.parseInt(del.group(1));
+            peticionesDashboard.add("eliminar:" + id);
+            eliminadosDashboard.add(id);
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"eliminado\":true},\"errors\":null}");
+            return;
+        }
+        responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+    }
+
+    private final java.util.List<String> peticionesProduccion = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /** Fase 4b: mismo criterio que Dashboard, para Inspecciones Producción. */
+    private final Map<Integer, String> estadoValidacionProduccion = new ConcurrentHashMap<>();
+    private final java.util.Set<Integer> eliminadosProduccion = ConcurrentHashMap.newKeySet();
+
+    /** "filtros", "resumen?<query cruda>" o "validar:<id>"/"rechazar:<id>"/"eliminar:<id>" recibidos en api/registros-produccion/*. */
     public java.util.List<String> peticionesProduccion() {
         return java.util.List.copyOf(peticionesProduccion);
+    }
+
+    /** Fase 4b: estado_validacion vigente de un registro de Producción. */
+    public String estadoValidacionProduccion(int id) {
+        return estadoValidacionProduccion.get(id);
     }
 
     /**
@@ -506,22 +614,90 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         String data = filtros ? dataDashboardFiltros() : dataProduccionResumen(sub, query);
+        if (!filtros) {
+            data = aplicarEstados(data, "ultimosRegistros", estadoValidacionProduccion, eliminadosProduccion);
+        }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 
-    private final java.util.List<String> peticionesControl = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /**
+     * Fase 4b: PUT api/registros-produccion/{id}/validar|rechazar y DELETE api/registros-produccion/{id},
+     * igual que RegistrosProduccionRepository.cs real (mismas 3 sentencias que Dashboard, filtradas a
+     * area='PRODUCCION' en la API; el fake no simula el filtro de área porque no hay otra área en los
+     * datos de prueba).
+     */
+    private void registrosProduccionEscritura(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        java.util.regex.Matcher val = java.util.regex.Pattern.compile("^/api/registros-produccion/(\\d+)/validar$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && val.matches()) {
+            int id = Integer.parseInt(val.group(1));
+            peticionesProduccion.add("validar:" + id);
+            estadoValidacionProduccion.put(id, "VALIDADO");
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"actualizado\":true},\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher rec = java.util.regex.Pattern.compile("^/api/registros-produccion/(\\d+)/rechazar$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && rec.matches()) {
+            int id = Integer.parseInt(rec.group(1));
+            peticionesProduccion.add("rechazar:" + id);
+            estadoValidacionProduccion.put(id, "RECHAZADO");
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"actualizado\":true},\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher del = java.util.regex.Pattern.compile("^/api/registros-produccion/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && del.matches()) {
+            int id = Integer.parseInt(del.group(1));
+            peticionesProduccion.add("eliminar:" + id);
+            eliminadosProduccion.add(id);
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"eliminado\":true},\"errors\":null}");
+            return;
+        }
+        responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+    }
 
-    /** "<ruta>?<query cruda>" recibidos en api/registros-control* (para verificar el mapeo exacto). */
+    private final java.util.List<String> peticionesControl = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    /** Fase 4b: mismo criterio que Dashboard, para Registros de Control. */
+    private final Map<Integer, String> estadoValidacionControl = new ConcurrentHashMap<>();
+    private final java.util.Set<Integer> eliminadosControl = ConcurrentHashMap.newKeySet();
+
+    /** "<método> <ruta>?<query cruda>" recibidos en api/registros-control* (para verificar el mapeo exacto). */
     public java.util.List<String> peticionesControl() {
         return java.util.List.copyOf(peticionesControl);
     }
 
+    /** Fase 4b: estado_validacion vigente de un registro de Registros de Control. */
+    public String estadoValidacionControl(int id) {
+        return estadoValidacionControl.get(id);
+    }
+
+    /** Fase 4b: simula que otra persona (Photino u otra sesión) ya validó/rechazó este registro. */
+    public void estadoValidacionControlPorOtro(int id, String estado) {
+        estadoValidacionControl.put(id, estado);
+    }
+
     /**
      * Forma real de la respuesta paginada de GET api/registros-control: { items, total, page, pages }.
-     * Con np=VACIO devuelve 0 items; con limit=999999 devuelve todo (300 items en una página);
-     * si no, 2 items de un total de 45 y "page" = el recibido.
+     * Con np=VACIO devuelve 0 items; con limit=999999 devuelve todo (300 items en una página); con id=N
+     * (Fase 4b: releer un registro antes de validar/rechazar) devuelve solo ESE item, como el filtro
+     * "rc.id = @id" de la API real; si no, 2 items de un total de 45 y "page" = el recibido.
      */
     public static String dataRegistrosControl(int sub, String query) {
+        if (query != null) {
+            java.util.regex.Matcher mid = java.util.regex.Pattern.compile("(?:^|&)id=(\\d+)").matcher(query);
+            if (mid.find()) {
+                int id = Integer.parseInt(mid.group(1));
+                String fila = filaRegistroControl(id, 0);
+                return "{\"items\":[" + fila + "],\"total\":1,\"page\":1,\"pages\":1,\"usuarioDelToken\":" + sub + "}";
+            }
+        }
         boolean vacio = query != null && query.contains("np=VACIO");
         boolean todo = query != null && query.contains("limit=999999");
         int items = vacio ? 0 : (todo ? 300 : 2);
@@ -536,33 +712,67 @@ public final class FakeInnpackApi implements AutoCloseable {
         int pages = vacio ? 1 : (todo ? 1 : 3);
         StringBuilder lista = new StringBuilder();
         for (int i = 0; i < items; i++) {
-            lista.append(i > 0 ? "," : "").append("{\"id\":").append(7000 + i)
-                    .append(",\"fechaRegistro\":\"24-09-2026\",\"horaRegistro\":\"08:").append(String.format("%02d", i % 60))
-                    .append("\",\"usuario\":\"María José Peña\",\"proceso\":\"Pegado\",\"parametro\":\"Adhesivo\",\"maquina\":\"Pegadora 3\","
-                            + "\"np\":\"41").append(String.format("%02d", i % 100)).append("\",\"producto\":\"Estuche cartón ñandú «E2E»\","
-                            + "\"turno\":\"A\",\"valor\":\"12.5\",\"unidad\":\"g\",\"estado\":\"Conforme\",\"estadoValidacion\":\"Pendiente\","
-                            + "\"observacion\":\"=SUMA(1;2) sin fórmula\",\"imagenUrl\":\"\"}");
+            lista.append(i > 0 ? "," : "").append(filaRegistroControl(7000 + i, i));
         }
         return "{\"items\":[" + lista + "],\"total\":" + total + ",\"page\":" + page + ",\"pages\":" + pages
                 + ",\"usuarioDelToken\":" + sub + "}";
     }
 
+    private static String filaRegistroControl(int id, int i) {
+        return "{\"id\":" + id + ",\"fechaRegistro\":\"24-09-2026\",\"horaRegistro\":\"08:" + String.format("%02d", i % 60)
+                + "\",\"usuario\":\"María José Peña\",\"proceso\":\"Pegado\",\"parametro\":\"Adhesivo\",\"maquina\":\"Pegadora 3\","
+                + "\"np\":\"41" + String.format("%02d", i % 100) + "\",\"producto\":\"Estuche cartón ñandú «E2E»\","
+                + "\"turno\":\"A\",\"valor\":\"12.5\",\"unidad\":\"g\",\"estado\":\"Conforme\",\"estadoValidacion\":\"Pendiente\","
+                + "\"observacion\":\"=SUMA(1;2) sin fórmula\",\"imagenUrl\":\"\"}";
+    }
+
+    /**
+     * GET api/registros-control (lista/filtra, incluido ?id=) + Fase 4b: PUT {id}/validar|rechazar y
+     * DELETE {id}, igual que RegistrosControlRepository.cs real (mismas sentencias que Dashboard, sin
+     * filtro de área).
+     */
     private void registrosControl(HttpExchange ex) throws IOException {
         String auth = ex.getRequestHeaders().getFirst("Authorization");
         authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
         String query = ex.getRequestURI().getRawQuery();
-        peticionesControl.add(ex.getRequestMethod() + " " + ex.getRequestURI().getRawPath() + "?" + query);
         Integer sub = subDeBearer(auth);
         if (sub == null || revocados.contains(sub)) {
             ex.sendResponseHeaders(401, -1);
             ex.close();
             return;
         }
+        java.util.regex.Matcher val = java.util.regex.Pattern.compile("^/api/registros-control/(\\d+)/validar$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && val.matches()) {
+            int id = Integer.parseInt(val.group(1));
+            peticionesControl.add("PUT " + path);
+            estadoValidacionControl.put(id, "VALIDADO");
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"actualizado\":true},\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher rec = java.util.regex.Pattern.compile("^/api/registros-control/(\\d+)/rechazar$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && rec.matches()) {
+            int id = Integer.parseInt(rec.group(1));
+            peticionesControl.add("PUT " + path);
+            estadoValidacionControl.put(id, "RECHAZADO");
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"actualizado\":true},\"errors\":null}");
+            return;
+        }
+        java.util.regex.Matcher del = java.util.regex.Pattern.compile("^/api/registros-control/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && del.matches()) {
+            int id = Integer.parseInt(del.group(1));
+            peticionesControl.add("DELETE " + path);
+            eliminadosControl.add(id);
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"eliminado\":true},\"errors\":null}");
+            return;
+        }
+        peticionesControl.add(ex.getRequestMethod() + " " + path + "?" + query);
         if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
             responder(ex, 400, fallo("Rango de fechas inválido"));
             return;
         }
-        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + dataRegistrosControl(sub, query) + ",\"errors\":null}");
+        String data = aplicarEstados(dataRegistrosControl(sub, query), "items", estadoValidacionControl, eliminadosControl);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 
     private final java.util.List<String> peticionesProductoTerminado = java.util.Collections.synchronizedList(new java.util.ArrayList<>());

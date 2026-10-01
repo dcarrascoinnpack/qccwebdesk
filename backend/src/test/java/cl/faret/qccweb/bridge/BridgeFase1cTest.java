@@ -180,8 +180,11 @@ class BridgeFase1cTest {
         assertThat(policy.accionesRegistradas()).containsExactlyInAnyOrder(
                 "inicio.getDashboard", "permisos.mios", "liberacionCalidad.inspectores", "maquinasSeguimiento.obtenerResumen",
                 "dashboard.obtenerFiltros", "dashboard.obtenerResumen",
+                "dashboard.validarRegistro", "dashboard.rechazarRegistro", "dashboard.eliminarRegistro",
                 "registrosProduccion.obtenerFiltros", "registrosProduccion.obtenerResumen",
+                "registrosProduccion.validarRegistro", "registrosProduccion.rechazarRegistro", "registrosProduccion.eliminarRegistro",
                 "registrosControl.obtenerRegistros",
+                "registrosControl.validarRegistro", "registrosControl.rechazarRegistro", "registrosControl.eliminarRegistro",
                 "productoTerminado.filtros", "productoTerminado.resumen", "productoTerminado.list",
                 "productoTerminado.detalle", "productoTerminado.exportarDetalle",
                 "certificadosLiberacion.buscar", "certificadosLiberacion.calidadPdf.descargar",

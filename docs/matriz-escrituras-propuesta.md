@@ -14,12 +14,14 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **26** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **35** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
-`noConformidades.acciones.crear`, `noConformidades.analisis.guardar` y `noConformidades.catalogos.{clientes,
-categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`, estado VALIDADA;
-mismos roles que Photino). Las otras 55 siguen denegadas por `ActionPolicy`
+`noConformidades.acciones.crear`, `noConformidades.analisis.guardar`, `noConformidades.catalogos.{clientes,
+categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`,
+`dashboard.{validarRegistro,rechazarRegistro,eliminarRegistro}`, `registrosProduccion.{validarRegistro,rechazarRegistro,eliminarRegistro}`
+y `registrosControl.{validarRegistro,rechazarRegistro,eliminarRegistro}`, estado VALIDADA;
+mismos roles que Photino). Las otras 46 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -64,7 +66,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 55 APROBADA · 26 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 46 APROBADA · 35 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -86,9 +88,9 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `dashboard.rechazarRegistro` | PUT `api/dashboard/{id}/rechazar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | cambia estado de una inspección de calidad | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; la API no guarda quién → auditoría obligatoria en gateway (SEC-26) | APROBADA |
-| `dashboard.validarRegistro` | PUT `api/dashboard/{id}/validar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | cambia estado de una inspección de calidad | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; la API no guarda quién → auditoría obligatoria en gateway (SEC-26) | APROBADA |
-| `dashboard.eliminarRegistro` | DELETE `api/dashboard/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina una inspección | no desde la UI | **ALTO** | destructivo y sin autor registrado | APROBADA |
+| `dashboard.rechazarRegistro` | PUT `api/dashboard/{id}/rechazar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | cambia estado de una inspección de calidad | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; la API no guarda quién → auditoría obligatoria en gateway (SEC-26) | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; exige haber visto el registro en una lista cargada de la sesión) |
+| `dashboard.validarRegistro` | PUT `api/dashboard/{id}/validar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | cambia estado de una inspección de calidad | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; la API no guarda quién → auditoría obligatoria en gateway (SEC-26) | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; exige haber visto el registro en una lista cargada de la sesión) |
+| `dashboard.eliminarRegistro` | DELETE `api/dashboard/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina una inspección | no desde la UI | **ALTO** | destructivo y sin autor registrado | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; borrado lógico idempotente, exige haber visto el registro en una lista cargada) |
 | `dashboard.rechazarTodo` | PUT `api/dashboard/rechazar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODOS los registros pendientes filtrados | no (masivo) | **ALTO** | masivo e irreversible en la práctica; solo admin y con confirmación explícita | APROBADA |
 | `dashboard.validarTodo` | PUT `api/dashboard/validar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODOS los registros pendientes filtrados | no (masivo) | **ALTO** | masivo e irreversible en la práctica; solo admin y con confirmación explícita | APROBADA |
 
@@ -175,17 +177,17 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `registrosControl.rechazarRegistro` | PUT `api/registros-control/{id}/rechazar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza un registro de control | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | APROBADA |
-| `registrosControl.validarRegistro` | PUT `api/registros-control/{id}/validar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza un registro de control | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | APROBADA |
-| `registrosControl.eliminarRegistro` | DELETE `api/registros-control/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un registro de control | no desde la UI | **ALTO** | destructivo; sin autor | APROBADA |
+| `registrosControl.rechazarRegistro` | PUT `api/registros-control/{id}/rechazar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza un registro de control | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; el filtro `?id=` de la API permite releer y detectar conflicto real antes de escribir) |
+| `registrosControl.validarRegistro` | PUT `api/registros-control/{id}/validar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza un registro de control | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; el filtro `?id=` de la API permite releer y detectar conflicto real antes de escribir) |
+| `registrosControl.eliminarRegistro` | DELETE `api/registros-control/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un registro de control | no desde la UI | **ALTO** | destructivo; sin autor | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; borrado lógico idempotente, exige haber visto el registro en una lista cargada) |
 
 ### registrosProduccion (5)
 
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `registrosProduccion.rechazarRegistro` | PUT `api/registros-produccion/{id}/rechazar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza una inspección de producción | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | APROBADA |
-| `registrosProduccion.validarRegistro` | PUT `api/registros-produccion/{id}/validar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza una inspección de producción | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | APROBADA |
-| `registrosProduccion.eliminarRegistro` | DELETE `api/registros-produccion/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina una inspección de producción | no desde la UI | **ALTO** | destructivo; sin autor | APROBADA |
+| `registrosProduccion.rechazarRegistro` | PUT `api/registros-produccion/{id}/rechazar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza una inspección de producción | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; exige haber visto el registro en una lista cargada de la sesión) |
+| `registrosProduccion.validarRegistro` | PUT `api/registros-produccion/{id}/validar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza una inspección de producción | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; exige haber visto el registro en una lista cargada de la sesión) |
+| `registrosProduccion.eliminarRegistro` | DELETE `api/registros-produccion/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina una inspección de producción | no desde la UI | **ALTO** | destructivo; sin autor | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; borrado lógico idempotente, exige haber visto el registro en una lista cargada) |
 | `registrosProduccion.rechazarTodo` | PUT `api/registros-produccion/rechazar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODAS las inspecciones filtradas | no (masivo) | **ALTO** | masivo; solo admin con confirmación | APROBADA |
 | `registrosProduccion.validarTodo` | PUT `api/registros-produccion/validar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODAS las inspecciones filtradas | no (masivo) | **ALTO** | masivo; solo admin con confirmación | APROBADA |
 
@@ -582,6 +584,42 @@ negocio "No hay tabla de muestreo NCh44 cargada para nivel II y tamaño de lote 
   regenerar, selección aleatoria según plan, error PVA como alert, Solo vista, sin sesión) + regresión 3u/3x/3y/3z.
 - Con esto Recepción queda **11/11** acciones de Photino habilitadas. Validación funcional con datos reales pendiente del
   primer lote de Recepción en `calidad_db` (hoy 0 lotes).
+
+## Dashboard / Registros Producción / Registros de Control — validar/rechazar/eliminar individual — VALIDADA (Fase 4b, 2026-10-01)
+
+Photino: botones "Validar"/"Rechazar"/"Eliminar" por fila de la grilla (`data-id`, sin confirm() salvo eliminar) →
+`{action, id}` en la RAÍZ del payload (no en `data`) → recarga la lista completa (`cargarDatos()`). Los 3 handlers C#
+(`DashboardHandler`, `RegistrosControlHandler`, `RegistrosProduccionHandler`) son passthrough puro: solo reenvían `id`,
+sin validación de negocio ni chequeo de rol propio (el único gate es `PermisosService`: nivel EDITAR en el módulo,
+alcanzable por cualquier rol). La API real hace un `UPDATE`/borrado lógico directo por id en `registros_control`, **sin
+transacción, sin validar que el id exista (responde `success:true` igual) y con `usuario_validacion` hardcodeado al
+string literal `'SUPERVISOR'`** (no es el usuario autenticado; no corregible desde el gateway sin tocar la API).
+`registrosProduccion.*` filtra `area='PRODUCCION'` en sus 3 sentencias; `dashboard.*` y `registrosControl.*` no filtran
+área ni empresa. `registrosControl` no tiene `validarTodo`/`rechazarTodo` (ni en Photino ni en la API).
+`dashboard.validarTodo`/`rechazarTodo` no tienen `WHERE` en la API (tocan TODA la tabla, no solo lo filtrado en pantalla)
+y quedan **deliberadamente fuera de esta fase** (deny-by-default), igual que `registrosProduccion.validarTodo/rechazarTodo`.
+
+- Web: mismo cuerpo `{id}` en la raíz; lista blanca `{action, id}`; `id` entero > 0 (defensivo: Photino con `id` ausente/0
+  hace un `UPDATE`/`DELETE` sin efecto — bloquearlo no cambia el comportamiento observable para un uso normal). Como
+  ninguno de los 3 módulos tiene un endpoint de "detalle por id" propio, la huella de lectura se toma de la ÚLTIMA lista
+  cargada por la sesión (`dashboard.obtenerResumen`/`registrosProduccion.obtenerResumen`: `ultimosRegistros` top 15;
+  `registrosControl.obtenerRegistros`: `items` paginados) — exige haber visto el registro en una lista antes de actuar
+  sobre él, y olvida la huella tras escribir (la vista recarga enseguida). Candado por id en los 3 módulos.
+  `registrosControl.obtenerRegistros` SÍ acepta `?id=` (releer un único registro): se usa para **detección de conflicto
+  real** antes de validar/rechazar, releyendo el `estadoValidacion` vigente y rechazando si cambió desde que la sesión
+  cargó la lista (mismo patrón que `recepcion.estado.actualizar`). `dashboard`/`registrosProduccion` no tienen ese filtro
+  por id en su endpoint de resumen (son TOP 15, no paginado por id), así que solo exigen la huella de "visto en una lista
+  cargada", sin releer antes de escribir — documentado como diferencia frente a Registros de Control, no como un hueco:
+  el peor caso es pisar una validación ajena reciente, igual que Photino hoy (sin ningún control de concurrencia).
+  `eliminarRegistro` es borrado lógico idempotente en los 3 módulos. Auditoría `recurso=<modulo>:<id>:<validar|rechazar|
+  eliminar>`.
+- Pruebas: `BridgeFase4bTest` (14: flujo completo + refresco de huella por módulo, exige lista cargada, id inválido,
+  campo no permitido, conflicto detectado y resuelto al reabrir en Registros de Control, dos sesiones secuenciales,
+  roles/empresa, auditoría con recurso por módulo/id/acción, CSRF/401); ajustes en `BridgeFase1cTest`/`BridgeFase3aTest`
+  (listas exhaustivas de acciones) y `BridgeFase2cTest`/`BridgeFase2dTest`/`BridgeFase2eTest` (las 9 acciones salen de
+  "escrituras bloqueadas"; `validarTodo`/`rechazarTodo` siguen denegadas en 2c/2d). Suite completa 718/719 (solo
+  `QccApiApplicationTests.contextLoads` legacy, esperado). `validarTodo`/`rechazarTodo` (4 acciones, riesgo ALTO por el
+  `UPDATE` sin `WHERE` de Dashboard) quedan para una fase aparte, a decisión del usuario.
 
 ## Recepción — `recepcion.crear` ("Nuevo Lote de Inspección") — VALIDADA (Fase 3z, 2026-09-30)
 

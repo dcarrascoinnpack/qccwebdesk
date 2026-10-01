@@ -54,9 +54,7 @@ class BridgeFase2dTest {
 
     private static final String FILTROS = "registrosProduccion.obtenerFiltros";
     private static final String RESUMEN = "registrosProduccion.obtenerResumen";
-    private static final List<String> ESCRITURAS = List.of("registrosProduccion.validarRegistro",
-            "registrosProduccion.rechazarRegistro", "registrosProduccion.eliminarRegistro",
-            "registrosProduccion.validarTodo", "registrosProduccion.rechazarTodo");
+    private static final List<String> ESCRITURAS = List.of("registrosProduccion.validarTodo", "registrosProduccion.rechazarTodo");
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
     private static final String PASS = "ClaveProduccion#2026";

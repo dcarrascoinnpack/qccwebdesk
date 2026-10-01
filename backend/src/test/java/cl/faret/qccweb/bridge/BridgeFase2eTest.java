@@ -49,8 +49,6 @@ import tools.jackson.databind.ObjectMapper;
 class BridgeFase2eTest {
 
     private static final String OBTENER = "registrosControl.obtenerRegistros";
-    private static final List<String> ESCRITURAS = List.of("registrosControl.validarRegistro",
-            "registrosControl.rechazarRegistro", "registrosControl.eliminarRegistro");
     private static final String BASE = "GET /api/registros-control?";
     private static final String DEFAULTS = "page=1&limit=20";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
@@ -207,20 +205,6 @@ class BridgeFase2eTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ok").value(false))
                 .andExpect(jsonPath("$.error").value("Rango de fechas inválido"));
-    }
-
-    // ------------------------------------------------------------- escrituras bloqueadas
-
-    @Test
-    void escriturasDelModuloSiguenBloqueadas() throws Exception {
-        MockHttpSession admin = login("admin1");
-        for (String escritura : ESCRITURAS) {
-            accion(admin, "{\"action\":\"" + escritura + "\",\"id\":7001}")
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
-            assertThat(policy.accionesRegistradas()).doesNotContain(escritura);
-        }
-        assertThat(API.peticionesControl()).isEmpty();
     }
 
     // --------------------------------------------------------------- roles y empresa

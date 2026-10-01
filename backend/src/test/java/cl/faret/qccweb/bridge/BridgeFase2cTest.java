@@ -51,8 +51,7 @@ class BridgeFase2cTest {
 
     private static final String FILTROS = "dashboard.obtenerFiltros";
     private static final String RESUMEN = "dashboard.obtenerResumen";
-    private static final List<String> ESCRITURAS = List.of("dashboard.validarRegistro", "dashboard.rechazarRegistro",
-            "dashboard.eliminarRegistro", "dashboard.validarTodo", "dashboard.rechazarTodo");
+    private static final List<String> ESCRITURAS = List.of("dashboard.validarTodo", "dashboard.rechazarTodo");
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
     private static final String PASS = "ClaveDashboard#2026";
