@@ -51,7 +51,6 @@ class BridgeFase2cTest {
 
     private static final String FILTROS = "dashboard.obtenerFiltros";
     private static final String RESUMEN = "dashboard.obtenerResumen";
-    private static final List<String> ESCRITURAS = List.of("dashboard.validarTodo", "dashboard.rechazarTodo");
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
     private static final String PASS = "ClaveDashboard#2026";
@@ -187,20 +186,6 @@ class BridgeFase2cTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.ok").value(false))
                 .andExpect(jsonPath("$.error").value("Rango de fechas inválido"));
-    }
-
-    // ------------------------------------------------------------- escrituras bloqueadas
-
-    @Test
-    void escriturasDelModuloSiguenBloqueadas() throws Exception {
-        MockHttpSession admin = login("admin1");
-        for (String escritura : ESCRITURAS) {
-            accion(admin, "{\"action\":\"" + escritura + "\",\"id\":501}")
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
-            assertThat(policy.accionesRegistradas()).doesNotContain(escritura);
-        }
-        assertThat(API.peticionesDashboard()).isEmpty();
     }
 
     // --------------------------------------------------------------- roles y empresa

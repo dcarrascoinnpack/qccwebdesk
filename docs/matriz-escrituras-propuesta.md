@@ -14,14 +14,15 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **35** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **39** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar`, `noConformidades.catalogos.{clientes,
 categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impactos,niveles}.crear`,
-`dashboard.{validarRegistro,rechazarRegistro,eliminarRegistro}`, `registrosProduccion.{validarRegistro,rechazarRegistro,eliminarRegistro}`
+`dashboard.{validarRegistro,rechazarRegistro,eliminarRegistro,validarTodo,rechazarTodo}`,
+`registrosProduccion.{validarRegistro,rechazarRegistro,eliminarRegistro,validarTodo,rechazarTodo}`
 y `registrosControl.{validarRegistro,rechazarRegistro,eliminarRegistro}`, estado VALIDADA;
-mismos roles que Photino). Las otras 46 siguen denegadas por `ActionPolicy`
+mismos roles que Photino). Las otras 42 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -66,7 +67,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 46 APROBADA · 35 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 42 APROBADA · 39 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -91,8 +92,8 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | `dashboard.rechazarRegistro` | PUT `api/dashboard/{id}/rechazar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | cambia estado de una inspección de calidad | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; la API no guarda quién → auditoría obligatoria en gateway (SEC-26) | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; exige haber visto el registro en una lista cargada de la sesión) |
 | `dashboard.validarRegistro` | PUT `api/dashboard/{id}/validar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | cambia estado de una inspección de calidad | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; la API no guarda quién → auditoría obligatoria en gateway (SEC-26) | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; exige haber visto el registro en una lista cargada de la sesión) |
 | `dashboard.eliminarRegistro` | DELETE `api/dashboard/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina una inspección | no desde la UI | **ALTO** | destructivo y sin autor registrado | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; borrado lógico idempotente, exige haber visto el registro en una lista cargada) |
-| `dashboard.rechazarTodo` | PUT `api/dashboard/rechazar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODOS los registros pendientes filtrados | no (masivo) | **ALTO** | masivo e irreversible en la práctica; solo admin y con confirmación explícita | APROBADA |
-| `dashboard.validarTodo` | PUT `api/dashboard/validar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODOS los registros pendientes filtrados | no (masivo) | **ALTO** | masivo e irreversible en la práctica; solo admin y con confirmación explícita | APROBADA |
+| `dashboard.rechazarTodo` | PUT `api/dashboard/rechazar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODOS los registros pendientes filtrados | no (masivo) | **ALTO** | masivo e irreversible en la práctica; solo admin y con confirmación explícita | VALIDADA (Fase 4b', gateway 0.4.0; roles = Photino; sin WHERE en la API, afecta TODA la tabla registros_control, no solo lo filtrado en pantalla — hallazgo heredado, replicado tal cual por decisión del usuario) |
+| `dashboard.validarTodo` | PUT `api/dashboard/validar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODOS los registros pendientes filtrados | no (masivo) | **ALTO** | masivo e irreversible en la práctica; solo admin y con confirmación explícita | VALIDADA (Fase 4b', gateway 0.4.0; roles = Photino; sin WHERE en la API, afecta TODA la tabla registros_control, no solo lo filtrado en pantalla — hallazgo heredado, replicado tal cual por decisión del usuario) |
 
 ### inicio (1)
 
@@ -188,8 +189,8 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | `registrosProduccion.rechazarRegistro` | PUT `api/registros-produccion/{id}/rechazar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza una inspección de producción | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; exige haber visto el registro en una lista cargada de la sesión) |
 | `registrosProduccion.validarRegistro` | PUT `api/registros-produccion/{id}/validar` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza una inspección de producción | re-operando; sin historial de autor | **MEDIO** | decisión de supervisión; sin autor en API | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; exige haber visto el registro en una lista cargada de la sesión) |
 | `registrosProduccion.eliminarRegistro` | DELETE `api/registros-produccion/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina una inspección de producción | no desde la UI | **ALTO** | destructivo; sin autor | VALIDADA (Fase 4b, gateway 0.4.0; roles = Photino; borrado lógico idempotente, exige haber visto el registro en una lista cargada) |
-| `registrosProduccion.rechazarTodo` | PUT `api/registros-produccion/rechazar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODAS las inspecciones filtradas | no (masivo) | **ALTO** | masivo; solo admin con confirmación | APROBADA |
-| `registrosProduccion.validarTodo` | PUT `api/registros-produccion/validar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODAS las inspecciones filtradas | no (masivo) | **ALTO** | masivo; solo admin con confirmación | APROBADA |
+| `registrosProduccion.rechazarTodo` | PUT `api/registros-produccion/rechazar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODAS las inspecciones filtradas | no (masivo) | **ALTO** | masivo; solo admin con confirmación | VALIDADA (Fase 4b', gateway 0.4.0; roles = Photino; a diferencia de Dashboard, la API SÍ filtra area='PRODUCCION') |
+| `registrosProduccion.validarTodo` | PUT `api/registros-produccion/validar-todo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | cualquier sesión INNPACK (= Photino; `operador, admin, admin_ti`) | **admin** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | valida/rechaza TODAS las inspecciones filtradas | no (masivo) | **ALTO** | masivo; solo admin con confirmación | VALIDADA (Fase 4b', gateway 0.4.0; roles = Photino; a diferencia de Dashboard, la API SÍ filtra area='PRODUCCION') |
 
 ### talleresExternos (6)
 
@@ -585,7 +586,7 @@ negocio "No hay tabla de muestreo NCh44 cargada para nivel II y tamaño de lote 
 - Con esto Recepción queda **11/11** acciones de Photino habilitadas. Validación funcional con datos reales pendiente del
   primer lote de Recepción en `calidad_db` (hoy 0 lotes).
 
-## Dashboard / Registros Producción / Registros de Control — validar/rechazar/eliminar individual — VALIDADA (Fase 4b, 2026-10-01)
+## Dashboard / Registros Producción / Registros de Control — validar/rechazar/eliminar (individual y masivo) — VALIDADA (Fase 4b + 4b', 2026-10-01)
 
 Photino: botones "Validar"/"Rechazar"/"Eliminar" por fila de la grilla (`data-id`, sin confirm() salvo eliminar) →
 `{action, id}` en la RAÍZ del payload (no en `data`) → recarga la lista completa (`cargarDatos()`). Los 3 handlers C#
@@ -594,10 +595,13 @@ sin validación de negocio ni chequeo de rol propio (el único gate es `Permisos
 alcanzable por cualquier rol). La API real hace un `UPDATE`/borrado lógico directo por id en `registros_control`, **sin
 transacción, sin validar que el id exista (responde `success:true` igual) y con `usuario_validacion` hardcodeado al
 string literal `'SUPERVISOR'`** (no es el usuario autenticado; no corregible desde el gateway sin tocar la API).
-`registrosProduccion.*` filtra `area='PRODUCCION'` en sus 3 sentencias; `dashboard.*` y `registrosControl.*` no filtran
-área ni empresa. `registrosControl` no tiene `validarTodo`/`rechazarTodo` (ni en Photino ni en la API).
-`dashboard.validarTodo`/`rechazarTodo` no tienen `WHERE` en la API (tocan TODA la tabla, no solo lo filtrado en pantalla)
-y quedan **deliberadamente fuera de esta fase** (deny-by-default), igual que `registrosProduccion.validarTodo/rechazarTodo`.
+`registrosProduccion.*` filtra `area='PRODUCCION'` en sus 5 sentencias; `dashboard.*` no filtra área ni empresa en
+ninguna. `registrosControl` no tiene `validarTodo`/`rechazarTodo` (ni en Photino ni en la API). Los botones "Validar
+todo"/"Rechazar todo" del dashboard (`#btnValidarTodoDashboard`/`#btnRechazarTodoDashboard`) no piden confirmación en la
+vista y no envían ningún parámetro; `dashboard.validarTodo`/`rechazarTodo` **no tienen `WHERE` en la API** (tocan TODA la
+tabla `registros_control`, no solo lo filtrado en pantalla) — hallazgo heredado, replicado tal cual (Fase 4b', decisión
+del usuario de paridad exacta con el riesgo aceptado); `registrosProduccion.validarTodo/rechazarTodo` sí filtran
+`area='PRODUCCION'`.
 
 - Web: mismo cuerpo `{id}` en la raíz; lista blanca `{action, id}`; `id` entero > 0 (defensivo: Photino con `id` ausente/0
   hace un `UPDATE`/`DELETE` sin efecto — bloquearlo no cambia el comportamiento observable para un uso normal). Como
@@ -613,13 +617,17 @@ y quedan **deliberadamente fuera de esta fase** (deny-by-default), igual que `re
   el peor caso es pisar una validación ajena reciente, igual que Photino hoy (sin ningún control de concurrencia).
   `eliminarRegistro` es borrado lógico idempotente en los 3 módulos. Auditoría `recurso=<modulo>:<id>:<validar|rechazar|
   eliminar>`.
-- Pruebas: `BridgeFase4bTest` (14: flujo completo + refresco de huella por módulo, exige lista cargada, id inválido,
+- Web (4b'): lista blanca `{action}` — SIN `id` ni ningún otro parámetro, como Photino; sin huella ni candado posible (la
+  acción no referencia ningún id en particular). Ninguna protección adicional frente a Photino más allá del límite de
+  escrituras por minuto del gateway (ya existente para toda escritura): paridad exacta, incluido el riesgo de
+  `dashboard.validarTodo`/`rechazarTodo` sin `WHERE`. Auditoría `recurso=<modulo>:todos:<validar|rechazar>` (sin id).
+- Pruebas: `BridgeFase4bTest` (17: flujo completo + refresco de huella por módulo, exige lista cargada, id inválido,
   campo no permitido, conflicto detectado y resuelto al reabrir en Registros de Control, dos sesiones secuenciales,
-  roles/empresa, auditoría con recurso por módulo/id/acción, CSRF/401); ajustes en `BridgeFase1cTest`/`BridgeFase3aTest`
-  (listas exhaustivas de acciones) y `BridgeFase2cTest`/`BridgeFase2dTest`/`BridgeFase2eTest` (las 9 acciones salen de
-  "escrituras bloqueadas"; `validarTodo`/`rechazarTodo` siguen denegadas en 2c/2d). Suite completa 718/719 (solo
-  `QccApiApplicationTests.contextLoads` legacy, esperado). `validarTodo`/`rechazarTodo` (4 acciones, riesgo ALTO por el
-  `UPDATE` sin `WHERE` de Dashboard) quedan para una fase aparte, a decisión del usuario.
+  roles/empresa, auditoría con recurso por módulo/id/acción, CSRF/401, validarTodo/rechazarTodo de Dashboard afectando
+  incluso un id nunca visto por la sesión —sin WHERE—, Producción con el mismo patrón); ajustes en
+  `BridgeFase1cTest`/`BridgeFase3aTest` (listas exhaustivas de acciones) y `BridgeFase2cTest`/`BridgeFase2dTest`/
+  `BridgeFase2eTest` (las 13 acciones salen de "escrituras bloqueadas"; `registrosControl` no tenía ese test, no aplica).
+  Suite completa 719/720 (solo `QccApiApplicationTests.contextLoads` legacy, esperado).
 
 ## Recepción — `recepcion.crear` ("Nuevo Lote de Inspección") — VALIDADA (Fase 3z, 2026-09-30)
 

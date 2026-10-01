@@ -46,7 +46,12 @@ import tools.jackson.databind.node.ObjectNode;
  * transparente: lista blanca {action, id}; exige haber visto el registro en una lista cargada en esta
  * sesión; candado por id. Registros de Control además relee por id antes de escribir (detección de
  * conflicto real); Dashboard/Producción no tienen endpoint de detalle por id, así que solo exigen la
- * huella de haberlo visto. validarTodo/rechazarTodo quedan fuera de esta fase.
+ * huella de haberlo visto.
+ *
+ * Fase 4b' — validarTodo/rechazarTodo de Dashboard y Registros Producción, igual que Photino: SIN id,
+ * sin confirmación en la vista, sin huella (no referencian ningún registro). La API de Dashboard no
+ * tiene WHERE (afecta TODA la tabla registros_control, no solo lo filtrado en pantalla); Producción sí
+ * filtra area='PRODUCCION'. Registros de Control no tiene estas 2 acciones (ni en Photino ni en la API).
  */
 @SpringBootTest(properties = {
     "spring.config.name=" + QccWebGatewayApplication.CONFIG_NAME,
@@ -62,10 +67,15 @@ class BridgeFase4bTest {
     private static final String DASH_RECHAZAR = "dashboard.rechazarRegistro";
     private static final String DASH_ELIMINAR = "dashboard.eliminarRegistro";
 
+    private static final String DASH_VALIDAR_TODO = "dashboard.validarTodo";
+    private static final String DASH_RECHAZAR_TODO = "dashboard.rechazarTodo";
+
     private static final String PROD_RESUMEN = "registrosProduccion.obtenerResumen";
     private static final String PROD_VALIDAR = "registrosProduccion.validarRegistro";
     private static final String PROD_RECHAZAR = "registrosProduccion.rechazarRegistro";
     private static final String PROD_ELIMINAR = "registrosProduccion.eliminarRegistro";
+    private static final String PROD_VALIDAR_TODO = "registrosProduccion.validarTodo";
+    private static final String PROD_RECHAZAR_TODO = "registrosProduccion.rechazarTodo";
 
     private static final String CTRL_OBTENER = "registrosControl.obtenerRegistros";
     private static final String CTRL_VALIDAR = "registrosControl.validarRegistro";
@@ -255,21 +265,62 @@ class BridgeFase4bTest {
         assertThat(API.peticionesControl()).filteredOn(p -> p.startsWith("PUT")).hasSize(1);
     }
 
+    // ------------------------------------------------------------------ Dashboard / Producción — validarTodo/rechazarTodo
+
+    @Test
+    void dashboardValidarTodoAfectaTODALaTablaSinWhereComoPhotino() throws Exception {
+        MockHttpSession s = login("operador1");
+        cargarDashboard(s);
+        // Un id que la sesión NUNCA vio en ninguna lista (sin huella) igual queda afectado: no hay WHERE en la API.
+        assertThat(API.estadoValidacionDashboard(999999)).isNull();
+        enviar(s, "{\"action\":\"" + DASH_VALIDAR_TODO + "\"}").andExpect(jsonPath("$.ok").value(true));
+        assertThat(API.peticionesDashboard()).contains("validarTodo");
+        assertThat(API.estadoValidacionDashboard(999999)).isEqualTo("VALIDADO");
+        assertThat(API.estadoValidacionDashboard(500)).isEqualTo("VALIDADO");
+
+        // rechazarTodo sobrescribe el estado global; una fila validada individualmente después queda aparte.
+        enviar(s, "{\"action\":\"" + DASH_RECHAZAR_TODO + "\"}").andExpect(jsonPath("$.ok").value(true));
+        assertThat(API.estadoValidacionDashboard(500)).isEqualTo("RECHAZADO");
+        cargarDashboard(s);
+        enviar(s, acc(DASH_VALIDAR, 500)).andExpect(jsonPath("$.ok").value(true));
+        assertThat(API.estadoValidacionDashboard(500)).isEqualTo("VALIDADO");
+        assertThat(API.estadoValidacionDashboard(501)).isEqualTo("RECHAZADO");
+    }
+
+    @Test
+    void dashboardTodoSinIdNiHuellaYCampoNoPermitido() throws Exception {
+        MockHttpSession s = login("operador1");
+        // Sin haber cargado ninguna lista: igual se ejecuta (no referencia ningún id, Photino tampoco lo exige).
+        enviar(s, "{\"action\":\"" + DASH_VALIDAR_TODO + "\"}").andExpect(jsonPath("$.ok").value(true));
+        enviar(s, "{\"action\":\"" + DASH_RECHAZAR_TODO + "\",\"id\":1}")
+                .andExpect(jsonPath("$.error").value("Campo no permitido: id"));
+    }
+
+    @Test
+    void produccionValidarTodoYRechazarTodo() throws Exception {
+        MockHttpSession s = login("operador1");
+        cargarProduccion(s);
+        enviar(s, "{\"action\":\"" + PROD_VALIDAR_TODO + "\"}").andExpect(jsonPath("$.ok").value(true));
+        assertThat(API.peticionesProduccion()).contains("validarTodo");
+        assertThat(API.estadoValidacionProduccion(500)).isEqualTo("VALIDADO");
+        enviar(s, "{\"action\":\"" + PROD_RECHAZAR_TODO + "\"}").andExpect(jsonPath("$.ok").value(true));
+        assertThat(API.estadoValidacionProduccion(500)).isEqualTo("RECHAZADO");
+    }
+
     // ------------------------------------------------------------------ roles, empresa, contrato
 
     @Test
-    void soloLasNueveEscriturasDe4bQuedanHabilitadas() {
-        for (String accion : List.of(DASH_VALIDAR, DASH_RECHAZAR, DASH_ELIMINAR, PROD_VALIDAR, PROD_RECHAZAR, PROD_ELIMINAR,
+    void soloLasTreceEscriturasDe4bYMasivasQuedanHabilitadas() {
+        for (String accion : List.of(DASH_VALIDAR, DASH_RECHAZAR, DASH_ELIMINAR, DASH_VALIDAR_TODO, DASH_RECHAZAR_TODO,
+                PROD_VALIDAR, PROD_RECHAZAR, PROD_ELIMINAR, PROD_VALIDAR_TODO, PROD_RECHAZAR_TODO,
                 CTRL_VALIDAR, CTRL_RECHAZAR, CTRL_ELIMINAR)) {
             Map<String, Object> d = policy.describir().stream().filter(x -> x.get("accion").equals(accion)).findFirst().orElseThrow();
             assertThat(d.get("escritura")).isEqualTo(true);
             assertThat(d.get("roles")).isEqualTo(List.of("admin", "admin_ti", "operador"));
             assertThat(d.get("identidad")).isEqualTo(Map.of());
         }
-        for (String bloqueada : List.of("dashboard.validarTodo", "dashboard.rechazarTodo",
-                "registrosProduccion.validarTodo", "registrosProduccion.rechazarTodo")) {
-            assertThat(policy.accionesRegistradas()).doesNotContain(bloqueada);
-        }
+        assertThat(policy.accionesRegistradas()).doesNotContain(
+                "registrosControl.validarTodo", "registrosControl.rechazarTodo");
     }
 
     @Test
@@ -289,11 +340,14 @@ class BridgeFase4bTest {
         enviar(s, acc(DASH_VALIDAR, 500)).andExpect(jsonPath("$.ok").value(true));
         cargarControl(s);
         enviar(s, acc(CTRL_RECHAZAR, 7001)).andExpect(jsonPath("$.ok").value(true));
+        enviar(s, "{\"action\":\"" + DASH_VALIDAR_TODO + "\"}").andExpect(jsonPath("$.ok").value(true));
         String log = salida.getAll();
         assertThat(log).containsPattern("evento=ESCRITURA usuario=operador1 empresa=INNPACK accion=dashboard\\.validarRegistro "
                 + "recurso=dashboard:500:validar resultado=OK ms=\\d+");
         assertThat(log).containsPattern("evento=ESCRITURA usuario=operador1 empresa=INNPACK accion=registrosControl\\.rechazarRegistro "
                 + "recurso=registrosControl:7001:rechazar resultado=OK ms=\\d+");
+        assertThat(log).containsPattern("evento=ESCRITURA usuario=operador1 empresa=INNPACK accion=dashboard\\.validarTodo "
+                + "recurso=dashboard:todos:validar resultado=OK ms=\\d+");
         assertThat(log).doesNotContain(FakeInnpackApi.firmaDeToken(10), PASS);
     }
 

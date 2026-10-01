@@ -16,8 +16,9 @@ import tools.jackson.databind.node.ObjectNode;
  * Módulo "Inspecciones Calidad" (Dashboard Calidad, INNPACK). Port de Photino
  * src/Backend/Modules/Dashboard/DashboardHandler.cs + InnpackDashboardApiService.
  *
- * Fase 4b: validarRegistro/rechazarRegistro/eliminarRegistro (individuales). validarTodo/rechazarTodo
- * (sin WHERE en la API: tocan TODA la tabla registros_control) quedan deliberadamente fuera por ahora.
+ * Fase 4b: validarRegistro/rechazarRegistro/eliminarRegistro (individuales). Fase 4b': validarTodo/
+ * rechazarTodo — igual que Photino (sin WHERE en la API: tocan TODA la tabla registros_control, no
+ * solo lo filtrado en pantalla; decisión del usuario, paridad exacta con el riesgo aceptado).
  */
 public class DashboardBridgeHandler {
 
@@ -170,6 +171,43 @@ public class DashboardBridgeHandler {
     public static String recursoRegistro(ObjectNode payload, String accion) {
         Integer id = entero(payload.get("id"));
         return "dashboard:" + (id != null && id > 0 ? id : "?") + ":" + accion;
+    }
+
+    static final String MENSAJE_CAMPO_NO_PERMITIDO_TODO = "Campo no permitido: ";
+    private static final Set<String> CLAVES_RAIZ_TODO = Set.of("action");
+
+    /**
+     * dashboard.validarTodo → PUT api/dashboard/validar-todo {} (Fase 4b'), igual que Photino para el
+     * usuario: botón "Validar todo" del dashboard, sin confirmación en la vista. La API hace
+     * `UPDATE registros_control SET estado_validacion='VALIDADO', ...` SIN WHERE: toca TODA la tabla,
+     * no solo lo que el filtro actual muestra en pantalla (hallazgo documentado en la matriz; replicado
+     * tal cual por decisión del usuario, paridad exacta con el riesgo aceptado).
+     *
+     * Seguridad transparente: lista blanca {action} (sin id ni parámetros, como Photino); no hay huella
+     * ni candado por id posible (la acción no referencia ningún id). El límite de escrituras por minuto
+     * del gateway (EscrituraRateLimiter) es la única fricción adicional frente a Photino.
+     */
+    public BridgeResult validarTodo(ObjectNode payload, SessionUser usuario) {
+        return todo(payload, usuario, "/api/dashboard/validar-todo");
+    }
+
+    /** dashboard.rechazarTodo → PUT api/dashboard/rechazar-todo {} (Fase 4b'). Mismo criterio que validarTodo. */
+    public BridgeResult rechazarTodo(ObjectNode payload, SessionUser usuario) {
+        return todo(payload, usuario, "/api/dashboard/rechazar-todo");
+    }
+
+    private BridgeResult todo(ObjectNode payload, SessionUser usuario, String ruta) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_RAIZ_TODO.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO_TODO + nombreCampoSeguro(clave));
+            }
+        }
+        return InnpackRespuestas.reenviar(api.putJson(usuario, ruta, mapper.createObjectNode()), mapper);
+    }
+
+    /** Recurso auditado: "dashboard:todos:<accion>" (sin id: la acción no referencia ninguno en particular). */
+    public static String recursoTodo(String accion) {
+        return "dashboard:todos:" + accion;
     }
 
     private static String nombreCampoSeguro(String clave) {

@@ -154,8 +154,10 @@ public final class FakeInnpackApi implements AutoCloseable {
         demoraNcRecepcionMs = 0;
         estadoValidacionDashboard.clear();
         eliminadosDashboard.clear();
+        estadoGlobalDashboard = null;
         estadoValidacionProduccion.clear();
         eliminadosProduccion.clear();
+        estadoGlobalProduccion = null;
         estadoValidacionControl.clear();
         eliminadosControl.clear();
     }
@@ -421,15 +423,17 @@ public final class FakeInnpackApi implements AutoCloseable {
     /** Fase 4b: estado_validacion mutado por validar/rechazar (id → VALIDADO|RECHAZADO), eliminado lógico por id. */
     private final Map<Integer, String> estadoValidacionDashboard = new ConcurrentHashMap<>();
     private final java.util.Set<Integer> eliminadosDashboard = ConcurrentHashMap.newKeySet();
+    /** Fase 4b': validarTodo/rechazarTodo de Dashboard NO tienen WHERE en la API real → afecta TODA fila, sin excepción. */
+    private volatile String estadoGlobalDashboard;
 
-    /** "filtros", "resumen?<query cruda>" o "validar:<id>"/"rechazar:<id>"/"eliminar:<id>" recibidos en api/dashboard/*. */
+    /** "filtros", "resumen?<query cruda>" o "validar:<id>"/"rechazar:<id>"/"eliminar:<id>"/"validarTodo"/"rechazarTodo" en api/dashboard/*. */
     public java.util.List<String> peticionesDashboard() {
         return java.util.List.copyOf(peticionesDashboard);
     }
 
-    /** Fase 4b: estado_validacion vigente de un registro de Dashboard (lo que mutó validar/rechazar). */
+    /** Fase 4b: estado_validacion vigente de un registro de Dashboard (lo que mutó validar/rechazar/validarTodo/rechazarTodo). */
     public String estadoValidacionDashboard(int id) {
-        return estadoValidacionDashboard.get(id);
+        return estadoValidacionDashboard.containsKey(id) ? estadoValidacionDashboard.get(id) : estadoGlobalDashboard;
     }
 
     /** Fase 4b: simula que otra persona (Photino u otra sesión) ya validó/rechazó este registro. */
@@ -493,17 +497,19 @@ public final class FakeInnpackApi implements AutoCloseable {
         }
         String data = filtros ? dataDashboardFiltros() : dataDashboardResumen(sub, query);
         if (!filtros) {
-            data = aplicarEstados(data, "ultimosRegistros", estadoValidacionDashboard, eliminadosDashboard);
+            data = aplicarEstados(data, "ultimosRegistros", estadoValidacionDashboard, eliminadosDashboard, estadoGlobalDashboard);
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 
     /**
-     * Fase 4b: aplica sobre el JSON de una lista/resumen el estado_validacion mutado por validar/rechazar
-     * y quita las filas marcadas como eliminadas, simulando el efecto de los 3 endpoints de escritura en
-     * la siguiente lectura (como lo vería la API real contra registros_control).
+     * Fase 4b/4b': aplica sobre el JSON de una lista/resumen el estado_validacion mutado por validar/
+     * rechazar (por id) o validarTodo/rechazarTodo (`estadoGlobal`, sin excepción, como el UPDATE sin
+     * WHERE de la API real) y quita las filas marcadas como eliminadas. El mapa por id tiene prioridad
+     * sobre `estadoGlobal` (una escritura individual posterior a un "todo" debe verse reflejada).
      */
-    private String aplicarEstados(String dataJson, String campoFilas, Map<Integer, String> estados, java.util.Set<Integer> eliminados) {
+    private String aplicarEstados(String dataJson, String campoFilas, Map<Integer, String> estados, java.util.Set<Integer> eliminados,
+            String estadoGlobal) {
         try {
             JsonNode raiz = mapper.readTree(dataJson);
             if (!(raiz instanceof tools.jackson.databind.node.ObjectNode obj)) {
@@ -518,7 +524,7 @@ public final class FakeInnpackApi implements AutoCloseable {
                         continue;
                     }
                     tools.jackson.databind.node.ObjectNode f = (tools.jackson.databind.node.ObjectNode) fila;
-                    String estado = estados.get(id);
+                    String estado = estados.containsKey(id) ? estados.get(id) : estadoGlobal;
                     if (estado != null) {
                         f.put("estadoValidacion", estado);
                     }
@@ -571,6 +577,19 @@ public final class FakeInnpackApi implements AutoCloseable {
             responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"eliminado\":true},\"errors\":null}");
             return;
         }
+        // Fase 4b': sin WHERE en la API real → afecta TODA la tabla registros_control, no solo lo filtrado en pantalla.
+        if (ex.getRequestMethod().equals("PUT") && path.equals("/api/dashboard/validar-todo")) {
+            peticionesDashboard.add("validarTodo");
+            estadoGlobalDashboard = "VALIDADO";
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{},\"errors\":null}");
+            return;
+        }
+        if (ex.getRequestMethod().equals("PUT") && path.equals("/api/dashboard/rechazar-todo")) {
+            peticionesDashboard.add("rechazarTodo");
+            estadoGlobalDashboard = "RECHAZADO";
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{},\"errors\":null}");
+            return;
+        }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
     }
 
@@ -578,15 +597,18 @@ public final class FakeInnpackApi implements AutoCloseable {
     /** Fase 4b: mismo criterio que Dashboard, para Inspecciones Producción. */
     private final Map<Integer, String> estadoValidacionProduccion = new ConcurrentHashMap<>();
     private final java.util.Set<Integer> eliminadosProduccion = ConcurrentHashMap.newKeySet();
+    /** Fase 4b': a diferencia de Dashboard, el UPDATE sí filtra area='PRODUCCION' en la API; el fake no simula otra
+     * área en sus datos de prueba, así que el efecto observable es el mismo (afecta todo lo generado). */
+    private volatile String estadoGlobalProduccion;
 
-    /** "filtros", "resumen?<query cruda>" o "validar:<id>"/"rechazar:<id>"/"eliminar:<id>" recibidos en api/registros-produccion/*. */
+    /** "filtros", "resumen?<query cruda>" o "validar:<id>"/"rechazar:<id>"/"eliminar:<id>"/"validarTodo"/"rechazarTodo" en api/registros-produccion/*. */
     public java.util.List<String> peticionesProduccion() {
         return java.util.List.copyOf(peticionesProduccion);
     }
 
     /** Fase 4b: estado_validacion vigente de un registro de Producción. */
     public String estadoValidacionProduccion(int id) {
-        return estadoValidacionProduccion.get(id);
+        return estadoValidacionProduccion.containsKey(id) ? estadoValidacionProduccion.get(id) : estadoGlobalProduccion;
     }
 
     /**
@@ -615,7 +637,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         }
         String data = filtros ? dataDashboardFiltros() : dataProduccionResumen(sub, query);
         if (!filtros) {
-            data = aplicarEstados(data, "ultimosRegistros", estadoValidacionProduccion, eliminadosProduccion);
+            data = aplicarEstados(data, "ultimosRegistros", estadoValidacionProduccion, eliminadosProduccion, estadoGlobalProduccion);
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
@@ -658,6 +680,18 @@ public final class FakeInnpackApi implements AutoCloseable {
             peticionesProduccion.add("eliminar:" + id);
             eliminadosProduccion.add(id);
             responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"eliminado\":true},\"errors\":null}");
+            return;
+        }
+        if (ex.getRequestMethod().equals("PUT") && path.equals("/api/registros-produccion/validar-todo")) {
+            peticionesProduccion.add("validarTodo");
+            estadoGlobalProduccion = "VALIDADO";
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{},\"errors\":null}");
+            return;
+        }
+        if (ex.getRequestMethod().equals("PUT") && path.equals("/api/registros-produccion/rechazar-todo")) {
+            peticionesProduccion.add("rechazarTodo");
+            estadoGlobalProduccion = "RECHAZADO";
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{},\"errors\":null}");
             return;
         }
         responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
@@ -771,7 +805,7 @@ public final class FakeInnpackApi implements AutoCloseable {
             responder(ex, 400, fallo("Rango de fechas inválido"));
             return;
         }
-        String data = aplicarEstados(dataRegistrosControl(sub, query), "items", estadoValidacionControl, eliminadosControl);
+        String data = aplicarEstados(dataRegistrosControl(sub, query), "items", estadoValidacionControl, eliminadosControl, null);
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 

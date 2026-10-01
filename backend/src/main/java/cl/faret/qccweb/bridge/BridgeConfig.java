@@ -192,6 +192,14 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "dashboard.eliminarRegistro", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), dashboard::eliminarRegistro, (p, data) -> DashboardBridgeHandler.recursoRegistro(p, "eliminar")),
+                // Fase 4b' — dashboard.validarTodo/rechazarTodo: igual que Photino (sin WHERE en la API, toca TODA
+                // la tabla registros_control); decisión del usuario, paridad exacta con el riesgo aceptado.
+                new ActionPolicy.Regla(
+                        "dashboard.validarTodo", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), dashboard::validarTodo, (p, data) -> DashboardBridgeHandler.recursoTodo("validar")),
+                new ActionPolicy.Regla(
+                        "dashboard.rechazarTodo", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), dashboard::rechazarTodo, (p, data) -> DashboardBridgeHandler.recursoTodo("rechazar")),
                 // Fase 2d — Inspecciones Producción (filtros + resumen). Fase 4b: mismo criterio que
                 // Dashboard (la API filtra estas 3 por area='PRODUCCION'). validarTodo/rechazarTodo
                 // quedan fuera por ahora.
@@ -213,6 +221,16 @@ public class BridgeConfig {
                         "registrosProduccion.eliminarRegistro", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosProduccion::eliminarRegistro,
                         (p, data) -> RegistrosProduccionBridgeHandler.recursoRegistro(p, "eliminar")),
+                // Fase 4b' — registrosProduccion.validarTodo/rechazarTodo: igual que Photino (la API SÍ filtra
+                // area='PRODUCCION' en estas 2, a diferencia de Dashboard).
+                new ActionPolicy.Regla(
+                        "registrosProduccion.validarTodo", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosProduccion::validarTodo,
+                        (p, data) -> RegistrosProduccionBridgeHandler.recursoTodo("validar")),
+                new ActionPolicy.Regla(
+                        "registrosProduccion.rechazarTodo", Set.of("INNPACK"),
+                        ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosProduccion::rechazarTodo,
+                        (p, data) -> RegistrosProduccionBridgeHandler.recursoTodo("rechazar")),
                 // Fase 2e — Registros de Control (grilla paginada + "traer todo" de Exportar/Imprimir).
                 // Fase 4b: valida/rechaza/elimina individual; a diferencia de Dashboard/Producción, el
                 // filtro ?id= de la API permite releer el registro antes de escribir (detección de

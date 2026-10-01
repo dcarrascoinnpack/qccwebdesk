@@ -177,7 +177,9 @@ class BridgeFase3aTest {
                         "recepcion.estado.actualizar", "recepcion.nc.crear", "recepcion.crear", "recepcion.plan.generar",
                         "noConformidades.eliminar", "noConformidades.adjuntos.eliminar",
                         "dashboard.validarRegistro", "dashboard.rechazarRegistro", "dashboard.eliminarRegistro",
+                        "dashboard.validarTodo", "dashboard.rechazarTodo",
                         "registrosProduccion.validarRegistro", "registrosProduccion.rechazarRegistro", "registrosProduccion.eliminarRegistro",
+                        "registrosProduccion.validarTodo", "registrosProduccion.rechazarTodo",
                         "registrosControl.validarRegistro", "registrosControl.rechazarRegistro", "registrosControl.eliminarRegistro");
         for (String otra : List.of("noConformidades.catalogos.clientes.desactivar",
                 "noConformidades.catalogos.nciAreas.crear")) {

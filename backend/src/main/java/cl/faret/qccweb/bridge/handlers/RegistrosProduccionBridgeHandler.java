@@ -20,8 +20,8 @@ import tools.jackson.databind.node.ObjectNode;
  * sentencias de este módulo en la API SÍ filtran area='PRODUCCION'), y se mantienen como clases
  * separadas igual que allá.
  *
- * Fase 4b: validarRegistro/rechazarRegistro/eliminarRegistro (individuales). validarTodo/rechazarTodo
- * quedan deliberadamente fuera por ahora (mismo criterio que Dashboard).
+ * Fase 4b: validarRegistro/rechazarRegistro/eliminarRegistro (individuales). Fase 4b': validarTodo/
+ * rechazarTodo — a diferencia de Dashboard, estas 2 SÍ filtran area='PRODUCCION' en la API.
  */
 public class RegistrosProduccionBridgeHandler {
 
@@ -169,6 +169,40 @@ public class RegistrosProduccionBridgeHandler {
     public static String recursoRegistro(ObjectNode payload, String accion) {
         Integer id = entero(payload.get("id"));
         return "registrosProduccion:" + (id != null && id > 0 ? id : "?") + ":" + accion;
+    }
+
+    private static final Set<String> CLAVES_RAIZ_TODO = Set.of("action");
+
+    /**
+     * registrosProduccion.validarTodo → PUT api/registros-produccion/validar-todo {} (Fase 4b'), igual
+     * que Photino: a diferencia de Dashboard, el UPDATE de la API SÍ filtra area='PRODUCCION', así que
+     * solo toca registros de este módulo (igual queda fuera del filtro visible en pantalla).
+     *
+     * Seguridad transparente: lista blanca {action} (sin id ni parámetros, como Photino); sin huella ni
+     * candado por id posible (no referencia ningún id). Rate limit general del gateway como única
+     * fricción adicional frente a Photino.
+     */
+    public BridgeResult validarTodo(ObjectNode payload, SessionUser usuario) {
+        return todo(payload, usuario, "/api/registros-produccion/validar-todo");
+    }
+
+    /** registrosProduccion.rechazarTodo → PUT api/registros-produccion/rechazar-todo {} (Fase 4b'). */
+    public BridgeResult rechazarTodo(ObjectNode payload, SessionUser usuario) {
+        return todo(payload, usuario, "/api/registros-produccion/rechazar-todo");
+    }
+
+    private BridgeResult todo(ObjectNode payload, SessionUser usuario, String ruta) {
+        for (String clave : payload.propertyNames()) {
+            if (!CLAVES_RAIZ_TODO.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        return InnpackRespuestas.reenviar(api.putJson(usuario, ruta, mapper.createObjectNode()), mapper);
+    }
+
+    /** Recurso auditado: "registrosProduccion:todos:<accion>". */
+    public static String recursoTodo(String accion) {
+        return "registrosProduccion:todos:" + accion;
     }
 
     private static String nombreCampoSeguro(String clave) {
