@@ -136,6 +136,13 @@ public final class FakeInnpackApi implements AutoCloseable {
         demoraPlanMs = 0;
         peticionesUsuarios.clear();
         peticionesLaboratorio.clear();
+        origenMuestraLab.clear();
+        muestrasLabAnuladas.clear();
+        ensayosPhFinalizados.clear();
+        siguienteMuestraLab.set(5000);
+        siguienteEnsayoPh.set(9000);
+        cuerposMuestraLabCreados.clear();
+        cuerposPhGuardados.clear();
         peticionesTalleres.clear();
         modoUsuarios = "NORMAL";
         modoDashboard = ModoDashboard.NORMAL;
@@ -2307,6 +2314,104 @@ public final class FakeInnpackApi implements AutoCloseable {
         return java.util.List.copyOf(peticionesLaboratorio);
     }
 
+    // ------------------------------------------------------------------ Fase 4e-1: escrituras (piloto)
+
+    /** Origen de cada muestra creada (para validar la FK de monotapaRelacionadaId, como MuestraLaboratorioService). */
+    private final Map<Integer, String> origenMuestraLab = new ConcurrentHashMap<>();
+    private final java.util.Set<Integer> muestrasLabAnuladas = ConcurrentHashMap.newKeySet();
+    /** Ensayos de pH ya insertados (Finalizado), para que ensayoOriginalId pueda "reemplazarlos". */
+    private final java.util.Set<Integer> ensayosPhFinalizados = ConcurrentHashMap.newKeySet();
+    private final java.util.concurrent.atomic.AtomicInteger siguienteMuestraLab = new java.util.concurrent.atomic.AtomicInteger(5000);
+    private final java.util.concurrent.atomic.AtomicInteger siguienteEnsayoPh = new java.util.concurrent.atomic.AtomicInteger(9000);
+    private final java.util.List<JsonNode> cuerposMuestraLabCreados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.List<JsonNode> cuerposPhGuardados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** Cuerpos EXACTOS recibidos por muestraLab.crear (POST api/muestra-laboratorio), en orden. */
+    public java.util.List<JsonNode> cuerposMuestraLabCreados() {
+        return java.util.List.copyOf(cuerposMuestraLabCreados);
+    }
+
+    /** Cuerpos EXACTOS recibidos por muestraLab.ph.guardar (POST api/muestra-laboratorio/ph), en orden. */
+    public java.util.List<JsonNode> cuerposPhGuardados() {
+        return java.util.List.copyOf(cuerposPhGuardados);
+    }
+
+    /** Simula una muestra anulada (MuestraLaboratorioService.EstaAnulada) sin pasar por muestraLab.anular (4e-2). */
+    public void anularMuestraLab(int muestraId) {
+        muestrasLabAnuladas.add(muestraId);
+    }
+
+    /**
+     * Como MuestraLaboratorioService.CrearMuestraAsync: Origen/TipoMuestra obligatorios; si viene
+     * monotapaRelacionadaId > 0 debe ser una muestra EXISTENTE de origen "Monotapa" (si no, el mensaje indica el
+     * origen real encontrado). Sin control de duplicados: cada POST inserta una fila nueva.
+     */
+    private void crearMuestraLab(HttpExchange ex, int sub) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposMuestraLabCreados.add(b);
+        String origen = b.path("origen").asString("");
+        String tipoMuestra = b.path("tipoMuestra").asString("");
+        if (origen.isBlank() || tipoMuestra.isBlank()) {
+            responder(ex, 400, fallo("Origen y Tipo de muestra son obligatorios"));
+            return;
+        }
+        JsonNode monotapaId = b.get("monotapaRelacionadaId");
+        if (monotapaId != null && !monotapaId.isNull() && monotapaId.asInt(0) > 0) {
+            int id = monotapaId.asInt();
+            String origenRelacionada = origenMuestraLab.get(id);
+            if (origenRelacionada == null) {
+                responder(ex, 400, fallo("No existe la muestra #" + id + " indicada como Monotapa relacionada"));
+                return;
+            }
+            if (!origenRelacionada.equals("Monotapa")) {
+                responder(ex, 400, fallo("La muestra #" + id + " no es de origen Monotapa (es " + origenRelacionada + ")"));
+                return;
+            }
+        }
+        int id = siguienteMuestraLab.getAndIncrement();
+        origenMuestraLab.put(id, origen);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    /**
+     * Como MuestraLaboratorioService.GuardarPhAsync + FinalizarGuardado: MuestraId/ValorTexto obligatorios, muestra
+     * no anulada; ensayoOriginalId &gt; 0 exige motivoReemplazo y que el original exista (haya sido insertado antes).
+     * El ensayo se inserta ANTES de validar el reemplazo (como la API): si el reemplazo falla, la fila ya existe,
+     * solo que la respuesta descarta el ensayoId (igual que el controller real).
+     */
+    private void guardarPhLab(HttpExchange ex, int sub) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposPhGuardados.add(b);
+        int muestraId = b.path("muestraId").asInt(0);
+        if (muestraId <= 0) {
+            responder(ex, 400, fallo("Falta indicar la muestra"));
+            return;
+        }
+        if (muestrasLabAnuladas.contains(muestraId)) {
+            responder(ex, 400, fallo("El registro está anulado, no se pueden agregar más ensayos"));
+            return;
+        }
+        if (b.path("valorTexto").asString("").isBlank()) {
+            responder(ex, 400, fallo("Falta el valor o rango leído en la tira"));
+            return;
+        }
+        int ensayoId = siguienteEnsayoPh.getAndIncrement();
+        ensayosPhFinalizados.add(ensayoId);
+        JsonNode originalNode = b.get("ensayoOriginalId");
+        if (originalNode != null && !originalNode.isNull() && originalNode.asInt(0) > 0) {
+            int originalId = originalNode.asInt();
+            if (b.path("motivoReemplazo").asString("").isBlank()) {
+                responder(ex, 400, fallo("Debes indicar el motivo de la corrección"));
+                return;
+            }
+            if (originalId == ensayoId || !ensayosPhFinalizados.contains(originalId)) {
+                responder(ex, 400, fallo("El ensayo original no existe o no está Finalizado"));
+                return;
+            }
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"ensayoId\":" + ensayoId + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
     /**
      * Laboratorio - Muestras (lecturas). Detalle 404 → "Muestra no encontrada"; registro-produccion con
      * np=ERROR → 400. Adjunto por id: 1 PDF, 2 PNG, 3 DOCX, 4 HTML declarado PDF, 404, 600 vacío,
@@ -2322,6 +2427,14 @@ public final class FakeInnpackApi implements AutoCloseable {
         if (sub == null || revocados.contains(sub)) {
             ex.sendResponseHeaders(401, -1);
             ex.close();
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio")) {
+            crearMuestraLab(ex, sub);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/ph")) {
+            guardarPhLab(ex, sub);
             return;
         }
         if (!ex.getRequestMethod().equals("GET")) {

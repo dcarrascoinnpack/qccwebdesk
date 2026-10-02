@@ -185,7 +185,8 @@ class BridgeFase3aTest {
                         "talleresExternos.catalogos.eliminarTaller", "talleresExternos.catalogos.eliminarProceso",
                         "talleresExternos.sincronizarFps",
                         "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
-                        "controlDocumental.eliminar", "controlDocumental.adjunto.subir");
+                        "controlDocumental.eliminar", "controlDocumental.adjunto.subir",
+                        "muestraLab.crear", "muestraLab.ph.guardar");
         for (String otra : List.of("noConformidades.catalogos.clientes.desactivar",
                 "noConformidades.catalogos.nciAreas.crear")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);

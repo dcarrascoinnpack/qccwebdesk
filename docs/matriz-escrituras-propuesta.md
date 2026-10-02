@@ -14,7 +14,7 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **50** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **52** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar`, `noConformidades.catalogos.{clientes,
@@ -22,9 +22,10 @@ categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impac
 `dashboard.{validarRegistro,rechazarRegistro,eliminarRegistro,validarTodo,rechazarTodo}`,
 `registrosProduccion.{validarRegistro,rechazarRegistro,eliminarRegistro,validarTodo,rechazarTodo}`,
 `registrosControl.{validarRegistro,rechazarRegistro,eliminarRegistro}`,
-`talleresExternos.{create,update,eliminar,catalogos.eliminarTaller,catalogos.eliminarProceso,sincronizarFps}` y
-`controlDocumental.{create,update,version.crear,eliminar,adjunto.subir}`, estado
-VALIDADA; mismos roles que Photino). Las otras 31 siguen denegadas por `ActionPolicy`
+`talleresExternos.{create,update,eliminar,catalogos.eliminarTaller,catalogos.eliminarProceso,sincronizarFps}`,
+`controlDocumental.{create,update,version.crear,eliminar,adjunto.subir}` y
+`muestraLab.{crear,ph.guardar}`, estado
+VALIDADA; mismos roles que Photino). Las otras 29 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -69,7 +70,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 31 APROBADA · 50 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 29 APROBADA · 52 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -111,7 +112,7 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | `muestraLab.bctMedido.guardar` | POST `api/muestra-laboratorio/bct-medido` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
 | `muestraLab.bctTeorico.guardar` | POST `api/muestra-laboratorio/bct-teorico` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
 | `muestraLab.cobb.guardar` | POST `api/muestra-laboratorio/cobb` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
-| `muestraLab.crear` | POST `api/muestra-laboratorio` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | crea una muestra de laboratorio | sí: anular/eliminar (admin) | **BAJO** | registro operativo del analista; autor desde sesión | APROBADA |
+| `muestraLab.crear` | POST `api/muestra-laboratorio` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | usuarioId/usuarioNombre ← sesión (ni siquiera son claves aceptadas del payload) | crea una muestra de laboratorio | sí: anular/eliminar (admin) | **BAJO** | registro operativo del analista; autor desde sesión | VALIDADA (Fase 4e-1, gateway 0.4.0; origen/tipoMuestra/etapaOrigen restringidos a los `<select>` de Photino, textos sin controles ni HTML; sin huella ni candado, alta pura sin control de duplicados en la API) |
 | `muestraLab.ect.guardar` | POST `api/muestra-laboratorio/ect` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
 | `muestraLab.espesor.guardar` | POST `api/muestra-laboratorio/espesor` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
 | `muestraLab.fct.guardar` | POST; POST `api/muestra-laboratorio/fct; api/muestra-laboratorio/rct` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
@@ -119,7 +120,7 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | `muestraLab.humedad.guardar` | POST `api/muestra-laboratorio/humedad` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
 | `muestraLab.lugol.guardar` | POST `api/muestra-laboratorio/lugol` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
 | `muestraLab.nc.crear` | POST `api/muestra-laboratorio/{muestraId}/nc` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | crea una NC vinculada a la muestra | sí: eliminar NC (admin) | **BAJO** | aditivo; autor desde sesión | APROBADA |
-| `muestraLab.ph.guardar` | POST `api/muestra-laboratorio/ph` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
+| `muestraLab.ph.guardar` | POST `api/muestra-laboratorio/ph` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | analistaUsuarioId/analistaNombre ← sesión (ni siquiera son claves aceptadas del payload) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | VALIDADA (Fase 4e-1, gateway 0.4.0; fija el patrón de "corrección" ensayoOriginalId/motivoReemplazo común a los 13 tipos de ensayo, lo valida la API) |
 | `muestraLab.rct.guardar` | POST; POST `api/muestra-laboratorio/fct; api/muestra-laboratorio/rct` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
 | `muestraLab.solidos.guardar` | POST `api/muestra-laboratorio/solidos` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
 | `muestraLab.viscosidad.guardar` | POST `api/muestra-laboratorio/viscosidad` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **operador, admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: Id, NombreCompleto | inyectar userId (Photino lo toma de su sesión); inyectar nombreCompleto (Photino lo toma de su sesión) | registra un ensayo sobre una muestra | sí: anular ensayo (admin) | **BAJO** | registro operativo; la evaluación la calcula la API | APROBADA |
@@ -630,6 +631,40 @@ del usuario de paridad exacta con el riesgo aceptado); `registrosProduccion.vali
   `BridgeFase1cTest`/`BridgeFase3aTest` (listas exhaustivas de acciones) y `BridgeFase2cTest`/`BridgeFase2dTest`/
   `BridgeFase2eTest` (las 13 acciones salen de "escrituras bloqueadas"; `registrosControl` no tenía ese test, no aplica).
   Suite completa 719/720 (solo `QccApiApplicationTests.contextLoads` legacy, esperado).
+
+## Laboratorio — `muestraLab.crear` / `muestraLab.ph.guardar` (piloto Fase 4e-1, 2026-10-02)
+
+Primer paso de las 25 escrituras de Laboratorio (`muestraLab.*`): `crear` (alta de la muestra) y `ph.guardar` (uno de
+los 13 tipos de ensayo), elegidos como piloto por fijar los dos patrones que reutilizan las otras 23 — autor siempre
+de sesión en un alta pura, y el patrón de "corrección" (`ensayoOriginalId`/`motivoReemplazo`) común a todos los
+ensayos. El handler C# de Photino (`MuestraLaboratorioHandler`) es passthrough puro: arma un objeto anónimo con
+`GetString/GetInt/GetDecimal/GetLong` y lo reenvía a la API (`MuestraLaboratorioService.cs`), que hace toda la
+validación de negocio. `crear` solo exige Origen/Tipo de muestra no vacíos y, si viene `monotapaRelacionadaId`, que
+esa muestra exista y sea de origen "Monotapa" (si no, el mensaje indica el origen real encontrado). `ph.guardar`
+exige `muestraId`/`valorTexto` y que la muestra no esté anulada; al guardar, `FinalizarGuardado` aplica el patrón de
+reemplazo: si viene `ensayoOriginalId > 0` exige `motivoReemplazo` y que el ensayo original exista y esté Finalizado
+(el ensayo nuevo ya quedó insertado antes de esa validación — si el reemplazo falla, la fila igual existe, solo que
+la API descarta el id en la respuesta de error).
+
+- Web: `usuarioId`/`usuarioNombre` (crear) y `analistaUsuarioId`/`analistaNombre` (ph.guardar) ← SIEMPRE sesión — a
+  diferencia de Control Documental, acá NI SIQUIERA son claves aceptadas del payload (se rechazan con "Campo no
+  permitido", igual que Talleres Externos). `origen`/`tipoMuestra`/`etapaOrigen` restringidos a las opciones exactas
+  de los `<select>` de Photino (10/9/8 valores). El resto de los 29 campos de `crear` (incluido el snapshot FPS:
+  `registroProduccionRecordKey`/`idProcesoFps`/`procesoTextoFps`/`operadorTexto`/`fechaProduccionFps`/
+  `fechaConsultaFps`) viaja tal cual lo manda el cliente — Photino tampoco los valida contra una consulta real (son
+  estado local del formulario, que depende de `consultarNp`/`consultarRegistroProduccion`, FPS/Planificación FARET,
+  aún fuera de alcance), así que no es una relajación nueva. Textos sin caracteres de control ni marcado HTML. Sin
+  huella ni candado en ninguna de las dos: son altas puras, sin control de duplicados en la API (crear otra muestra o
+  ensayo a sabiendas sigue permitido, igual que Photino).
+- Pruebas: `BridgeFase4e1Test` (12: cuerpo mínimo y usuario/analista manipulado rechazado, campo no permitido, origen/
+  tipoMuestra/etapaOrigen obligatorios y restringidos, texto con HTML, `monotapaRelacionadaId` inexistente/de otro
+  origen/válido, campos obligatorios de ph.guardar, muestra anulada, reemplazo exitoso/sin motivo/original
+  inexistente, roles, auditoría con recurso por acción); ajustes en `BridgeFase2lTest` (`NO_HABILITADAS` 28→26) y
+  `BridgeFase1cTest`/`BridgeFase3aTest` (listas exhaustivas). Suite completa 766/767 (solo
+  `QccApiApplicationTests.contextLoads` legacy, esperado).
+- Quedan 23 escrituras de Laboratorio para las fases 4e-2 (`anular`, `ensayo.anular`, `actualizarFechaEnsayo` —
+  MEDIO), 4e-3 (maestros de métodos/especificaciones — MEDIO) y 4e-4 (`adjunto.eliminar`, `eliminar` — ALTO), más los
+  otros 12 tipos de ensayo `*.guardar` (BAJO, mismo patrón que `ph.guardar`) y `adjunto.subir`/`nc.crear` en 4e-1.
 
 ## Control Documental — create/update/version.crear/eliminar/adjunto.subir — VALIDADA (Fase 4d, 2026-10-01)
 

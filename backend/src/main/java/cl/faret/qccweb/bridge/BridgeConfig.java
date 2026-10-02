@@ -390,10 +390,10 @@ public class BridgeConfig {
                 // Escrituras y matriz de permisos fuera (deny-by-default; se abordan aparte).
                 new ActionPolicy.Regla(
                         "usuarios.list", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::list),
-                // Fase 2l — Laboratorio - Muestras, SOLO LECTURA contra la API INNPACK (payload en
-                // "data", sin empresa ni rol). adjunto.abrir: validado como Control Documental y
+                // Fase 2l — Laboratorio - Muestras contra la API INNPACK (payload en "data", sin empresa ni
+                // rol propio para lecturas). adjunto.abrir: validado como Control Documental y
                 // previsualizado/descargado en el navegador. Fuera: consultarNp/consultarRegistroProduccion/
-                // materialesFps/resolverBobina (otras APIs externas) y las 25 escrituras.
+                // resolverBobina (otras APIs externas) y 23 de las 25 escrituras (ver Fase 4e-1 más abajo).
                 new ActionPolicy.Regla("muestraLab.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::list),
                 new ActionPolicy.Regla("muestraLab.detalle", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::detalle),
                 new ActionPolicy.Regla("muestraLab.catalogos", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::catalogos),
@@ -412,6 +412,15 @@ public class BridgeConfig {
                 // solo el proceso FPS de una muestra abierta en la sesión.
                 new ActionPolicy.Regla(
                         "muestraLab.materialesFps", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::materialesFps),
+                // Fase 4e-1 — piloto de las 25 escrituras de Laboratorio: crear + ph.guardar. Roles = matriz
+                // (operador/admin/admin_ti); usuarioId/analistaUsuarioId y usuarioNombre/analistaNombre ← sesión,
+                // ni siquiera son claves aceptadas del payload. Sin huella ni candado: altas puras.
+                new ActionPolicy.Regla(
+                        "muestraLab.crear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::crear, MuestraLaboratorioBridgeHandler::recursoCrear),
+                new ActionPolicy.Regla(
+                        "muestraLab.ph.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::phGuardar, MuestraLaboratorioBridgeHandler::recursoPhGuardar),
                 // Fase 2m — Talleres Externos (payload en "data", sin empresa ni rol propio).
                 new ActionPolicy.Regla("talleresExternos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::list),
                 new ActionPolicy.Regla(

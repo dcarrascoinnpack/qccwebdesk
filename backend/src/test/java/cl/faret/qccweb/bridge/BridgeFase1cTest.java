@@ -205,7 +205,7 @@ class BridgeFase1cTest {
                 "usuarios.list",
                 "muestraLab.list", "muestraLab.detalle", "muestraLab.materialesFps", "muestraLab.catalogos", "muestraLab.indicadores",
                 "muestraLab.metodo.list", "muestraLab.especificacion.list", "muestraLab.bobinaHistorial",
-                "muestraLab.registroProduccion.list", "muestraLab.adjunto.abrir",
+                "muestraLab.registroProduccion.list", "muestraLab.adjunto.abrir", "muestraLab.crear", "muestraLab.ph.guardar",
                 "talleresExternos.list", "talleresExternos.catalogos", "talleresExternos.historialLiberaciones",
                 "talleresExternos.create", "talleresExternos.update", "talleresExternos.eliminar",
                 "talleresExternos.catalogos.eliminarTaller", "talleresExternos.catalogos.eliminarProceso",
