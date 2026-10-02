@@ -211,6 +211,8 @@ class BridgeFase1cTest {
                 "muestraLab.bctMedido.guardar", "muestraLab.bctTeorico.guardar", "muestraLab.viscosidad.guardar",
                 "muestraLab.solidos.guardar", "muestraLab.lugol.guardar", "muestraLab.nc.crear", "muestraLab.adjunto.subir",
                 "muestraLab.anular", "muestraLab.ensayo.anular", "muestraLab.actualizarFechaEnsayo",
+                "muestraLab.metodo.guardar", "muestraLab.metodo.activar", "muestraLab.especificacion.guardar",
+                "muestraLab.especificacion.activar",
                 "talleresExternos.list", "talleresExternos.catalogos", "talleresExternos.historialLiberaciones",
                 "talleresExternos.create", "talleresExternos.update", "talleresExternos.eliminar",
                 "talleresExternos.catalogos.eliminarTaller", "talleresExternos.catalogos.eliminarProceso",

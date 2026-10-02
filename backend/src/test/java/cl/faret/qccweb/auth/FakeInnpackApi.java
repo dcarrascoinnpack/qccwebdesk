@@ -152,6 +152,10 @@ public final class FakeInnpackApi implements AutoCloseable {
         cuerposAnularMuestraLabRecibidos.clear();
         cuerposEnsayoAnularLabRecibidos.clear();
         cuerposFechaEnsayoLabRecibidos.clear();
+        cuerposMetodoGuardadoRecibidos.clear();
+        cuerposEspecificacionGuardadaRecibidos.clear();
+        siguienteMetodoLab.set(9800);
+        siguienteEspecificacionLab.set(9900);
         peticionesTalleres.clear();
         modoUsuarios = "NORMAL";
         modoDashboard = ModoDashboard.NORMAL;
@@ -2638,6 +2642,62 @@ public final class FakeInnpackApi implements AutoCloseable {
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
     }
 
+    // ------------------------------------------------------------------ Fase 4e-4: maestros de métodos y especificaciones
+
+    private final java.util.List<JsonNode> cuerposMetodoGuardadoRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.List<JsonNode> cuerposEspecificacionGuardadaRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.concurrent.atomic.AtomicInteger siguienteMetodoLab = new java.util.concurrent.atomic.AtomicInteger(9800);
+    private final java.util.concurrent.atomic.AtomicInteger siguienteEspecificacionLab = new java.util.concurrent.atomic.AtomicInteger(9900);
+
+    public java.util.List<JsonNode> cuerposMetodoGuardadoRecibidos() {
+        return java.util.List.copyOf(cuerposMetodoGuardadoRecibidos);
+    }
+
+    public java.util.List<JsonNode> cuerposEspecificacionGuardadaRecibidos() {
+        return java.util.List.copyOf(cuerposEspecificacionGuardadaRecibidos);
+    }
+
+    /** Como MuestraLaboratorioService.GuardarMetodoAsync: TipoEnsayo y Nombre obligatorios. */
+    private void guardarMetodoLab(HttpExchange ex, int sub) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposMetodoGuardadoRecibidos.add(b);
+        if (b.path("tipoEnsayo").asString("").isBlank()) {
+            responder(ex, 400, fallo("Falta el tipo de ensayo"));
+            return;
+        }
+        if (b.path("nombre").asString("").isBlank()) {
+            responder(ex, 400, fallo("Falta el nombre del método"));
+            return;
+        }
+        int id = siguienteMetodoLab.getAndIncrement();
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    /** Como MuestraLaboratorioService.CambiarActivoMetodoAsync/CambiarActivoEspecificacionAsync: sin validación propia. */
+    private void cambiarActivoLab(HttpExchange ex, int sub) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        boolean activo = b.path("activo").asBoolean(false);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"activo\":" + activo + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    /** Como MuestraLaboratorioService.GuardarEspecificacionAsync: tipoMuestra/tipoEnsayo obligatorios, al menos un límite. */
+    private void guardarEspecificacionLab(HttpExchange ex, int sub) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposEspecificacionGuardadaRecibidos.add(b);
+        if (b.path("tipoMuestra").asString("").isBlank() || b.path("tipoEnsayo").asString("").isBlank()) {
+            responder(ex, 400, fallo("Tipo de muestra y tipo de ensayo son obligatorios"));
+            return;
+        }
+        JsonNode min = b.get("limiteMin");
+        JsonNode max = b.get("limiteMax");
+        if ((min == null || min.isNull()) && (max == null || max.isNull())) {
+            responder(ex, 400, fallo("Debes indicar al menos un límite (mínimo o máximo)"));
+            return;
+        }
+        int id = siguienteEspecificacionLab.getAndIncrement();
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
     /**
      * Laboratorio - Muestras (lecturas). Detalle 404 → "Muestra no encontrada"; registro-produccion con
      * np=ERROR → 400. Adjunto por id: 1 PDF, 2 PNG, 3 DOCX, 4 HTML declarado PDF, 404, 600 vacío,
@@ -2761,6 +2821,24 @@ public final class FakeInnpackApi implements AutoCloseable {
         java.util.regex.Matcher fechaEnsayo = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/(\\d+)/fecha-ensayo$").matcher(path);
         if (ex.getRequestMethod().equals("PUT") && fechaEnsayo.matches()) {
             actualizarFechaEnsayoLab(ex, sub, Integer.parseInt(fechaEnsayo.group(1)));
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/metodos")) {
+            guardarMetodoLab(ex, sub);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/especificaciones")) {
+            guardarEspecificacionLab(ex, sub);
+            return;
+        }
+        java.util.regex.Matcher activoMetodo = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/metodos/(\\d+)/activo$").matcher(path);
+        if (ex.getRequestMethod().equals("PATCH") && activoMetodo.matches()) {
+            cambiarActivoLab(ex, sub);
+            return;
+        }
+        java.util.regex.Matcher activoEspecificacion = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/especificaciones/(\\d+)/activo$").matcher(path);
+        if (ex.getRequestMethod().equals("PATCH") && activoEspecificacion.matches()) {
+            cambiarActivoLab(ex, sub);
             return;
         }
         if (!ex.getRequestMethod().equals("GET")) {

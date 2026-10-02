@@ -1042,6 +1042,38 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-10-02T15:36:39Z"
+    },
+    "muestraLab.metodo.guardar": {
+      "huella": "fbc529e3bd79e4c8c72b72d8c2596f559a3e6873bc818638e3b619034007e6cd",
+      "huellaFrontend": "ec73b2ad0e18247ac2aa3c48bdc4075dbc0a94d035b34479a041b1e3764b8920",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:50:37Z"
+    },
+    "muestraLab.metodo.activar": {
+      "huella": "129ada992119fe09ce24ffd49f29636ef71b56adc866da1aa7dafd1bd2a25d90",
+      "huellaFrontend": "a8df188aaf2400b6fe767a43ee4ad18aebb8ce425d91c3143421dfa4510fda80",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:50:37Z"
+    },
+    "muestraLab.especificacion.guardar": {
+      "huella": "91b0690db638ad55394306c16b871bc04a415c5057a5a0be17559965d0aa3382",
+      "huellaFrontend": "64f57d7dcf2f3dab8e33d3b36b7d4ecc40f0a13ed65c0f372b71d5adc94993e4",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:50:37Z"
+    },
+    "muestraLab.especificacion.activar": {
+      "huella": "375f8536b4f61c581ff46c249df23f096518a35260a4c7cc3679cdea4894909f",
+      "huellaFrontend": "5c237645388fd4537eb5fe7b01da0f5c789cef76db6036a4e5dcd3986fefcc88",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:50:37Z"
     }
   }
 }

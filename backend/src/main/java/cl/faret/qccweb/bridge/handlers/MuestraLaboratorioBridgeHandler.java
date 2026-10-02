@@ -47,9 +47,13 @@ import tools.jackson.databind.node.ObjectNode;
  * para ello, auditoría obligatoria del gateway); `actualizarFechaEnsayo` restringe la fecha al formato real del
  * {@code <input type="datetime-local">} de Photino.
  *
+ * Fase 4e-4: maestros de métodos/especificaciones (`metodo.guardar/activar`, `especificacion.guardar/activar`).
+ * `metodo.guardar` es la única de las 4 con autor (usuarioNombre ← sesión); las otras 3 no reciben autor (la API no
+ * tiene campo para ello). `*.activar` comparten un solo método (`activarComun`): `id` se rechaza antes de llamar a
+ * la API, `activo` solo es `true` si el JSON trae literalmente el booleano `true` (igual que Photino).
+ *
  * Fuera: consultarNp (Planificación FARET), consultarRegistroProduccion (FPS, solo en el alta de muestra, que depende
- * de consultarNp), resolverBobina (SAP) y el resto de las escrituras (quedan para 4e-4/4e-5: maestros de métodos/
- * especificaciones, adjunto.eliminar, eliminar).
+ * de consultarNp), resolverBobina (SAP) y 4e-5 (adjunto.eliminar, eliminar).
  */
 public class MuestraLaboratorioBridgeHandler {
 
@@ -608,6 +612,187 @@ public class MuestraLaboratorioBridgeHandler {
         JsonNode data = payload.get("data");
         Integer id = data == null ? null : entero(data.get("id"));
         return "muestraLab:" + (id != null ? id : "?") + ":fechaEnsayo";
+    }
+
+    // ------------------------------------------------------------------ Fase 4e-4: maestros de métodos y especificaciones
+
+    /** Opciones del {@code <select id="mlbMetodoTipoEnsayo">} de Photino (9 valores). */
+    private static final Set<String> TIPOS_ENSAYO_METODO = Set.of("HUMEDAD", "GRAMAJE", "ESPESOR", "COBB", "RCT",
+            "FCT", "ECT", "BCT_MEDIDO", "BCT_TEORICO");
+    /** Opciones del {@code <select id="mlbMetodoVariante">} ("" = no aplica). */
+    private static final Set<String> VARIANTES_METODO = Set.of("Horno", "Higrometro", "Termobalanza");
+    /** Opciones del {@code <select id="mlbEspecTipoEnsayo">} de Photino (12 valores, distinto del de métodos). */
+    private static final Set<String> TIPOS_ENSAYO_ESPECIFICACION = Set.of("HUMEDAD", "GRAMAJE", "COBB", "ESPESOR",
+            "RCT", "FCT", "ECT", "BCT_MEDIDO", "BCT_TEORICO", "VISCOSIDAD", "PH", "SOLIDOS");
+
+    private static final Set<String> CLAVES_METODO_GUARDAR = Set.of("id", "tipoEnsayo", "variante", "nombre",
+            "codigo", "version", "unidad");
+    private static final Set<String> CLAVES_ACTIVAR = Set.of("id", "activo");
+    private static final Set<String> CLAVES_ESPECIFICACION_GUARDAR = Set.of("id", "tipoMuestra", "tipoEnsayo",
+            "codigoProducto", "limiteMin", "limiteMax", "unidad");
+
+    /**
+     * muestraLab.metodo.guardar → POST api/muestra-laboratorio/metodos {id?, tipoEnsayo, variante, nombre, codigo,
+     * version, unidad, usuarioNombre} (Fase 4e-4), igual que Photino: crea o edita (según `id`) un método del
+     * maestro (punto 32 del REG-LAB-04). `variante` viaja `null` (no `""`) cuando no aplica — el lookup del método
+     * vigente de la API compara "variante IS NULL" literal en SQL (solo HUMEDAD usa variante).
+     *
+     * Seguridad transparente: usuarioNombre ← sesión; tipoEnsayo/variante restringidos a los {@code <select>} de
+     * Photino (TipoEnsayo/Nombre obligatorios los valida la API).
+     */
+    public BridgeResult metodoGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_METODO_GUARDAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        ponerEntero(cuerpo, data, "id");
+        String error = ponerTexto(cuerpo, data, "nombre", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "codigo", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "version", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "unidad", CONTROL_UNA_LINEA);
+        if (error == null) {
+            String tipoEnsayo = texto(data.get("tipoEnsayo"));
+            if (!tipoEnsayo.isEmpty() && !TIPOS_ENSAYO_METODO.contains(tipoEnsayo)) {
+                error = MENSAJE_OPCION_INVALIDA + "tipoEnsayo.";
+            } else {
+                cuerpo.put("tipoEnsayo", tipoEnsayo);
+            }
+        }
+        if (error == null) {
+            String variante = texto(data.get("variante"));
+            if (variante.isBlank()) {
+                cuerpo.putNull("variante");
+            } else if (!VARIANTES_METODO.contains(variante)) {
+                error = MENSAJE_OPCION_INVALIDA + "variante.";
+            } else {
+                cuerpo.put("variante", variante);
+            }
+        }
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        cuerpo.put("usuarioNombre", autorDeSesion(usuario));
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/metodos", cuerpo), mapper);
+    }
+
+    /** Recurso auditado: "muestraLab:metodo:&lt;id&gt;". */
+    public static String recursoMetodoGuardar(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer id = data == null ? null : entero(data.get("id"));
+        JsonNode idRespuesta = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("id") : null;
+        Integer resuelto = id != null ? id : (idRespuesta != null && idRespuesta.canConvertToInt() ? idRespuesta.asInt() : null);
+        return "muestraLab:metodo:" + (resuelto != null ? resuelto : "?");
+    }
+
+    /**
+     * muestraLab.metodo.activar → PATCH api/muestra-laboratorio/metodos/{id}/activo {activo} (Fase 4e-4), igual que
+     * Photino: activa/desactiva un método del maestro. `id` se rechaza ANTES de llamar a la API si falta (igual que
+     * el handler C# de Photino). La API no recibe autor (sin campo para ello); auditoría obligatoria del gateway.
+     * `activo` sigue el mismo criterio que Photino: solo el booleano JSON `true` cuenta como activar, cualquier otra
+     * cosa (incluida su ausencia) es desactivar.
+     */
+    public BridgeResult metodoActivar(ObjectNode payload, SessionUser usuario) {
+        return activarComun(payload, usuario, "metodos", MENSAJE_FALTA_METODO);
+    }
+
+    /** Recurso auditado: "muestraLab:metodo:&lt;id&gt;:activo". */
+    public static String recursoMetodoActivar(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer id = data == null ? null : entero(data.get("id"));
+        return "muestraLab:metodo:" + (id != null ? id : "?") + ":activo";
+    }
+
+    /**
+     * muestraLab.especificacion.guardar → POST api/muestra-laboratorio/especificaciones {id?, tipoMuestra,
+     * tipoEnsayo, codigoProducto, limiteMin, limiteMax, unidad} (Fase 4e-4), igual que Photino: crea o edita (según
+     * `id`) una especificación del maestro. La API no recibe autor (sin campo para ello); auditoría obligatoria del
+     * gateway. tipoMuestra/tipoEnsayo obligatorios y al menos un límite los valida la API con mensajes propios.
+     *
+     * Seguridad transparente: tipoMuestra (mismas 9 opciones que `muestraLab.crear`) y tipoEnsayo (12 opciones,
+     * distintas de las 9 de `metodo.guardar`) restringidos a los {@code <select>} de Photino.
+     */
+    public BridgeResult especificacionGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ESPECIFICACION_GUARDAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        ponerEntero(cuerpo, data, "id");
+        String error = ponerTexto(cuerpo, data, "codigoProducto", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "unidad", CONTROL_UNA_LINEA);
+        if (error == null) {
+            String tipoMuestra = texto(data.get("tipoMuestra"));
+            if (!tipoMuestra.isEmpty() && !TIPOS_MUESTRA.contains(tipoMuestra)) {
+                error = MENSAJE_OPCION_INVALIDA + "tipoMuestra.";
+            } else {
+                cuerpo.put("tipoMuestra", tipoMuestra);
+            }
+        }
+        if (error == null) {
+            String tipoEnsayo = texto(data.get("tipoEnsayo"));
+            if (!tipoEnsayo.isEmpty() && !TIPOS_ENSAYO_ESPECIFICACION.contains(tipoEnsayo)) {
+                error = MENSAJE_OPCION_INVALIDA + "tipoEnsayo.";
+            } else {
+                cuerpo.put("tipoEnsayo", tipoEnsayo);
+            }
+        }
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        ponerDecimal(cuerpo, data, "limiteMin");
+        ponerDecimal(cuerpo, data, "limiteMax");
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/especificaciones", cuerpo), mapper);
+    }
+
+    /** Recurso auditado: "muestraLab:especificacion:&lt;id&gt;". */
+    public static String recursoEspecificacionGuardar(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer id = data == null ? null : entero(data.get("id"));
+        JsonNode idRespuesta = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("id") : null;
+        Integer resuelto = id != null ? id : (idRespuesta != null && idRespuesta.canConvertToInt() ? idRespuesta.asInt() : null);
+        return "muestraLab:especificacion:" + (resuelto != null ? resuelto : "?");
+    }
+
+    /**
+     * muestraLab.especificacion.activar → PATCH api/muestra-laboratorio/especificaciones/{id}/activo {activo}
+     * (Fase 4e-4), igual que Photino. Mismo criterio que `metodo.activar`.
+     */
+    public BridgeResult especificacionActivar(ObjectNode payload, SessionUser usuario) {
+        return activarComun(payload, usuario, "especificaciones", MENSAJE_FALTA_ESPECIFICACION);
+    }
+
+    /** Recurso auditado: "muestraLab:especificacion:&lt;id&gt;:activo". */
+    public static String recursoEspecificacionActivar(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer id = data == null ? null : entero(data.get("id"));
+        return "muestraLab:especificacion:" + (id != null ? id : "?") + ":activo";
+    }
+
+    static final String MENSAJE_FALTA_METODO = "Falta indicar el método";
+    static final String MENSAJE_FALTA_ESPECIFICACION = "Falta indicar la especificación";
+
+    /** metodo.activar/especificacion.activar comparten el mismo cuerpo {id, activo} y la misma validación en Photino. */
+    private BridgeResult activarComun(ObjectNode payload, SessionUser usuario, String recurso, String mensajeFaltaId) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ACTIVAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(data.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(mensajeFaltaId);
+        }
+        JsonNode activoNodo = data.get("activo");
+        boolean activo = activoNodo != null && activoNodo.isBoolean() && activoNodo.asBoolean();
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("activo", activo);
+        return InnpackRespuestas.reenviar(api.patchJson(usuario, BASE + "/" + recurso + "/" + id + "/activo", cuerpo), mapper);
     }
 
     private static String validarArchivoSubida(String nombreArchivo, String base64) {

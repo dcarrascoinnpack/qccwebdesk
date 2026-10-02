@@ -474,6 +474,19 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "muestraLab.actualizarFechaEnsayo", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), laboratorio::actualizarFechaEnsayo, MuestraLaboratorioBridgeHandler::recursoActualizarFechaEnsayo),
+                // Fase 4e-4 — maestros de métodos / especificaciones.
+                new ActionPolicy.Regla(
+                        "muestraLab.metodo.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::metodoGuardar, MuestraLaboratorioBridgeHandler::recursoMetodoGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.metodo.activar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::metodoActivar, MuestraLaboratorioBridgeHandler::recursoMetodoActivar),
+                new ActionPolicy.Regla(
+                        "muestraLab.especificacion.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::especificacionGuardar, MuestraLaboratorioBridgeHandler::recursoEspecificacionGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.especificacion.activar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::especificacionActivar, MuestraLaboratorioBridgeHandler::recursoEspecificacionActivar),
                 // Fase 2m — Talleres Externos (payload en "data", sin empresa ni rol propio).
                 new ActionPolicy.Regla("talleresExternos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::list),
                 new ActionPolicy.Regla(
