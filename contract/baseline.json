@@ -906,6 +906,118 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-10-02T14:27:41Z"
+    },
+    "muestraLab.humedad.guardar": {
+      "huella": "ce572ea65cdf0b70bd84e8e3db09935028ebeb7e1b971d8cc0134561d46d3d3d",
+      "huellaFrontend": "2f48a296455f4d7fbbd1e38c11e635ff7d116572bd917e8252d7f26405b03e0c",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.gramaje.guardar": {
+      "huella": "6964ecf16229729428cb1dffd345c111bc364d86f99b34d973114d4b3e35a1d3",
+      "huellaFrontend": "187fe872ab6558f3ef983328f59416e7829660320ce82f061d07916d2867d333",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.cobb.guardar": {
+      "huella": "dbfc565981cb59c8b6ac0eae7104db29661ae213ef666ecce693d02415909e79",
+      "huellaFrontend": "ff855b42f1006cef171ed32a61621b0ff96c4c5248cbaf258865ec1f89e2dcc6",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.espesor.guardar": {
+      "huella": "cd4db50cf9137986f7c96d16fbb56f1b6e755d1ee2163acdde75b8ab37331c9e",
+      "huellaFrontend": "7580f51960793b0ec962d0f4dc6c878427a3681ca465f4f4fcfdb917e70d25b7",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.rct.guardar": {
+      "huella": "dd9dd6d92ea24b44555a76c2cd2f4a715375c42c7d18aa8af2c459a2b61e9c36",
+      "huellaFrontend": "80f39b604c7fa13834b348e2cbd9ab9c07bbe6137e13cb93f86729ab62d8bf96",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.fct.guardar": {
+      "huella": "dd9dd6d92ea24b44555a76c2cd2f4a715375c42c7d18aa8af2c459a2b61e9c36",
+      "huellaFrontend": "a4e3b7bc65042a2fff971f5b65340475c4bbfb8f78c89991992b67a08d4dce64",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.ect.guardar": {
+      "huella": "7025cefbf13ffdba55c247134de90670f681bb861872cf7523275acd9d38a87d",
+      "huellaFrontend": "5c8389e722d2a0ae60f74736638ba20f7126f3209dfba598b5008a66e1a1a35e",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.bctMedido.guardar": {
+      "huella": "fad4ca856f2a393e10c71d9d02c2577f4dbbf83ee9b37823115477d087b84cbd",
+      "huellaFrontend": "4003f9fa7ed8cb75ed0384e7123aa99aad413c5959dfd6c5555763110591dbdc",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.bctTeorico.guardar": {
+      "huella": "323d565a6815d83d6e9645ccc9e7be298fff07351ba65fb3c578f4a70afb1b56",
+      "huellaFrontend": "ae1026a39f83aa9ddee933536a546a23113c2c4cdc9234f34a59ae19c4a60a84",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.viscosidad.guardar": {
+      "huella": "db9103f2b2cd2c19c40a7b32fcd37a7b719d6d70b16e20aaca178a44c0e9c6c0",
+      "huellaFrontend": "32841ada2e0a9187d5d3c206cbb0e94c9489acc8ec1a3e1bc5ac499d68bce732",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.solidos.guardar": {
+      "huella": "876caf8638f4f7dca43f703f7e047249c9953f4c9d260a8e2975576a6fa7a2a5",
+      "huellaFrontend": "a0df52143be4d291c0200d98e18e7b4c21c3303c48fa20878578321f2fa7e4f8",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.lugol.guardar": {
+      "huella": "060dc5234007902512dca1435cd4fc71fe17a077f2ecf0e2ed4d10b1339431d9",
+      "huellaFrontend": "3097e448c708367182554d7c21ba295fbeacac8a96faf7646db1ac50940d5ee0",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.nc.crear": {
+      "huella": "b157ba1791cfe1f7740ea126284cf091f1ffaaf397ad9b6b8a473b022b83b577",
+      "huellaFrontend": "7943dfbd906d7ef48bd28a000554e6ecfc414a97784fccfdd031d9653271b850",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
+    },
+    "muestraLab.adjunto.subir": {
+      "huella": "73443852d00b63b577b45f7cc1b42f57787c08e6a42ed39a29937f74f333528b",
+      "huellaFrontend": "3657f5a2e48468c140d5dcdb4c9d28e958847e88786029edd91141b9cd8be5d7",
+      "handler": "MuestraLaboratorioHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T15:13:25Z"
     }
   }
 }

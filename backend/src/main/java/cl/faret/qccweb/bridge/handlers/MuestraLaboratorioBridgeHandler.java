@@ -404,6 +404,798 @@ public class MuestraLaboratorioBridgeHandler {
                 + (ensayoId != null && ensayoId.canConvertToInt() ? ":" + ensayoId.asInt() : "");
     }
 
+    // ------------------------------------------------------------------ Fase 4e-2: resto de ensayos + nc.crear + adjunto
+
+    static final String MENSAJE_FALTA_MUESTRA = "Falta indicar la muestra";
+    static final String MENSAJE_FALTA_ARCHIVO_NOMBRE = "Falta el nombre del archivo";
+    static final String MENSAJE_FALTA_ARCHIVO_CONTENIDO = "Falta el contenido del archivo";
+    static final String MENSAJE_ARCHIVO_INVALIDO = "El contenido del archivo no es válido";
+    static final String MENSAJE_ARCHIVO_TAMANO = "El archivo supera el tamaño máximo permitido (10 MB)";
+    static final String MENSAJE_ARCHIVO_TIPO = "Tipo de archivo no permitido. Formatos válidos: .pdf, .doc, .docx, .jpg, .jpeg, .png, .webp";
+    static final String MENSAJE_ARCHIVO_FIRMA = "El archivo no corresponde al tipo declarado por su extensión.";
+    static final int MAX_SUBIDA_BYTES = 10 * 1024 * 1024;
+    static final int MAX_SUBIDA_BASE64 = ((MAX_SUBIDA_BYTES + 2) / 3) * 4;
+
+    private static final java.util.Map<String, String> MIME_POR_EXTENSION_SUBIDA = java.util.Map.ofEntries(
+            java.util.Map.entry(".pdf", "application/pdf"), java.util.Map.entry(".doc", "application/msword"),
+            java.util.Map.entry(".docx", "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
+            java.util.Map.entry(".jpg", "image/jpeg"), java.util.Map.entry(".jpeg", "image/jpeg"),
+            java.util.Map.entry(".png", "image/png"), java.util.Map.entry(".webp", "image/webp"));
+    private static final byte[] FIRMA_OLE2 = {(byte) 0xd0, (byte) 0xcf, 0x11, (byte) 0xe0, (byte) 0xa1, (byte) 0xb1, 0x1a, (byte) 0xe1};
+    private static final byte[] FIRMA_ZIP = {0x50, 0x4b, 0x03, 0x04};
+
+    private static final Set<String> CLAVES_ADJUNTO_SUBIR = Set.of("muestraId", "nombreArchivo", "contenidoBase64");
+    private static final Set<String> CLAVES_NC_CREAR = Set.of("muestraId");
+    /** Opciones del {@code <select>} de cada fila de "Muestreo de bobinas" (Humedad/Gramaje/Espesor). */
+    private static final Set<String> POSICIONES_BOBINA = Set.of("Onda", "Liner", "Cartulina");
+    private static final Set<String> CARAS_PROBETA_COBB = Set.of("Externa", "Interna");
+    private static final Set<String> COMPONENTES_RESISTENCIA = Set.of("Liner", "Onda");
+    private static final Set<String> METODOS_EQUIPO_HUMEDAD = Set.of("Higrometro", "Termobalanza", "Horno");
+    private static final Set<String> ORIGENES_MUESTRA_HUMEDAD = Set.of("Bobinas", "SeparacionPapeles");
+    private static final Set<String> TIPOS_MATERIAL_GRAMAJE = Set.of("Papel", "Cartulina", "Pliego", "ComplejoCorrugado");
+    private static final Set<String> MODALIDADES_GRAMAJE = Set.of("ProbetaPeso", "Directo");
+    private static final Set<String> TAMANOS_PROBETA_GRAMAJE = Set.of("10x10", "5x5", "10x5");
+    private static final Set<String> TIPOS_MEDICION_ESPESOR = Set.of("Ubicacion", "Muestra");
+    private static final Set<String> RESULTADOS_LUGOL = Set.of("Negativo", "Positivo", "NoConcluyente");
+
+    /**
+     * muestraLab.adjunto.subir → POST api/muestra-laboratorio/{muestraId}/adjunto {nombreArchivo, contenidoBase64,
+     * subidoPor} (Fase 4e-2), igual que Photino: adjunta un archivo/foto al registro completo de la muestra (no por
+     * ensayo). Mismo criterio de Control Documental: extensión + tamaño (10 MB) los valida la API; el gateway agrega
+     * la firma real de los primeros bytes (Photino/la API solo validan por extensión).
+     *
+     * Seguridad transparente: subidoPor ← sesión; lista blanca {muestraId, nombreArchivo, contenidoBase64}; nombre
+     * saneado; igual que el handler C# de Photino, `muestraId &lt;= 0` se rechaza ANTES de llamar a la API (no es la
+     * API la que lo valida acá).
+     */
+    public BridgeResult adjuntoSubir(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ADJUNTO_SUBIR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer muestraId = entero(data.get("muestraId"));
+        if (muestraId == null || muestraId <= 0) {
+            return BridgeResult.error(MENSAJE_FALTA_MUESTRA);
+        }
+        String nombre = texto(data.get("nombreArchivo"));
+        String contenidoBase64 = texto(data.get("contenidoBase64"));
+        if (nombre.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_ARCHIVO_NOMBRE);
+        }
+        if (contenidoBase64.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_ARCHIVO_CONTENIDO);
+        }
+        String error = validarArchivoSubida(nombre, contenidoBase64);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("nombreArchivo", ControlDocumentalBridgeHandler.nombreArchivoSeguro(nombre, "adjunto"));
+        cuerpo.put("contenidoBase64", contenidoBase64);
+        cuerpo.put("subidoPor", autorDeSesion(usuario));
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + muestraId + "/adjunto", cuerpo), mapper);
+    }
+
+    /** Recurso auditado: "muestraLab:&lt;muestraId&gt;:adjunto[:&lt;adjuntoId&gt;]". */
+    public static String recursoAdjuntoSubir(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer muestraId = data == null ? null : entero(data.get("muestraId"));
+        JsonNode id = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("adjuntoId") : null;
+        return "muestraLab:" + (muestraId != null ? muestraId : "?") + ":adjunto"
+                + (id != null && id.canConvertToInt() ? ":" + id.asInt() : "");
+    }
+
+    private static String validarArchivoSubida(String nombreArchivo, String base64) {
+        int punto = nombreArchivo.lastIndexOf('.');
+        String extension = punto < 0 ? "" : nombreArchivo.substring(punto).toLowerCase(java.util.Locale.ROOT);
+        String mimeEsperado = MIME_POR_EXTENSION_SUBIDA.get(extension);
+        if (mimeEsperado == null) {
+            return MENSAJE_ARCHIVO_TIPO;
+        }
+        if (base64.length() > MAX_SUBIDA_BASE64) {
+            return MENSAJE_ARCHIVO_TAMANO;
+        }
+        byte[] contenido;
+        try {
+            contenido = java.util.Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            return MENSAJE_ARCHIVO_INVALIDO;
+        }
+        if (contenido.length > MAX_SUBIDA_BYTES) {
+            return MENSAJE_ARCHIVO_TAMANO;
+        }
+        boolean firmaOk = switch (mimeEsperado) {
+            case "application/msword" -> coincidePrefijo(contenido, FIRMA_OLE2);
+            case "application/vnd.openxmlformats-officedocument.wordprocessingml.document" -> coincidePrefijo(contenido, FIRMA_ZIP);
+            default -> ControlDocumentalBridgeHandler.firmaCoincide(mimeEsperado, contenido);
+        };
+        return firmaOk ? null : MENSAJE_ARCHIVO_FIRMA;
+    }
+
+    private static boolean coincidePrefijo(byte[] contenido, byte[] firma) {
+        if (contenido.length < firma.length) {
+            return false;
+        }
+        for (int i = 0; i < firma.length; i++) {
+            if (contenido[i] != firma[i]) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * muestraLab.nc.crear → POST api/muestra-laboratorio/{muestraId}/nc {usuarioNombre} (Fase 4e-2), igual que
+     * Photino: crea una No Conformidad vinculada a la muestra. La API exige que la muestra exista, que haya evaluado
+     * "No cumple" y que no tenga ya una NC vinculada (mensajes propios); el gateway no los repite.
+     *
+     * Seguridad transparente: usuarioNombre ← sesión (creadoPor); lista blanca {muestraId}; `muestraId &lt;= 0` se
+     * rechaza antes de llamar a la API (igual que el handler C# de Photino).
+     */
+    public BridgeResult ncCrear(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_NC_CREAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer muestraId = entero(data.get("muestraId"));
+        if (muestraId == null || muestraId <= 0) {
+            return BridgeResult.error(MENSAJE_FALTA_MUESTRA);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("usuarioNombre", autorDeSesion(usuario));
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + muestraId + "/nc", cuerpo), mapper);
+    }
+
+    /** Recurso auditado: "muestraLab:&lt;muestraId&gt;:nc[:&lt;ncId&gt;]". */
+    public static String recursoNcCrear(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer muestraId = data == null ? null : entero(data.get("muestraId"));
+        JsonNode id = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("ncId") : null;
+        return "muestraLab:" + (muestraId != null ? muestraId : "?") + ":nc"
+                + (id != null && id.canConvertToInt() ? ":" + id.asInt() : "");
+    }
+
+    // ---- Los otros 12 tipos de ensayo (el 13° es ph.guardar, arriba) comparten el mismo cuerpo común: muestraId,
+    // metodo, observacion, analista de sesión, y el patrón de corrección ensayoOriginalId/motivoReemplazo.
+
+    private static final Set<String> CLAVES_HUMEDAD = Set.of("muestraId", "metodo", "observacion", "metodoEquipo",
+            "higrometroIzquierdo", "higrometroCentro", "higrometroDerecho", "termobalanzaValor",
+            "horno1PesoInicial", "horno1PesoFinal", "horno2PesoInicial", "horno2PesoFinal",
+            "horno3PesoInicial", "horno3PesoFinal", "bobinaOnda", "bobinaLiner", "bobinaCartulina",
+            "bobinas", "origenMuestra", "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.humedad.guardar → POST api/muestra-laboratorio/humedad (Fase 4e-2). */
+    public BridgeResult humedadGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_HUMEDAD.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        error = error != null ? error : ponerTexto(cuerpo, data, "bobinaOnda", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "bobinaLiner", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "bobinaCartulina", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerBobinas(cuerpo, data, "bobinas");
+        if (error == null) {
+            String metodoEquipo = texto(data.get("metodoEquipo"));
+            if (!metodoEquipo.isEmpty() && !METODOS_EQUIPO_HUMEDAD.contains(metodoEquipo)) {
+                error = MENSAJE_OPCION_INVALIDA + "metodoEquipo.";
+            } else {
+                cuerpo.put("metodoEquipo", metodoEquipo);
+            }
+        }
+        if (error == null) {
+            String origenMuestra = texto(data.get("origenMuestra"));
+            if (!origenMuestra.isEmpty() && !ORIGENES_MUESTRA_HUMEDAD.contains(origenMuestra)) {
+                error = MENSAJE_OPCION_INVALIDA + "origenMuestra.";
+            } else {
+                cuerpo.put("origenMuestra", origenMuestra);
+            }
+        }
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        ponerDecimal(cuerpo, data, "higrometroIzquierdo");
+        ponerDecimal(cuerpo, data, "higrometroCentro");
+        ponerDecimal(cuerpo, data, "higrometroDerecho");
+        ponerDecimal(cuerpo, data, "termobalanzaValor");
+        ponerDecimal(cuerpo, data, "horno1PesoInicial");
+        ponerDecimal(cuerpo, data, "horno1PesoFinal");
+        ponerDecimal(cuerpo, data, "horno2PesoInicial");
+        ponerDecimal(cuerpo, data, "horno2PesoFinal");
+        ponerDecimal(cuerpo, data, "horno3PesoInicial");
+        ponerDecimal(cuerpo, data, "horno3PesoFinal");
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/humedad", cuerpo), mapper);
+    }
+
+    public static String recursoHumedadGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("humedad", p, d);
+    }
+
+    private static final Set<String> CLAVES_GRAMAJE = Set.of("muestraId", "metodo", "observacion", "tipoMaterial",
+            "modalidad", "tamanoProbeta", "muestra1", "muestra2", "muestra3", "bobinaOnda", "bobinaLiner",
+            "bobinaCartulina", "bobinas", "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.gramaje.guardar → POST api/muestra-laboratorio/gramaje (Fase 4e-2). */
+    public BridgeResult gramajeGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_GRAMAJE.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        error = error != null ? error : ponerTexto(cuerpo, data, "bobinaOnda", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "bobinaLiner", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "bobinaCartulina", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerBobinas(cuerpo, data, "bobinas");
+        if (error == null) {
+            String tipoMaterial = texto(data.get("tipoMaterial"));
+            if (!tipoMaterial.isEmpty() && !TIPOS_MATERIAL_GRAMAJE.contains(tipoMaterial)) {
+                error = MENSAJE_OPCION_INVALIDA + "tipoMaterial.";
+            } else {
+                cuerpo.put("tipoMaterial", tipoMaterial);
+            }
+        }
+        if (error == null) {
+            String modalidad = texto(data.get("modalidad"));
+            if (!modalidad.isEmpty() && !MODALIDADES_GRAMAJE.contains(modalidad)) {
+                error = MENSAJE_OPCION_INVALIDA + "modalidad.";
+            } else {
+                cuerpo.put("modalidad", modalidad);
+            }
+        }
+        if (error == null) {
+            String tamanoProbeta = texto(data.get("tamanoProbeta"));
+            if (!tamanoProbeta.isEmpty() && !TAMANOS_PROBETA_GRAMAJE.contains(tamanoProbeta)) {
+                error = MENSAJE_OPCION_INVALIDA + "tamanoProbeta.";
+            } else {
+                cuerpo.put("tamanoProbeta", tamanoProbeta);
+            }
+        }
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        ponerDecimal(cuerpo, data, "muestra1");
+        ponerDecimal(cuerpo, data, "muestra2");
+        ponerDecimal(cuerpo, data, "muestra3");
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/gramaje", cuerpo), mapper);
+    }
+
+    public static String recursoGramajeGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("gramaje", p, d);
+    }
+
+    private static final Set<String> CLAVES_ESPESOR = Set.of("muestraId", "metodo", "observacion", "tipoMedicion",
+            "medicion1", "medicion2", "medicion3", "bobinaOnda", "bobinaLiner", "bobinaCartulina",
+            "bobinas", "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.espesor.guardar → POST api/muestra-laboratorio/espesor (Fase 4e-2). */
+    public BridgeResult espesorGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ESPESOR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        error = error != null ? error : ponerTexto(cuerpo, data, "bobinaOnda", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "bobinaLiner", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "bobinaCartulina", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerBobinas(cuerpo, data, "bobinas");
+        if (error == null) {
+            String tipoMedicion = texto(data.get("tipoMedicion"));
+            if (!tipoMedicion.isEmpty() && !TIPOS_MEDICION_ESPESOR.contains(tipoMedicion)) {
+                error = MENSAJE_OPCION_INVALIDA + "tipoMedicion.";
+            } else {
+                cuerpo.put("tipoMedicion", tipoMedicion);
+            }
+        }
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        ponerDecimal(cuerpo, data, "medicion1");
+        ponerDecimal(cuerpo, data, "medicion2");
+        ponerDecimal(cuerpo, data, "medicion3");
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/espesor", cuerpo), mapper);
+    }
+
+    public static String recursoEspesorGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("espesor", p, d);
+    }
+
+    private static final Set<String> CLAVES_COBB = Set.of("muestraId", "metodo", "observacion",
+            "p1", "p2", "p3", "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.cobb.guardar → POST api/muestra-laboratorio/cobb (Fase 4e-2). */
+    public BridgeResult cobbGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_COBB.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        error = error != null ? error : ponerProbetaCobb(cuerpo, data, "p1");
+        error = error != null ? error : ponerProbetaCobb(cuerpo, data, "p2");
+        error = error != null ? error : ponerProbetaCobb(cuerpo, data, "p3");
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/cobb", cuerpo), mapper);
+    }
+
+    public static String recursoCobbGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("cobb", p, d);
+    }
+
+    private static final Set<String> CLAVES_RCT = Set.of("muestraId", "metodo", "observacion", "componente",
+            "strengthUnidad", "p1", "p2", "p3", "ensayoOriginalId", "motivoReemplazo");
+    private static final Set<String> CLAVES_FCT = Set.of("muestraId", "metodo", "observacion",
+            "strengthUnidad", "p1", "p2", "p3", "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.rct.guardar → POST api/muestra-laboratorio/rct (Fase 4e-2). */
+    public BridgeResult rctGuardar(ObjectNode payload, SessionUser usuario) {
+        return resistenciaGuardar(payload, usuario, true);
+    }
+
+    /** muestraLab.fct.guardar → POST api/muestra-laboratorio/fct (Fase 4e-2). */
+    public BridgeResult fctGuardar(ObjectNode payload, SessionUser usuario) {
+        return resistenciaGuardar(payload, usuario, false);
+    }
+
+    /** rct.guardar/fct.guardar comparten el mismo cuerpo en Photino; solo RCT lee/exige "componente". */
+    private BridgeResult resistenciaGuardar(ObjectNode payload, SessionUser usuario, boolean esRct) {
+        JsonNode data = data(payload);
+        Set<String> claves = esRct ? CLAVES_RCT : CLAVES_FCT;
+        for (String clave : data.propertyNames()) {
+            if (!claves.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        error = error != null ? error : ponerTexto(cuerpo, data, "strengthUnidad", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerProbetaResistencia(cuerpo, data, "p1");
+        error = error != null ? error : ponerProbetaResistencia(cuerpo, data, "p2");
+        error = error != null ? error : ponerProbetaResistencia(cuerpo, data, "p3");
+        if (error == null && esRct) {
+            String componente = texto(data.get("componente"));
+            if (!componente.isEmpty() && !COMPONENTES_RESISTENCIA.contains(componente)) {
+                error = MENSAJE_OPCION_INVALIDA + "componente.";
+            } else {
+                cuerpo.put("componente", componente);
+            }
+        } else if (error == null) {
+            cuerpo.putNull("componente");
+        }
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + (esRct ? "/rct" : "/fct"), cuerpo), mapper);
+    }
+
+    public static String recursoRctGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("rct", p, d);
+    }
+
+    public static String recursoFctGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("fct", p, d);
+    }
+
+    private static final Set<String> CLAVES_ECT = Set.of("muestraId", "metodo", "observacion",
+            "p1Force", "p2Force", "p3Force", "p4Force", "p5Force", "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.ect.guardar → POST api/muestra-laboratorio/ect (Fase 4e-2). */
+    public BridgeResult ectGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ECT.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        ponerDecimal(cuerpo, data, "p1Force");
+        ponerDecimal(cuerpo, data, "p2Force");
+        ponerDecimal(cuerpo, data, "p3Force");
+        ponerDecimal(cuerpo, data, "p4Force");
+        ponerDecimal(cuerpo, data, "p5Force");
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/ect", cuerpo), mapper);
+    }
+
+    public static String recursoEctGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("ect", p, d);
+    }
+
+    private static final Set<String> CLAVES_BCT_MEDIDO = Set.of("muestraId", "metodo", "observacion",
+            "cajasEnsayadas", "motivoMenos3", "c1", "c2", "c3", "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.bctMedido.guardar → POST api/muestra-laboratorio/bct-medido (Fase 4e-2); cajasEnsayadas (1-3) lo
+     * valida la API; c2/c3 se fuerzan a null si no corresponden (igual que el handler C# de Photino). */
+    public BridgeResult bctMedidoGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_BCT_MEDIDO.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        error = error != null ? error : ponerTexto(cuerpo, data, "motivoMenos3", CONTROL_UNA_LINEA);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        int cajas = enteroODefault(data.get("cajasEnsayadas"), 0);
+        cuerpo.put("cajasEnsayadas", cajas);
+        error = ponerCajaBct(cuerpo, data, "c1");
+        if (error == null) {
+            if (cajas >= 2) {
+                error = ponerCajaBct(cuerpo, data, "c2");
+            } else {
+                cuerpo.putNull("c2");
+            }
+        }
+        if (error == null) {
+            if (cajas >= 3) {
+                error = ponerCajaBct(cuerpo, data, "c3");
+            } else {
+                cuerpo.putNull("c3");
+            }
+        }
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/bct-medido", cuerpo), mapper);
+    }
+
+    public static String recursoBctMedidoGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("bctMedido", p, d);
+    }
+
+    private static final Set<String> CLAVES_BCT_TEORICO = Set.of("muestraId", "metodo", "observacion",
+            "ectEnsayoId", "espesorEnsayoId", "largoMm", "anchoMm", "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.bctTeorico.guardar → POST api/muestra-laboratorio/bct-teorico (Fase 4e-2); ectEnsayoId/
+     * espesorEnsayoId deben ser ensayos ya Finalizados de la muestra, lo valida la API. */
+    public BridgeResult bctTeoricoGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_BCT_TEORICO.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        cuerpo.put("ectEnsayoId", enteroODefault(data.get("ectEnsayoId"), 0));
+        cuerpo.put("espesorEnsayoId", enteroODefault(data.get("espesorEnsayoId"), 0));
+        cuerpo.put("largoMm", decimalODefault(data.get("largoMm")));
+        cuerpo.put("anchoMm", decimalODefault(data.get("anchoMm")));
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/bct-teorico", cuerpo), mapper);
+    }
+
+    public static String recursoBctTeoricoGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("bctTeorico", p, d);
+    }
+
+    private static final Set<String> CLAVES_VISCOSIDAD = Set.of("muestraId", "metodo", "observacion",
+            "tipoAdhesivo", "temperatura", "equipo", "husillo", "velocidadRpm", "resultadoCp",
+            "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.viscosidad.guardar → POST api/muestra-laboratorio/viscosidad (Fase 4e-2). */
+    public BridgeResult viscosidadGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_VISCOSIDAD.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        error = error != null ? error : ponerTexto(cuerpo, data, "tipoAdhesivo", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "equipo", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "husillo", CONTROL_UNA_LINEA);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        ponerDecimal(cuerpo, data, "temperatura");
+        ponerDecimal(cuerpo, data, "velocidadRpm");
+        ponerDecimal(cuerpo, data, "resultadoCp");
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/viscosidad", cuerpo), mapper);
+    }
+
+    public static String recursoViscosidadGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("viscosidad", p, d);
+    }
+
+    private static final Set<String> CLAVES_SOLIDOS = Set.of("muestraId", "metodo", "observacion",
+            "d1", "d2", "d3", "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.solidos.guardar → POST api/muestra-laboratorio/solidos (Fase 4e-2). */
+    public BridgeResult solidosGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_SOLIDOS.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        error = error != null ? error : ponerDeterminacionSolidos(cuerpo, data, "d1");
+        error = error != null ? error : ponerDeterminacionSolidos(cuerpo, data, "d2");
+        error = error != null ? error : ponerDeterminacionSolidos(cuerpo, data, "d3");
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/solidos", cuerpo), mapper);
+    }
+
+    public static String recursoSolidosGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("solidos", p, d);
+    }
+
+    private static final Set<String> CLAVES_LUGOL = Set.of("muestraId", "metodo", "observacion",
+            "puntoMuestra", "coloracion", "resultado", "interpretacion", "cumplimiento",
+            "ensayoOriginalId", "motivoReemplazo");
+
+    /** muestraLab.lugol.guardar → POST api/muestra-laboratorio/lugol (Fase 4e-2); cumplimiento en blanco → "Sin
+     * especificacion" (default del handler C# de Photino, no de la API). */
+    public BridgeResult lugolGuardar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_LUGOL.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = armarComunesEnsayo(cuerpo, data);
+        error = error != null ? error : ponerTexto(cuerpo, data, "puntoMuestra", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "coloracion", CONTROL_UNA_LINEA);
+        error = error != null ? error : ponerTexto(cuerpo, data, "interpretacion", CONTROL_UNA_LINEA);
+        if (error == null) {
+            String resultado = texto(data.get("resultado"));
+            if (!resultado.isEmpty() && !RESULTADOS_LUGOL.contains(resultado)) {
+                error = MENSAJE_OPCION_INVALIDA + "resultado.";
+            } else {
+                cuerpo.put("resultado", resultado);
+            }
+        }
+        if (error == null) {
+            String cumplimiento = texto(data.get("cumplimiento"));
+            if (CONTROL_UNA_LINEA.matcher(cumplimiento).find()) {
+                error = MENSAJE_TEXTO_CARACTERES;
+            } else if (MARCADO_HTML.matcher(cumplimiento).find()) {
+                error = MENSAJE_TEXTO_HTML;
+            } else {
+                cuerpo.put("cumplimiento", cumplimiento.isBlank() ? "Sin especificacion" : cumplimiento);
+            }
+        }
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        error = cerrarComunesEnsayo(cuerpo, data, usuario);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/lugol", cuerpo), mapper);
+    }
+
+    public static String recursoLugolGuardar(ObjectNode p, Object d) {
+        return recursoEnsayo("lugol", p, d);
+    }
+
+    /** Recurso auditado común a los 12 ensayos de este bloque: "muestraLab:&lt;muestraId&gt;:&lt;tipo&gt;[:&lt;ensayoId&gt;]". */
+    private static String recursoEnsayo(String tipo, ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer muestraId = data == null ? null : entero(data.get("muestraId"));
+        JsonNode ensayoId = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("ensayoId") : null;
+        return "muestraLab:" + (muestraId != null ? muestraId : "?") + ":" + tipo
+                + (ensayoId != null && ensayoId.canConvertToInt() ? ":" + ensayoId.asInt() : "");
+    }
+
+    /** MuestraId (0 si falta/inválido), metodo y observacion — comunes a los 13 tipos de ensayo. */
+    private static String armarComunesEnsayo(ObjectNode cuerpo, JsonNode data) {
+        cuerpo.put("muestraId", enteroODefault(data.get("muestraId"), 0));
+        String error = ponerTexto(cuerpo, data, "metodo", CONTROL_UNA_LINEA);
+        return error != null ? error : ponerTexto(cuerpo, data, "observacion", CONTROL_MULTILINEA);
+    }
+
+    /** ensayoOriginalId/motivoReemplazo (patrón de corrección común a los 13 ensayos) + analista de sesión. */
+    private static String cerrarComunesEnsayo(ObjectNode cuerpo, JsonNode data, SessionUser usuario) {
+        ponerEntero(cuerpo, data, "ensayoOriginalId");
+        String error = ponerTexto(cuerpo, data, "motivoReemplazo", CONTROL_UNA_LINEA);
+        if (error != null) {
+            return error;
+        }
+        cuerpo.put("analistaUsuarioId", usuario.userId());
+        cuerpo.put("analistaNombre", autorDeSesion(usuario));
+        return null;
+    }
+
+    /** GetBobinas de Photino: array de filas {numeroBobina,lote,posicion,valor1,valor2,valor3,observacion}; si la
+     * clave no es un array, viaja null (silencioso, como Photino); filas que no son objeto se ignoran. */
+    private String ponerBobinas(ObjectNode cuerpo, JsonNode data, String campo) {
+        JsonNode nodo = data.get(campo);
+        if (nodo == null || nodo.isNull() || !nodo.isArray()) {
+            cuerpo.putNull(campo);
+            return null;
+        }
+        ArrayNode lista = mapper.createArrayNode();
+        for (JsonNode item : nodo) {
+            if (item == null || !item.isObject()) {
+                continue;
+            }
+            ObjectNode fila = mapper.createObjectNode();
+            String error = ponerTexto(fila, item, "numeroBobina", CONTROL_UNA_LINEA);
+            error = error != null ? error : ponerTexto(fila, item, "lote", CONTROL_UNA_LINEA);
+            if (error != null) {
+                return error;
+            }
+            String posicion = texto(item.get("posicion"));
+            if (!posicion.isEmpty() && !POSICIONES_BOBINA.contains(posicion)) {
+                return MENSAJE_OPCION_INVALIDA + "posicion.";
+            }
+            fila.put("posicion", posicion);
+            ponerDecimal(fila, item, "valor1");
+            ponerDecimal(fila, item, "valor2");
+            ponerDecimal(fila, item, "valor3");
+            error = ponerTexto(fila, item, "observacion", CONTROL_MULTILINEA);
+            if (error != null) {
+                return error;
+            }
+            lista.add(fila);
+        }
+        cuerpo.set(campo, lista);
+        return null;
+    }
+
+    /** GetProbeta de Photino (Cobb): {bobina,cara,pesoInicial,pesoFinal,tiempo}; ausente/no objeto → null. */
+    private String ponerProbetaCobb(ObjectNode cuerpo, JsonNode data, String campo) {
+        JsonNode nodo = data.get(campo);
+        if (nodo == null || nodo.isNull() || !nodo.isObject()) {
+            cuerpo.putNull(campo);
+            return null;
+        }
+        ObjectNode obj = mapper.createObjectNode();
+        String error = ponerTexto(obj, nodo, "bobina", CONTROL_UNA_LINEA);
+        if (error != null) {
+            return error;
+        }
+        String cara = texto(nodo.get("cara"));
+        if (!cara.isEmpty() && !CARAS_PROBETA_COBB.contains(cara)) {
+            return MENSAJE_OPCION_INVALIDA + "cara.";
+        }
+        obj.put("cara", cara);
+        ponerDecimal(obj, nodo, "pesoInicial");
+        ponerDecimal(obj, nodo, "pesoFinal");
+        error = ponerTexto(obj, nodo, "tiempo", CONTROL_UNA_LINEA);
+        if (error != null) {
+            return error;
+        }
+        cuerpo.set(campo, obj);
+        return null;
+    }
+
+    /** GetResistenciaProbeta de Photino (RCT/FCT): {bobina,force,strength}; ausente/no objeto → null. */
+    private String ponerProbetaResistencia(ObjectNode cuerpo, JsonNode data, String campo) {
+        JsonNode nodo = data.get(campo);
+        if (nodo == null || nodo.isNull() || !nodo.isObject()) {
+            cuerpo.putNull(campo);
+            return null;
+        }
+        ObjectNode obj = mapper.createObjectNode();
+        String error = ponerTexto(obj, nodo, "bobina", CONTROL_UNA_LINEA);
+        if (error != null) {
+            return error;
+        }
+        ponerDecimal(obj, nodo, "force");
+        ponerDecimal(obj, nodo, "strength");
+        cuerpo.set(campo, obj);
+        return null;
+    }
+
+    /** GetBctCaja de Photino: {largo,ancho,alto,tipoOnda,gramajeComplejo,espesorComplejo,resultadoLbf}. */
+    private String ponerCajaBct(ObjectNode cuerpo, JsonNode data, String campo) {
+        JsonNode nodo = data.get(campo);
+        if (nodo == null || nodo.isNull() || !nodo.isObject()) {
+            cuerpo.putNull(campo);
+            return null;
+        }
+        ObjectNode obj = mapper.createObjectNode();
+        ponerDecimal(obj, nodo, "largo");
+        ponerDecimal(obj, nodo, "ancho");
+        ponerDecimal(obj, nodo, "alto");
+        String error = ponerTexto(obj, nodo, "tipoOnda", CONTROL_UNA_LINEA);
+        if (error != null) {
+            return error;
+        }
+        ponerDecimal(obj, nodo, "gramajeComplejo");
+        ponerDecimal(obj, nodo, "espesorComplejo");
+        ponerDecimal(obj, nodo, "resultadoLbf");
+        cuerpo.set(campo, obj);
+        return null;
+    }
+
+    /** GetSolidosDeterminacion de Photino: {m1,m2,m3}. */
+    private String ponerDeterminacionSolidos(ObjectNode cuerpo, JsonNode data, String campo) {
+        JsonNode nodo = data.get(campo);
+        if (nodo == null || nodo.isNull() || !nodo.isObject()) {
+            cuerpo.putNull(campo);
+            return null;
+        }
+        ObjectNode obj = mapper.createObjectNode();
+        ponerDecimal(obj, nodo, "m1");
+        ponerDecimal(obj, nodo, "m2");
+        ponerDecimal(obj, nodo, "m3");
+        cuerpo.set(campo, obj);
+        return null;
+    }
+
+    private static int enteroODefault(JsonNode nodo, int porDefecto) {
+        Integer v = entero(nodo);
+        return v != null ? v : porDefecto;
+    }
+
+    private static BigDecimal decimalODefault(JsonNode nodo) {
+        BigDecimal v = decimal(nodo);
+        return v != null ? v : BigDecimal.ZERO;
+    }
+
     /** GetString de Photino + control de seguridad: string/número → texto; sin \\x00-\\x1F/\\x7F ni "&lt;tag". */
     private static String ponerTexto(ObjectNode cuerpo, JsonNode data, String campo, Pattern control) {
         JsonNode v = data.get(campo);

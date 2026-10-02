@@ -57,12 +57,9 @@ class BridgeFase2lTest {
     private static final List<String> LECTURAS = List.of(LIST, DETALLE, "muestraLab.catalogos", "muestraLab.indicadores",
             "muestraLab.metodo.list", "muestraLab.especificacion.list", HISTORIAL, REGISTRO, ADJUNTO);
     private static final List<String> NO_HABILITADAS = List.of("muestraLab.anular", "muestraLab.eliminar",
-            "muestraLab.actualizarFechaEnsayo", "muestraLab.adjunto.subir", "muestraLab.adjunto.eliminar", "muestraLab.humedad.guardar",
-            "muestraLab.gramaje.guardar", "muestraLab.cobb.guardar", "muestraLab.espesor.guardar", "muestraLab.rct.guardar",
-            "muestraLab.fct.guardar", "muestraLab.ect.guardar", "muestraLab.bctMedido.guardar", "muestraLab.bctTeorico.guardar",
-            "muestraLab.viscosidad.guardar", "muestraLab.solidos.guardar", "muestraLab.lugol.guardar",
+            "muestraLab.actualizarFechaEnsayo", "muestraLab.adjunto.eliminar",
             "muestraLab.metodo.guardar", "muestraLab.metodo.activar", "muestraLab.especificacion.guardar",
-            "muestraLab.especificacion.activar", "muestraLab.ensayo.anular", "muestraLab.nc.crear",
+            "muestraLab.especificacion.activar", "muestraLab.ensayo.anular",
             "muestraLab.consultarNp", "muestraLab.consultarRegistroProduccion", "muestraLab.resolverBobina");
     private static final String BASE = "GET /api/muestra-laboratorio";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
@@ -262,7 +259,7 @@ class BridgeFase2lTest {
     @Test
     void escriturasYLecturasExternasSiguenBloqueadas() throws Exception {
         MockHttpSession admin = login("admin1");
-        assertThat(NO_HABILITADAS).hasSize(26); // Fase 3w: materialesFps habilitada; Fase 4e-1: crear/ph.guardar habilitadas
+        assertThat(NO_HABILITADAS).hasSize(12); // Fase 3w: materialesFps habilitada; Fase 4e-1/4e-2: 14 escrituras habilitadas
         for (String accion : NO_HABILITADAS) {
             accion(admin, "{\"action\":\"" + accion + "\",\"data\":{\"id\":501,\"muestraId\":501,\"np\":\"NP-1\",\"idProceso\":5,\"lote\":\"L1\"}}")
                     .andExpect(status().isForbidden())

@@ -138,11 +138,17 @@ public final class FakeInnpackApi implements AutoCloseable {
         peticionesLaboratorio.clear();
         origenMuestraLab.clear();
         muestrasLabAnuladas.clear();
-        ensayosPhFinalizados.clear();
+        ensayosLabFinalizados.clear();
         siguienteMuestraLab.set(5000);
-        siguienteEnsayoPh.set(9000);
+        siguienteEnsayoLab.set(9000);
         cuerposMuestraLabCreados.clear();
         cuerposPhGuardados.clear();
+        evaluacionMuestraLab.clear();
+        ncVinculadaMuestraLab.clear();
+        siguienteNcLab.set(9700);
+        cuerposEnsayoLabRecibidos.clear();
+        cuerposNcLabRecibidos.clear();
+        cuerposAdjuntoLabRecibidos.clear();
         peticionesTalleres.clear();
         modoUsuarios = "NORMAL";
         modoDashboard = ModoDashboard.NORMAL;
@@ -2320,9 +2326,9 @@ public final class FakeInnpackApi implements AutoCloseable {
     private final Map<Integer, String> origenMuestraLab = new ConcurrentHashMap<>();
     private final java.util.Set<Integer> muestrasLabAnuladas = ConcurrentHashMap.newKeySet();
     /** Ensayos de pH ya insertados (Finalizado), para que ensayoOriginalId pueda "reemplazarlos". */
-    private final java.util.Set<Integer> ensayosPhFinalizados = ConcurrentHashMap.newKeySet();
+    private final java.util.Set<Integer> ensayosLabFinalizados = ConcurrentHashMap.newKeySet();
     private final java.util.concurrent.atomic.AtomicInteger siguienteMuestraLab = new java.util.concurrent.atomic.AtomicInteger(5000);
-    private final java.util.concurrent.atomic.AtomicInteger siguienteEnsayoPh = new java.util.concurrent.atomic.AtomicInteger(9000);
+    private final java.util.concurrent.atomic.AtomicInteger siguienteEnsayoLab = new java.util.concurrent.atomic.AtomicInteger(9000);
     private final java.util.List<JsonNode> cuerposMuestraLabCreados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final java.util.List<JsonNode> cuerposPhGuardados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
@@ -2395,8 +2401,8 @@ public final class FakeInnpackApi implements AutoCloseable {
             responder(ex, 400, fallo("Falta el valor o rango leído en la tira"));
             return;
         }
-        int ensayoId = siguienteEnsayoPh.getAndIncrement();
-        ensayosPhFinalizados.add(ensayoId);
+        int ensayoId = siguienteEnsayoLab.getAndIncrement();
+        ensayosLabFinalizados.add(ensayoId);
         JsonNode originalNode = b.get("ensayoOriginalId");
         if (originalNode != null && !originalNode.isNull() && originalNode.asInt(0) > 0) {
             int originalId = originalNode.asInt();
@@ -2404,12 +2410,163 @@ public final class FakeInnpackApi implements AutoCloseable {
                 responder(ex, 400, fallo("Debes indicar el motivo de la corrección"));
                 return;
             }
-            if (originalId == ensayoId || !ensayosPhFinalizados.contains(originalId)) {
+            if (originalId == ensayoId || !ensayosLabFinalizados.contains(originalId)) {
                 responder(ex, 400, fallo("El ensayo original no existe o no está Finalizado"));
                 return;
             }
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"ensayoId\":" + ensayoId + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    // ------------------------------------------------------------------ Fase 4e-2: resto de ensayos + nc.crear + adjunto
+
+    /** evaluacion de cada muestra, para nc.crear (CrearNoConformidadAsync exige "No cumple"). Por defecto null. */
+    private final Map<Integer, String> evaluacionMuestraLab = new ConcurrentHashMap<>();
+    private final java.util.Set<Integer> ncVinculadaMuestraLab = ConcurrentHashMap.newKeySet();
+    private final java.util.concurrent.atomic.AtomicInteger siguienteNcLab = new java.util.concurrent.atomic.AtomicInteger(9700);
+    private final java.util.List<JsonNode> cuerposEnsayoLabRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.List<JsonNode> cuerposNcLabRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.List<JsonNode> cuerposAdjuntoLabRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** Cuerpos EXACTOS recibidos por los 12 ensayos de 4e-2 (humedad/gramaje/cobb/espesor/rct/fct/ect/bct-medido/
+     * bct-teorico/viscosidad/solidos/lugol), en orden. */
+    public java.util.List<JsonNode> cuerposEnsayoLabRecibidos() {
+        return java.util.List.copyOf(cuerposEnsayoLabRecibidos);
+    }
+
+    public java.util.List<JsonNode> cuerposNcLabRecibidos() {
+        return java.util.List.copyOf(cuerposNcLabRecibidos);
+    }
+
+    public java.util.List<JsonNode> cuerposAdjuntoLabRecibidos() {
+        return java.util.List.copyOf(cuerposAdjuntoLabRecibidos);
+    }
+
+    /** Fija la evaluación de una muestra (MuestraLaboratorioRepository), para probar nc.crear. */
+    public void fijarEvaluacionMuestraLab(int muestraId, String evaluacion) {
+        evaluacionMuestraLab.put(muestraId, evaluacion);
+    }
+
+    @FunctionalInterface
+    private interface ValidadorEnsayo {
+        String validar(JsonNode cuerpo);
+    }
+
+    /** ValidarBobinas de MuestraLaboratorioService: cada fila debe traer numeroBobina. */
+    private static String errorBobinas(JsonNode bobinas) {
+        if (bobinas == null || !bobinas.isArray()) {
+            return null;
+        }
+        for (JsonNode fila : bobinas) {
+            if (fila.path("numeroBobina").asString("").isBlank()) {
+                return "Cada bobina del muestreo debe tener su número de bobina";
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Común a los 12 tipos de ensayo de 4e-2 (igual estructura que guardarPhLab): MuestraId obligatorio, muestra no
+     * anulada, validación propia del tipo (`validador`), luego el patrón de reemplazo (FinalizarGuardado).
+     */
+    private void guardarEnsayoLab(HttpExchange ex, int sub, ValidadorEnsayo validador) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposEnsayoLabRecibidos.add(b);
+        int muestraId = b.path("muestraId").asInt(0);
+        if (muestraId <= 0) {
+            responder(ex, 400, fallo("Falta indicar la muestra"));
+            return;
+        }
+        if (muestrasLabAnuladas.contains(muestraId)) {
+            responder(ex, 400, fallo("El registro está anulado, no se pueden agregar más ensayos"));
+            return;
+        }
+        String errorEspecifico = validador.validar(b);
+        if (errorEspecifico != null) {
+            responder(ex, 400, fallo(errorEspecifico));
+            return;
+        }
+        int ensayoId = siguienteEnsayoLab.getAndIncrement();
+        ensayosLabFinalizados.add(ensayoId);
+        JsonNode originalNode = b.get("ensayoOriginalId");
+        if (originalNode != null && !originalNode.isNull() && originalNode.asInt(0) > 0) {
+            int originalId = originalNode.asInt();
+            if (b.path("motivoReemplazo").asString("").isBlank()) {
+                responder(ex, 400, fallo("Debes indicar el motivo de la corrección"));
+                return;
+            }
+            if (originalId == ensayoId || !ensayosLabFinalizados.contains(originalId)) {
+                responder(ex, 400, fallo("El ensayo original no existe o no está Finalizado"));
+                return;
+            }
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"ensayoId\":" + ensayoId + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    /**
+     * Como MuestraLaboratorioService.CrearNoConformidadAsync: 404 → "Muestra no encontrada"; evaluación distinta de
+     * "No cumple" → rechazada; ya vinculada a una NC → rechazada. Responde {ncId, codigo}.
+     */
+    private void crearNcLab(HttpExchange ex, int sub, int muestraId) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposNcLabRecibidos.add(b);
+        if (muestraId == 404) {
+            responder(ex, 400, fallo("Muestra no encontrada"));
+            return;
+        }
+        if (!"No cumple".equals(evaluacionMuestraLab.get(muestraId))) {
+            responder(ex, 400, fallo("Solo se puede crear una No Conformidad cuando la muestra evaluó \\\"No cumple\\\""));
+            return;
+        }
+        if (!ncVinculadaMuestraLab.add(muestraId)) {
+            responder(ex, 400, fallo("Esta muestra ya tiene una No Conformidad vinculada"));
+            return;
+        }
+        int ncId = siguienteNcLab.getAndIncrement();
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"ncId\":" + ncId
+                + ",\"codigo\":\"NC-" + ncId + "\",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    /**
+     * Como MuestraLaboratorioService.SubirAdjuntoAsync: nombre/contenido obligatorios, muestra 404 → "No existe la
+     * muestra o fue eliminada", extensión de las 7 válidas, base64 decodificable ≤ 10 MB.
+     */
+    private void subirAdjuntoLab(HttpExchange ex, int sub, int muestraId) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposAdjuntoLabRecibidos.add(b);
+        String nombre = b.path("nombreArchivo").asString("");
+        String contenidoBase64 = b.path("contenidoBase64").asString("");
+        if (nombre.isBlank()) {
+            responder(ex, 400, fallo("Falta el nombre del archivo"));
+            return;
+        }
+        if (contenidoBase64.isBlank()) {
+            responder(ex, 400, fallo("Falta el contenido del archivo"));
+            return;
+        }
+        if (muestraId == 404) {
+            responder(ex, 400, fallo("No existe la muestra o fue eliminada"));
+            return;
+        }
+        int punto = nombre.lastIndexOf('.');
+        String extension = punto < 0 ? "" : nombre.substring(punto).toLowerCase(java.util.Locale.ROOT);
+        if (!java.util.Set.of(".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png", ".webp").contains(extension)) {
+            responder(ex, 400, fallo("Tipo de archivo no permitido. Formatos válidos: .pdf, .doc, .docx, .jpg, .jpeg, .png, .webp"));
+            return;
+        }
+        byte[] contenido;
+        try {
+            contenido = Base64.getDecoder().decode(contenidoBase64);
+        } catch (IllegalArgumentException e) {
+            responder(ex, 400, fallo("El contenido del archivo no es válido"));
+            return;
+        }
+        if (contenido.length > 10 * 1024 * 1024) {
+            responder(ex, 400, fallo("El archivo supera el tamaño máximo permitido (10 MB)"));
+            return;
+        }
+        int adjuntoId = siguienteEnsayoLab.getAndIncrement();
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"adjuntoId\":" + adjuntoId + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
     }
 
     /**
@@ -2435,6 +2592,91 @@ public final class FakeInnpackApi implements AutoCloseable {
         }
         if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/ph")) {
             guardarPhLab(ex, sub);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/humedad")) {
+            guardarEnsayoLab(ex, sub, b -> {
+                if (b.path("metodoEquipo").asString("").isBlank()) {
+                    return "Debes indicar el metodo de equipo (Higrometro/Termobalanza/Horno)";
+                }
+                return errorBobinas(b.get("bobinas"));
+            });
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/gramaje")) {
+            guardarEnsayoLab(ex, sub, b -> {
+                if (b.path("modalidad").asString("").isBlank()) {
+                    return "Debes indicar la modalidad (ProbetaPeso/Directo)";
+                }
+                return errorBobinas(b.get("bobinas"));
+            });
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/cobb")) {
+            guardarEnsayoLab(ex, sub, b -> null);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/espesor")) {
+            guardarEnsayoLab(ex, sub, b -> {
+                if (b.path("tipoMedicion").asString("").isBlank()) {
+                    return "Debes indicar el tipo de medición (Ubicacion/Muestra)";
+                }
+                return errorBobinas(b.get("bobinas"));
+            });
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/rct")) {
+            guardarEnsayoLab(ex, sub,
+                    b -> b.path("componente").asString("").isBlank() ? "Debes indicar el componente (Liner/Onda) para RCT" : null);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/fct")) {
+            guardarEnsayoLab(ex, sub, b -> null);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/ect")) {
+            guardarEnsayoLab(ex, sub, b -> null);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/bct-medido")) {
+            guardarEnsayoLab(ex, sub, b -> {
+                int cajas = b.path("cajasEnsayadas").asInt(0);
+                if (cajas < 1 || cajas > 3) {
+                    return "Cajas ensayadas debe ser 1, 2 o 3";
+                }
+                if (cajas < 3 && b.path("motivoMenos3").asString("").isBlank()) {
+                    return "Debes indicar el motivo por ensayar menos de 3 cajas";
+                }
+                return null;
+            });
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/bct-teorico")) {
+            guardarEnsayoLab(ex, sub, b -> (b.path("ectEnsayoId").asInt(0) <= 0 || b.path("espesorEnsayoId").asInt(0) <= 0)
+                    ? "Debes seleccionar un ECT y un Espesor ya finalizados de esta muestra" : null);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/viscosidad")) {
+            guardarEnsayoLab(ex, sub, b -> null);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/solidos")) {
+            guardarEnsayoLab(ex, sub, b -> null);
+            return;
+        }
+        if (ex.getRequestMethod().equals("POST") && path.equals("/api/muestra-laboratorio/lugol")) {
+            guardarEnsayoLab(ex, sub,
+                    b -> b.path("resultado").asString("").isBlank() ? "Falta el resultado (Positivo/Negativo/No concluyente)" : null);
+            return;
+        }
+        java.util.regex.Matcher adjSubir = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/(\\d+)/adjunto$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && adjSubir.matches()) {
+            subirAdjuntoLab(ex, sub, Integer.parseInt(adjSubir.group(1)));
+            return;
+        }
+        java.util.regex.Matcher ncCrear = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/(\\d+)/nc$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && ncCrear.matches()) {
+            crearNcLab(ex, sub, Integer.parseInt(ncCrear.group(1)));
             return;
         }
         if (!ex.getRequestMethod().equals("GET")) {

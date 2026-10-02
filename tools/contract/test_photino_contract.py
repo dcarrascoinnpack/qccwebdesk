@@ -609,6 +609,71 @@ class HuellaAccionEnVariableLocalTest(unittest.TestCase):
         self.assertEqual(self.estado_con(nc)["estado"], "COMPATIBLE")
 
 
+PARAMETRO_FUNCION_JS = """class InicioController {
+    async guardarUno() {
+        await this._guardarComun("getDashboard")
+    }
+
+    async guardarDos() {
+        await this._guardarComun("frecuencias.actualizar")
+    }
+
+    async _guardarComun(accion) {
+        const data = { valor: document.getElementById("x").value.trim() }
+        const res = await window.PhotinoBridge.send({ action: `inicio.${accion}`, data })
+        this._mensaje(res.ok)
+    }
+
+    _mensaje(ok) { document.body.style.color = ok ? "green" : "red" }
+}
+"""
+
+
+class HuellaAccionPorParametroDeFuncionTest(unittest.TestCase):
+    """`send({ action: \\`x.${tipo}\\` })` dentro de una función compartida, invocada con el literal de esta
+    acción en un call-site (`this._f("getDashboard")`): ningún literal exacto de la acción aparece en el texto."""
+
+    INICIO = "src/UI/www/modules/inicio/inicio.controller.js"
+
+    def fuente(self, inicio=PARAMETRO_FUNCION_JS):
+        return repo(**{self.INICIO: inicio})
+
+    def setUp(self):
+        self.base = baseline_de(self.fuente())
+
+    def estado_con(self, inicio):
+        filas, _ = estados(self.fuente(inicio=inicio), baseline=self.base)
+        return filas["inicio.getDashboard"]
+
+    def test_fragmento_cubre_la_funcion_compartida_y_el_call_site(self):
+        fr = pc.fragmentos_llamado_js(PARAMETRO_FUNCION_JS, "inicio.getDashboard")
+        self.assertEqual(len(fr), 1)
+        self.assertIn("funcion_compartida:", fr[0])
+        self.assertIn("valor: document.getElementById", fr[0])
+        self.assertIn('llamado: await this._guardarComun("getDashboard")', fr[0])
+        self.assertEqual(self.estado_con(PARAMETRO_FUNCION_JS)["estado"], "COMPATIBLE")
+
+    def test_las_dos_acciones_comparten_la_funcion_pero_tienen_huellas_distintas_por_el_call_site(self):
+        fr1 = pc.fragmentos_llamado_js(PARAMETRO_FUNCION_JS, "inicio.getDashboard")
+        fr2 = pc.fragmentos_llamado_js(PARAMETRO_FUNCION_JS, "inicio.frecuencias.actualizar")
+        self.assertNotEqual(fr1, fr2)
+        self.assertIn("funcion_compartida:", fr2[0])
+
+    def test_cambio_en_la_funcion_compartida_pasa_a_revisar(self):
+        inicio = PARAMETRO_FUNCION_JS.replace("valor: document.getElementById", "valor2: document.getElementById")
+        self.assertEqual(self.estado_con(inicio)["estado"], "REVISAR")
+
+    def test_cambio_solo_en_el_call_site_de_la_otra_accion_no_afecta_esta(self):
+        inicio = PARAMETRO_FUNCION_JS.replace('await this._guardarComun("frecuencias.actualizar")',
+                                               'await this._guardarComun("frecuencias.actualizarOtra")')
+        self.assertEqual(self.estado_con(inicio)["estado"], "COMPATIBLE")
+
+    def test_cambios_fuera_de_la_funcion_no_alteran_la_huella(self):
+        inicio = PARAMETRO_FUNCION_JS.replace('_mensaje(ok) { document.body.style.color = ok ? "green" : "red" }',
+                                               '_mensaje(ok) { alert(ok) }')
+        self.assertEqual(self.estado_con(inicio)["estado"], "COMPATIBLE")
+
+
 class BloqueIfLargoTest(unittest.TestCase):
     """Rama `if (action == ...) { ... }` más larga que cualquier tope: se toma el bloque completo."""
 

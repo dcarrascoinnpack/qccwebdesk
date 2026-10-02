@@ -186,7 +186,12 @@ class BridgeFase3aTest {
                         "talleresExternos.sincronizarFps",
                         "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
                         "controlDocumental.eliminar", "controlDocumental.adjunto.subir",
-                        "muestraLab.crear", "muestraLab.ph.guardar");
+                        "muestraLab.crear", "muestraLab.ph.guardar", "muestraLab.humedad.guardar",
+                        "muestraLab.gramaje.guardar", "muestraLab.cobb.guardar", "muestraLab.espesor.guardar",
+                        "muestraLab.rct.guardar", "muestraLab.fct.guardar", "muestraLab.ect.guardar",
+                        "muestraLab.bctMedido.guardar", "muestraLab.bctTeorico.guardar", "muestraLab.viscosidad.guardar",
+                        "muestraLab.solidos.guardar", "muestraLab.lugol.guardar", "muestraLab.nc.crear",
+                        "muestraLab.adjunto.subir");
         for (String otra : List.of("noConformidades.catalogos.clientes.desactivar",
                 "noConformidades.catalogos.nciAreas.crear")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);

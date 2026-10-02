@@ -314,6 +314,12 @@ def fragmentos_llamado_js(texto, accion, callbacks=None):
         `PhotinoBridge.send({ action, ...payload })` en el mismo método): el método desde su cabecera hasta
         el cierre de ESE send (armado completo del payload, incluidas mutaciones previas) y los métodos
         `this.x()` llamados en ese tramo.
+      - ACCIÓN POR PARÁMETRO DE FUNCIÓN COMPARTIDA (p. ej. `send({ action: \\`x.${tipo}.guardar\\`, ... })`
+        dentro de una función con parámetro `tipo`, invocada como `this._f("rct", ...)`/`this._f("fct", ...)`):
+        si ningún literal exacto de `accion` aparece en el texto, se cae a esto (ver
+        `_fragmento_parametro_funcion_js`): el cuerpo completo de la función compartida (cualquier cambio
+        ahí afecta a TODAS las acciones que la comparten, a propósito) + la sentencia del call-site que
+        pasa el literal de ESTA acción.
     No cubre mutaciones posteriores (`data.x = ...`): documentado como límite.
     """
     limpio = quitar_comentarios_js(texto)
@@ -339,7 +345,48 @@ def fragmentos_llamado_js(texto, accion, callbacks=None):
             ancla = send
         partes = ["llamado:" + arg] + _contexto_js(limpio, ancla, arg) + dinamica
         frag.append("\n".join(re.sub(r"\s+", " ", p).strip() for p in partes))
+    if not frag:
+        extra = _fragmento_parametro_funcion_js(limpio, accion)
+        if extra:
+            frag.append("\n".join(re.sub(r"\s+", " ", p).strip() for p in extra))
     return frag
+
+
+def _fragmento_parametro_funcion_js(limpio, accion):
+    """
+    ACCIÓN POR PARÁMETRO DE FUNCIÓN COMPARTIDA: ningún literal exacto de `accion` aparece en el texto
+    porque se arma con un template `` `prefijo.${var}.sufijo` `` dentro de una función con parámetro
+    `var`, y esta acción corresponde a uno de sus call-sites (`this._f("valor", ...)`). Devuelve
+    [cuerpo de la función, sentencia del call-site] o [] si no hay ningún template/call-site que resuelva
+    a `accion` exactamente.
+    """
+    for tm in re.finditer(r"`([A-Za-z][\w.]*)\$\{(\w+)\}([^`]*)`", limpio):
+        prefijo, var, sufijo = tm.group(1), tm.group(2), tm.group(3)
+        if not (accion.startswith(prefijo) and accion.endswith(sufijo) and len(accion) >= len(prefijo) + len(sufijo)):
+            continue
+        valor = accion[len(prefijo):len(accion) - len(sufijo)] if sufijo else accion[len(prefijo):]
+        if not valor:
+            continue
+        ini = limpio.rfind("\n", 0, tm.start()) + 1
+        ventana_previa = limpio[:ini].split("\n")[-80:]
+        funcion_nombre, idx = None, None
+        for linea in reversed(ventana_previa):
+            cand = re.match(r"\s*(?:async\s+)?(\w+)\s*\(([^)]*)\)\s*\{", linea)
+            if cand and var in [x.strip() for x in cand.group(2).split(",")]:
+                funcion_nombre = cand.group(1)
+                idx = [x.strip() for x in cand.group(2).split(",")].index(var)
+                break
+        if funcion_nombre is None:
+            continue
+        cuerpo = _metodo_js(limpio, funcion_nombre)
+        if not cuerpo:
+            continue
+        for cm in re.finditer(r"\." + re.escape(funcion_nombre) + r"\(([^)]*)\)", limpio):
+            args = [x.strip() for x in cm.group(1).split(",")]
+            if len(args) > idx and re.match(r"^[\"']" + re.escape(valor) + r"[\"']$", args[idx]):
+                llamado = _sentencia_js(limpio, limpio.rfind("\n", 0, cm.start()) + 1)
+                return ["funcion_compartida:" + cuerpo, "llamado:" + llamado]
+    return []
 
 
 def _contexto_js(limpio, ancla, arg, metodos=True):

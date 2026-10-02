@@ -421,6 +421,49 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "muestraLab.ph.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), laboratorio::phGuardar, MuestraLaboratorioBridgeHandler::recursoPhGuardar),
+                // Fase 4e-2 — resto de los 12 tipos de ensayo (mismo patrón que ph.guardar) + nc.crear + adjunto.subir.
+                new ActionPolicy.Regla(
+                        "muestraLab.humedad.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::humedadGuardar, MuestraLaboratorioBridgeHandler::recursoHumedadGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.gramaje.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::gramajeGuardar, MuestraLaboratorioBridgeHandler::recursoGramajeGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.cobb.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::cobbGuardar, MuestraLaboratorioBridgeHandler::recursoCobbGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.espesor.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::espesorGuardar, MuestraLaboratorioBridgeHandler::recursoEspesorGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.rct.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::rctGuardar, MuestraLaboratorioBridgeHandler::recursoRctGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.fct.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::fctGuardar, MuestraLaboratorioBridgeHandler::recursoFctGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.ect.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::ectGuardar, MuestraLaboratorioBridgeHandler::recursoEctGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.bctMedido.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::bctMedidoGuardar, MuestraLaboratorioBridgeHandler::recursoBctMedidoGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.bctTeorico.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::bctTeoricoGuardar, MuestraLaboratorioBridgeHandler::recursoBctTeoricoGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.viscosidad.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::viscosidadGuardar, MuestraLaboratorioBridgeHandler::recursoViscosidadGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.solidos.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::solidosGuardar, MuestraLaboratorioBridgeHandler::recursoSolidosGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.lugol.guardar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::lugolGuardar, MuestraLaboratorioBridgeHandler::recursoLugolGuardar),
+                new ActionPolicy.Regla(
+                        "muestraLab.nc.crear", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::ncCrear, MuestraLaboratorioBridgeHandler::recursoNcCrear),
+                new ActionPolicy.Regla(
+                        "muestraLab.adjunto.subir", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::adjuntoSubir, MuestraLaboratorioBridgeHandler::recursoAdjuntoSubir),
                 // Fase 2m — Talleres Externos (payload en "data", sin empresa ni rol propio).
                 new ActionPolicy.Regla("talleresExternos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::list),
                 new ActionPolicy.Regla(
