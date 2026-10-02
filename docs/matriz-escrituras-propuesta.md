@@ -14,7 +14,7 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **73** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **75** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar`, `noConformidades.catalogos.{clientes,
@@ -27,8 +27,8 @@ categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impac
 `muestraLab.{crear,ph.guardar,humedad.guardar,gramaje.guardar,cobb.guardar,espesor.guardar,rct.guardar,
 fct.guardar,ect.guardar,bctMedido.guardar,bctTeorico.guardar,viscosidad.guardar,solidos.guardar,lugol.guardar,
 nc.crear,adjunto.subir,anular,ensayo.anular,actualizarFechaEnsayo,metodo.guardar,metodo.activar,
-especificacion.guardar,especificacion.activar}`, estado
-VALIDADA; mismos roles que Photino). Las otras 8 siguen denegadas por `ActionPolicy`
+especificacion.guardar,especificacion.activar,eliminar,adjunto.eliminar}`, estado
+VALIDADA; mismos roles que Photino). Las otras 6 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -73,7 +73,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 8 APROBADA · 73 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 6 APROBADA · 75 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -134,8 +134,8 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 | `muestraLab.especificacion.guardar` | POST `api/muestra-laboratorio/especificaciones` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | edita maestro de métodos/especificaciones | sí: volver a editar/activar | **MEDIO** | maestro que cambia evaluaciones futuras | VALIDADA (Fase 4e-4, gateway 0.4.0; roles = Photino; la API no recibe autor -sin campo para ello-; tipoMuestra (9 opciones) y tipoEnsayo (12, distinto del set de metodo.guardar) restringidos a los select de Photino) |
 | `muestraLab.metodo.activar` | PATCH `api/muestra-laboratorio/metodos/{id}/activo` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | edita maestro de métodos/especificaciones | sí: volver a editar/activar | **MEDIO** | maestro que cambia evaluaciones futuras | VALIDADA (Fase 4e-4, gateway 0.4.0; roles = Photino; la API no recibe autor -sin campo para ello-; activo solo es true si el JSON trae literalmente el booleano true) |
 | `muestraLab.metodo.guardar` | POST `api/muestra-laboratorio/metodos` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | sesión C# de Photino: NombreCompleto | inyectar nombreCompleto (Photino lo toma de su sesión) | edita maestro de métodos/especificaciones | sí: volver a editar/activar | **MEDIO** | maestro que cambia evaluaciones futuras | VALIDADA (Fase 4e-4, gateway 0.4.0; roles = Photino; usuarioNombre ← sesión (ni siquiera es clave aceptada del payload); tipoEnsayo/variante restringidos a los select de Photino (9/4 opciones; variante en blanco viaja null, no "")) |
-| `muestraLab.adjunto.eliminar` | DELETE `api/muestra-laboratorio/adjunto/{adjuntoId}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un adjunto | no desde la UI | **ALTO** | destructivo; sin autor | APROBADA |
-| `muestraLab.eliminar` | DELETE `api/muestra-laboratorio/{muestraId}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | borrado lógico de la muestra | no desde la UI | **ALTO** | destructivo; sin autor | APROBADA |
+| `muestraLab.adjunto.eliminar` | DELETE `api/muestra-laboratorio/adjunto/{adjuntoId}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina un adjunto | no desde la UI | **ALTO** | destructivo; sin autor | VALIDADA (Fase 4e-5, gateway 0.4.0; roles = Photino; sin autor -ni Photino ni la API lo registran-, auditoria obligatoria del gateway; id/adjuntoId se rechazan antes de llamar a la API, igual que el handler C# de Photino; la API devuelve 404 real si el adjunto ya no existe) |
+| `muestraLab.eliminar` | DELETE `api/muestra-laboratorio/{muestraId}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | borrado lógico de la muestra | no desde la UI | **ALTO** | destructivo; sin autor | VALIDADA (Fase 4e-5, gateway 0.4.0; roles = Photino; sin autor -ni Photino ni la API lo registran-, auditoria obligatoria del gateway; id/adjuntoId se rechazan antes de llamar a la API, igual que el handler C# de Photino; a diferencia de controlDocumental.eliminar, la API SI verifica filas afectadas y devuelve error real si ya no existe/ya estaba eliminada, no hace falta releer antes de borrar) |
 
 ### noConformidades (20)
 
@@ -634,6 +634,34 @@ del usuario de paridad exacta con el riesgo aceptado); `registrosProduccion.vali
   `BridgeFase1cTest`/`BridgeFase3aTest` (listas exhaustivas de acciones) y `BridgeFase2cTest`/`BridgeFase2dTest`/
   `BridgeFase2eTest` (las 13 acciones salen de "escrituras bloqueadas"; `registrosControl` no tenía ese test, no aplica).
   Suite completa 719/720 (solo `QccApiApplicationTests.contextLoads` legacy, esperado).
+
+## Laboratorio — eliminar / adjunto.eliminar — VALIDADA (Fase 4e-5, 2026-10-02) — MÓDULO COMPLETO 25/25
+
+Las últimas 2 escrituras ALTO de Laboratorio: `eliminar` (borrado lógico de la muestra, columna `eliminado`,
+distinto de `anular` que conserva historial) y `adjunto.eliminar`. Con esto **Laboratorio queda 25/25 — las 25
+escrituras del módulo quedan paridad completa con Photino**.
+
+Ninguna de las dos recibe autor (ni Photino ni la API lo registran); la auditoría del gateway es la única traza,
+igual que `ensayo.anular` (4e-3) y 3 de las 4 de maestros (4e-4). `id`/`adjuntoId` se rechazan en el GATEWAY antes de
+llamar a la API si faltan (replica el pre-check del handler C# de Photino). A diferencia de
+`controlDocumental.eliminar` (donde la API hace un `UPDATE` sin verificar existencia y el gateway tuvo que releer
+antes de borrar para convertir el "no existe" silencioso en un error real), la API de Laboratorio **sí** verifica
+filas afectadas/existencia por sí misma y devuelve un error real ("No existe la muestra o ya estaba eliminada" /
+"Adjunto no encontrado") — el gateway no necesita ningún mecanismo adicional de detección de conflicto. Ninguna de
+las dos tiene "deshacer" en la UI (solo el `confirm()` del navegador en Photino).
+
+- Web: lista blanca `{id}`/`{adjuntoId}` respectivamente; sin huella ni candado (innecesarios: la propia API detecta
+  el "ya no existe").
+- Pruebas: `BridgeFase4e5Test` (7: campos obligatorios y campo no permitido en ambas, eliminación exitosa e
+  idempotente con el error real de la API en el segundo intento, muestra/adjunto inexistente, roles, auditoría con
+  recurso por acción); ajustes en `BridgeFase1cTest`/`BridgeFase2lTest`/`BridgeFase3aTest` (listas exhaustivas, ya
+  sin ninguna acción de `muestraLab.*` pendiente salvo las 3 que dependen de otras APIs externas: `consultarNp`,
+  `consultarRegistroProduccion`, `resolverBobina`). Suite completa 809/810 (solo
+  `QccApiApplicationTests.contextLoads` legacy, esperado).
+- **Cierre del módulo:** con 4e-1 a 4e-5 (`584d8e2`, `afc3a8c`, `14c442a`, `c8f1391` y este commit), Laboratorio pasó
+  de 2/25 a 25/25 en 5 fases sobre 2 días (2026-10-02). Único pendiente real del módulo: las 3 lecturas que dependen
+  de clientes de otras APIs externas (`consultarNp`/Planificación FARET, `consultarRegistroProduccion`/FPS,
+  `resolverBobina`/SAP) — no son escrituras, quedan fuera de esta serie de fases.
 
 ## Laboratorio — maestros de métodos / especificaciones — VALIDADA (Fase 4e-4, 2026-10-02)
 

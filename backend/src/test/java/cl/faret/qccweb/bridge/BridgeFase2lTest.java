@@ -56,7 +56,7 @@ class BridgeFase2lTest {
     private static final String REGISTRO = "muestraLab.registroProduccion.list";
     private static final List<String> LECTURAS = List.of(LIST, DETALLE, "muestraLab.catalogos", "muestraLab.indicadores",
             "muestraLab.metodo.list", "muestraLab.especificacion.list", HISTORIAL, REGISTRO, ADJUNTO);
-    private static final List<String> NO_HABILITADAS = List.of("muestraLab.eliminar", "muestraLab.adjunto.eliminar",
+    private static final List<String> NO_HABILITADAS = List.of(
             "muestraLab.consultarNp", "muestraLab.consultarRegistroProduccion", "muestraLab.resolverBobina");
     private static final String BASE = "GET /api/muestra-laboratorio";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
@@ -256,7 +256,7 @@ class BridgeFase2lTest {
     @Test
     void escriturasYLecturasExternasSiguenBloqueadas() throws Exception {
         MockHttpSession admin = login("admin1");
-        assertThat(NO_HABILITADAS).hasSize(5); // Fase 3w: materialesFps habilitada; Fase 4e-1..4e-4: 21 escrituras habilitadas
+        assertThat(NO_HABILITADAS).hasSize(3); // Fase 3w: materialesFps habilitada; Fase 4e-1..4e-5: las 25 escrituras de Laboratorio habilitadas
         for (String accion : NO_HABILITADAS) {
             accion(admin, "{\"action\":\"" + accion + "\",\"data\":{\"id\":501,\"muestraId\":501,\"np\":\"NP-1\",\"idProceso\":5,\"lote\":\"L1\"}}")
                     .andExpect(status().isForbidden())

@@ -156,6 +156,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         cuerposEspecificacionGuardadaRecibidos.clear();
         siguienteMetodoLab.set(9800);
         siguienteEspecificacionLab.set(9900);
+        muestrasLabEliminadas.clear();
+        adjuntosLabEliminados.clear();
         peticionesTalleres.clear();
         modoUsuarios = "NORMAL";
         modoDashboard = ModoDashboard.NORMAL;
@@ -2698,6 +2700,34 @@ public final class FakeInnpackApi implements AutoCloseable {
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
     }
 
+    // ------------------------------------------------------------------ Fase 4e-5: eliminar / adjunto.eliminar
+
+    private final java.util.Set<Integer> muestrasLabEliminadas = ConcurrentHashMap.newKeySet();
+    private final java.util.Set<Integer> adjuntosLabEliminados = ConcurrentHashMap.newKeySet();
+
+    /** Simula un adjunto de muestra ya eliminado, para probar el 404 real de adjunto.eliminar. */
+    public void eliminarAdjuntoLabPorOtro(int adjuntoId) {
+        adjuntosLabEliminados.add(adjuntoId);
+    }
+
+    /** Como MuestraLaboratorioService.EliminarMuestraAsync: la API SÍ verifica filas afectadas (existe/no eliminada). */
+    private void eliminarMuestraLab(HttpExchange ex, int id) throws IOException {
+        if (id == 404 || !muestrasLabEliminadas.add(id)) {
+            responder(ex, 400, fallo("No existe la muestra o ya estaba eliminada"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + "},\"errors\":null}");
+    }
+
+    /** Como MuestraLaboratorioService.EliminarAdjuntoAsync: 404 real si no existe o ya fue eliminado. */
+    private void eliminarAdjuntoLab(HttpExchange ex, int adjuntoId) throws IOException {
+        if (adjuntoId == 404 || !adjuntosLabEliminados.add(adjuntoId)) {
+            responder(ex, 404, fallo("Adjunto no encontrado"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"adjuntoId\":" + adjuntoId + "},\"errors\":null}");
+    }
+
     /**
      * Laboratorio - Muestras (lecturas). Detalle 404 → "Muestra no encontrada"; registro-produccion con
      * np=ERROR → 400. Adjunto por id: 1 PDF, 2 PNG, 3 DOCX, 4 HTML declarado PDF, 404, 600 vacío,
@@ -2839,6 +2869,16 @@ public final class FakeInnpackApi implements AutoCloseable {
         java.util.regex.Matcher activoEspecificacion = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/especificaciones/(\\d+)/activo$").matcher(path);
         if (ex.getRequestMethod().equals("PATCH") && activoEspecificacion.matches()) {
             cambiarActivoLab(ex, sub);
+            return;
+        }
+        java.util.regex.Matcher eliminarAdjunto = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/adjunto/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && eliminarAdjunto.matches()) {
+            eliminarAdjuntoLab(ex, Integer.parseInt(eliminarAdjunto.group(1)));
+            return;
+        }
+        java.util.regex.Matcher eliminarMuestra = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && eliminarMuestra.matches()) {
+            eliminarMuestraLab(ex, Integer.parseInt(eliminarMuestra.group(1)));
             return;
         }
         if (!ex.getRequestMethod().equals("GET")) {

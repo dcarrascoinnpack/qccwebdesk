@@ -52,8 +52,13 @@ import tools.jackson.databind.node.ObjectNode;
  * tiene campo para ello). `*.activar` comparten un solo método (`activarComun`): `id` se rechaza antes de llamar a
  * la API, `activo` solo es `true` si el JSON trae literalmente el booleano `true` (igual que Photino).
  *
+ * Fase 4e-5 (cierra las 25 escrituras de Laboratorio): `eliminar` (borrado lógico de la muestra, distinto de
+ * `anular`) y `adjunto.eliminar`. Ninguna de las dos recibe autor (ni Photino ni la API lo registran); a diferencia
+ * de `controlDocumental.eliminar`, estas dos SÍ reciben un error real de la API si el id no existe (no hace falta
+ * releer antes de borrar).
+ *
  * Fuera: consultarNp (Planificación FARET), consultarRegistroProduccion (FPS, solo en el alta de muestra, que depende
- * de consultarNp), resolverBobina (SAP) y 4e-5 (adjunto.eliminar, eliminar).
+ * de consultarNp) y resolverBobina (SAP) — único trío que falta, requieren clientes de otras APIs externas.
  */
 public class MuestraLaboratorioBridgeHandler {
 
@@ -793,6 +798,68 @@ public class MuestraLaboratorioBridgeHandler {
         ObjectNode cuerpo = mapper.createObjectNode();
         cuerpo.put("activo", activo);
         return InnpackRespuestas.reenviar(api.patchJson(usuario, BASE + "/" + recurso + "/" + id + "/activo", cuerpo), mapper);
+    }
+
+    // ------------------------------------------------------------------ Fase 4e-5: eliminar / adjunto.eliminar
+
+    static final String MENSAJE_FALTA_MUESTRA_ELIMINAR = "Falta la muestra a eliminar";
+    private static final Set<String> CLAVES_ELIMINAR = Set.of("id");
+    private static final Set<String> CLAVES_ADJUNTO_ELIMINAR = Set.of("adjuntoId");
+
+    /**
+     * muestraLab.eliminar → DELETE api/muestra-laboratorio/{id} (Fase 4e-5), igual que Photino: borrado lógico
+     * (columna `eliminado`), distinto de `anular` (que conserva el registro con historial). `id` se rechaza ANTES de
+     * llamar a la API si falta (igual que el handler C# de Photino). A diferencia de `controlDocumental.eliminar`,
+     * la API SÍ verifica existencia (filas afectadas) y devuelve un error real si ya no existe o ya estaba
+     * eliminada — el gateway no necesita releer antes de borrar. Sin autor: ni Photino ni la API lo registran;
+     * auditoría obligatoria del gateway. No hay "deseliminar" en la UI (confirm() del navegador en Photino).
+     */
+    public BridgeResult eliminar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ELIMINAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(data.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_FALTA_MUESTRA_ELIMINAR);
+        }
+        return InnpackRespuestas.reenviar(api.delete(usuario, BASE + "/" + id), mapper);
+    }
+
+    /** Recurso auditado: "muestraLab:&lt;id&gt;:eliminar". */
+    public static String recursoEliminar(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer id = data == null ? null : entero(data.get("id"));
+        return "muestraLab:" + (id != null ? id : "?") + ":eliminar";
+    }
+
+    /**
+     * muestraLab.adjunto.eliminar → DELETE api/muestra-laboratorio/adjunto/{adjuntoId} (Fase 4e-5), igual que
+     * Photino: elimina un adjunto (sin "deseliminar" en la UI). `adjuntoId` se rechaza ANTES de llamar a la API si
+     * falta. La API devuelve 404 real ("Adjunto no encontrado") si ya no existe; el gateway no necesita releer
+     * antes de borrar. Sin autor: ni Photino ni la API lo registran; auditoría obligatoria del gateway.
+     */
+    public BridgeResult adjuntoEliminar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ADJUNTO_ELIMINAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer adjuntoId = entero(data.get("adjuntoId"));
+        if (adjuntoId == null || adjuntoId <= 0) {
+            return BridgeResult.error(MENSAJE_FALTA_ADJUNTO);
+        }
+        return InnpackRespuestas.reenviar(api.delete(usuario, BASE + "/adjunto/" + adjuntoId), mapper);
+    }
+
+    /** Recurso auditado: "muestraLab:adjunto:&lt;adjuntoId&gt;:eliminar". */
+    public static String recursoAdjuntoEliminar(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer adjuntoId = data == null ? null : entero(data.get("adjuntoId"));
+        return "muestraLab:adjunto:" + (adjuntoId != null ? adjuntoId : "?") + ":eliminar";
     }
 
     private static String validarArchivoSubida(String nombreArchivo, String base64) {

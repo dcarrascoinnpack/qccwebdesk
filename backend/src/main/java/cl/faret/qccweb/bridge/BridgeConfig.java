@@ -487,6 +487,13 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "muestraLab.especificacion.activar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), laboratorio::especificacionActivar, MuestraLaboratorioBridgeHandler::recursoEspecificacionActivar),
+                // Fase 4e-5 — eliminar / adjunto.eliminar (cierra las 25 escrituras de Laboratorio).
+                new ActionPolicy.Regla(
+                        "muestraLab.eliminar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::eliminar, MuestraLaboratorioBridgeHandler::recursoEliminar),
+                new ActionPolicy.Regla(
+                        "muestraLab.adjunto.eliminar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::adjuntoEliminar, MuestraLaboratorioBridgeHandler::recursoAdjuntoEliminar),
                 // Fase 2m — Talleres Externos (payload en "data", sin empresa ni rol propio).
                 new ActionPolicy.Regla("talleresExternos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::list),
                 new ActionPolicy.Regla(
