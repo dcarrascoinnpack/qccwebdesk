@@ -42,8 +42,14 @@ import tools.jackson.databind.node.ObjectNode;
  * original debe existir y estar Finalizado). Sin huella ni candado: son altas puras, la API no
  * verifica duplicados (mismo criterio que noConformidades.create/controlDocumental.create).
  *
+ * Fase 4e-3: `anular`, `ensayo.anular`, `actualizarFechaEnsayo`. `id`/`ensayoId`/`motivo` se rechazan ANTES de llamar
+ * a la API si faltan (igual que el handler C# de Photino); `ensayo.anular` no recibe autor (la API no tiene campo
+ * para ello, auditoría obligatoria del gateway); `actualizarFechaEnsayo` restringe la fecha al formato real del
+ * {@code <input type="datetime-local">} de Photino.
+ *
  * Fuera: consultarNp (Planificación FARET), consultarRegistroProduccion (FPS, solo en el alta de muestra, que depende
- * de consultarNp), resolverBobina (SAP) y el resto de las escrituras (quedan para 4e-2/3/4).
+ * de consultarNp), resolverBobina (SAP) y el resto de las escrituras (quedan para 4e-4/4e-5: maestros de métodos/
+ * especificaciones, adjunto.eliminar, eliminar).
  */
 public class MuestraLaboratorioBridgeHandler {
 
@@ -485,6 +491,123 @@ public class MuestraLaboratorioBridgeHandler {
         JsonNode id = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("adjuntoId") : null;
         return "muestraLab:" + (muestraId != null ? muestraId : "?") + ":adjunto"
                 + (id != null && id.canConvertToInt() ? ":" + id.asInt() : "");
+    }
+
+    // ------------------------------------------------------------------ Fase 4e-3: anular / ensayo.anular / actualizarFechaEnsayo
+
+    static final String MENSAJE_FALTA_MUESTRA_O_MOTIVO = "Falta la muestra o el motivo de anulación";
+    static final String MENSAJE_FALTA_ENSAYO_O_MOTIVO = "Falta el ensayo o el motivo de anulacion";
+    static final String MENSAJE_FECHA_INVALIDA = "Fecha inválida";
+
+    private static final Set<String> CLAVES_ANULAR = Set.of("id", "motivo");
+    private static final Set<String> CLAVES_ENSAYO_ANULAR = Set.of("ensayoId", "motivo");
+    private static final Set<String> CLAVES_ACTUALIZAR_FECHA = Set.of("id", "fechaEnsayo");
+    /** {@code <input type="datetime-local">} de Photino: "AAAA-MM-DDTHH:mm" (segundos opcionales). */
+    private static final Pattern FECHA_HORA_LOCAL = Pattern.compile("[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}(:[0-9]{2})?");
+
+    /**
+     * muestraLab.anular → POST api/muestra-laboratorio/{id}/anular {motivo, usuarioNombre} (Fase 4e-3), igual que
+     * Photino: anula el registro completo (conserva historial, no hay "desanular" en la UI). `id`/`motivo` se
+     * rechazan ANTES de llamar a la API si faltan (igual que el handler C# de Photino, no solo la API).
+     *
+     * Seguridad transparente: usuarioNombre ← sesión; motivo (`prompt()` de una línea en Photino) sin caracteres de
+     * control ni marcado HTML.
+     */
+    public BridgeResult anular(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ANULAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(data.get("id"));
+        String motivoCrudo = texto(data.get("motivo"));
+        if (id == null || id <= 0 || motivoCrudo.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_MUESTRA_O_MOTIVO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = ponerTexto(cuerpo, data, "motivo", CONTROL_UNA_LINEA);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        cuerpo.put("usuarioNombre", autorDeSesion(usuario));
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + id + "/anular", cuerpo), mapper);
+    }
+
+    /** Recurso auditado: "muestraLab:&lt;id&gt;:anular". */
+    public static String recursoAnular(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer id = data == null ? null : entero(data.get("id"));
+        return "muestraLab:" + (id != null ? id : "?") + ":anular";
+    }
+
+    /**
+     * muestraLab.ensayo.anular → POST api/muestra-laboratorio/ensayos/{ensayoId}/anular {motivo} (Fase 4e-3), igual
+     * que Photino: anula un ensayo puntual (no hay "desanular"). La API no recibe autor (sin campo para ello);
+     * auditoría obligatoria del gateway. `ensayoId`/`motivo` se rechazan ANTES de llamar a la API si faltan.
+     */
+    public BridgeResult ensayoAnular(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ENSAYO_ANULAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer ensayoId = entero(data.get("ensayoId"));
+        String motivoCrudo = texto(data.get("motivo"));
+        if (ensayoId == null || ensayoId <= 0 || motivoCrudo.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_ENSAYO_O_MOTIVO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        String error = ponerTexto(cuerpo, data, "motivo", CONTROL_UNA_LINEA);
+        if (error != null) {
+            return BridgeResult.error(error);
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/ensayos/" + ensayoId + "/anular", cuerpo), mapper);
+    }
+
+    /** Recurso auditado: "muestraLab:ensayo:&lt;ensayoId&gt;:anular". */
+    public static String recursoEnsayoAnular(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer ensayoId = data == null ? null : entero(data.get("ensayoId"));
+        return "muestraLab:ensayo:" + (ensayoId != null ? ensayoId : "?") + ":anular";
+    }
+
+    /**
+     * muestraLab.actualizarFechaEnsayo → PUT api/muestra-laboratorio/{id}/fecha-ensayo {fechaEnsayo, usuarioNombre}
+     * (Fase 4e-3), igual que Photino: corrige la fecha efectiva de un registro ya creado (auditada por la API:
+     * `fechaEnsayoModificadaPor`/`fechaEnsayoFechaModificacion`). `id` se rechaza ANTES de llamar a la API si falta.
+     *
+     * Seguridad transparente: usuarioNombre ← sesión; fechaEnsayo restringida al formato real del
+     * {@code <input type="datetime-local">} de Photino (AAAA-MM-DDTHH:mm[:ss]) — la API solo valida que sea una
+     * fecha parseable, sin fijar el formato.
+     */
+    public BridgeResult actualizarFechaEnsayo(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ACTUALIZAR_FECHA.contains(clave)) {
+                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+            }
+        }
+        Integer id = entero(data.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_FALTA_MUESTRA);
+        }
+        String fechaEnsayo = texto(data.get("fechaEnsayo"));
+        if (!FECHA_HORA_LOCAL.matcher(fechaEnsayo).matches()) {
+            return BridgeResult.error(MENSAJE_FECHA_INVALIDA);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("fechaEnsayo", fechaEnsayo);
+        cuerpo.put("usuarioNombre", autorDeSesion(usuario));
+        return InnpackRespuestas.reenviar(api.putJson(usuario, BASE + "/" + id + "/fecha-ensayo", cuerpo), mapper);
+    }
+
+    /** Recurso auditado: "muestraLab:&lt;id&gt;:fechaEnsayo". */
+    public static String recursoActualizarFechaEnsayo(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        Integer id = data == null ? null : entero(data.get("id"));
+        return "muestraLab:" + (id != null ? id : "?") + ":fechaEnsayo";
     }
 
     private static String validarArchivoSubida(String nombreArchivo, String base64) {

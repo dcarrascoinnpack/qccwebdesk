@@ -464,6 +464,16 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "muestraLab.adjunto.subir", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
                         Map.of(), laboratorio::adjuntoSubir, MuestraLaboratorioBridgeHandler::recursoAdjuntoSubir),
+                // Fase 4e-3 — anular / ensayo.anular / actualizarFechaEnsayo.
+                new ActionPolicy.Regla(
+                        "muestraLab.anular", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::anular, MuestraLaboratorioBridgeHandler::recursoAnular),
+                new ActionPolicy.Regla(
+                        "muestraLab.ensayo.anular", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::ensayoAnular, MuestraLaboratorioBridgeHandler::recursoEnsayoAnular),
+                new ActionPolicy.Regla(
+                        "muestraLab.actualizarFechaEnsayo", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), laboratorio::actualizarFechaEnsayo, MuestraLaboratorioBridgeHandler::recursoActualizarFechaEnsayo),
                 // Fase 2m — Talleres Externos (payload en "data", sin empresa ni rol propio).
                 new ActionPolicy.Regla("talleresExternos.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), talleres::list),
                 new ActionPolicy.Regla(

@@ -149,6 +149,9 @@ public final class FakeInnpackApi implements AutoCloseable {
         cuerposEnsayoLabRecibidos.clear();
         cuerposNcLabRecibidos.clear();
         cuerposAdjuntoLabRecibidos.clear();
+        cuerposAnularMuestraLabRecibidos.clear();
+        cuerposEnsayoAnularLabRecibidos.clear();
+        cuerposFechaEnsayoLabRecibidos.clear();
         peticionesTalleres.clear();
         modoUsuarios = "NORMAL";
         modoDashboard = ModoDashboard.NORMAL;
@@ -2569,6 +2572,72 @@ public final class FakeInnpackApi implements AutoCloseable {
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"adjuntoId\":" + adjuntoId + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
     }
 
+    // ------------------------------------------------------------------ Fase 4e-3: anular / ensayo.anular / actualizarFechaEnsayo
+
+    private final java.util.List<JsonNode> cuerposAnularMuestraLabRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.List<JsonNode> cuerposEnsayoAnularLabRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final java.util.List<JsonNode> cuerposFechaEnsayoLabRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    public java.util.List<JsonNode> cuerposAnularMuestraLabRecibidos() {
+        return java.util.List.copyOf(cuerposAnularMuestraLabRecibidos);
+    }
+
+    public java.util.List<JsonNode> cuerposEnsayoAnularLabRecibidos() {
+        return java.util.List.copyOf(cuerposEnsayoAnularLabRecibidos);
+    }
+
+    public java.util.List<JsonNode> cuerposFechaEnsayoLabRecibidos() {
+        return java.util.List.copyOf(cuerposFechaEnsayoLabRecibidos);
+    }
+
+    /** Como MuestraLaboratorioService.AnularMuestraAsync: motivo obligatorio, 404/ya anulada → error. */
+    private void anularMuestraLabReal(HttpExchange ex, int sub, int muestraId) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposAnularMuestraLabRecibidos.add(b);
+        if (b.path("motivo").asString("").isBlank()) {
+            responder(ex, 400, fallo("Falta el motivo de anulación"));
+            return;
+        }
+        if (muestraId == 404 || !muestrasLabAnuladas.add(muestraId)) {
+            responder(ex, 400, fallo("No existe la muestra, fue eliminada, o ya estaba anulada"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + muestraId + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    /** Como MuestraLaboratorioService.AnularEnsayoAsync: motivo obligatorio; sin verificación de existencia. */
+    private void ensayoAnularLab(HttpExchange ex, int sub, int ensayoId) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposEnsayoAnularLabRecibidos.add(b);
+        if (b.path("motivo").asString("").isBlank()) {
+            responder(ex, 400, fallo("Falta el ensayo o el motivo de anulacion"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"anulado\":true,\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
+    private static final java.util.regex.Pattern FECHA_HORA_ISO = java.util.regex.Pattern.compile(
+            "\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}(:\\d{2})?");
+
+    /** Como MuestraLaboratorioService.ActualizarFechaEnsayoAsync: fecha parseable, muestra no anulada, 404 → error. */
+    private void actualizarFechaEnsayoLab(HttpExchange ex, int sub, int id) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposFechaEnsayoLabRecibidos.add(b);
+        if (!FECHA_HORA_ISO.matcher(b.path("fechaEnsayo").asString("")).matches()) {
+            responder(ex, 400, fallo("Fecha inválida"));
+            return;
+        }
+        if (muestrasLabAnuladas.contains(id)) {
+            responder(ex, 400, fallo("El registro está anulado, no se puede editar la fecha"));
+            return;
+        }
+        if (id == 404) {
+            responder(ex, 400, fallo("No existe la muestra o fue eliminada"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + ",\"usuarioDelToken\":" + sub + "},\"errors\":null}");
+    }
+
     /**
      * Laboratorio - Muestras (lecturas). Detalle 404 → "Muestra no encontrada"; registro-produccion con
      * np=ERROR → 400. Adjunto por id: 1 PDF, 2 PNG, 3 DOCX, 4 HTML declarado PDF, 404, 600 vacío,
@@ -2677,6 +2746,21 @@ public final class FakeInnpackApi implements AutoCloseable {
         java.util.regex.Matcher ncCrear = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/(\\d+)/nc$").matcher(path);
         if (ex.getRequestMethod().equals("POST") && ncCrear.matches()) {
             crearNcLab(ex, sub, Integer.parseInt(ncCrear.group(1)));
+            return;
+        }
+        java.util.regex.Matcher anularMuestra = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/(\\d+)/anular$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && anularMuestra.matches()) {
+            anularMuestraLabReal(ex, sub, Integer.parseInt(anularMuestra.group(1)));
+            return;
+        }
+        java.util.regex.Matcher ensayoAnular = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/ensayos/(\\d+)/anular$").matcher(path);
+        if (ex.getRequestMethod().equals("POST") && ensayoAnular.matches()) {
+            ensayoAnularLab(ex, sub, Integer.parseInt(ensayoAnular.group(1)));
+            return;
+        }
+        java.util.regex.Matcher fechaEnsayo = java.util.regex.Pattern.compile("^/api/muestra-laboratorio/(\\d+)/fecha-ensayo$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && fechaEnsayo.matches()) {
+            actualizarFechaEnsayoLab(ex, sub, Integer.parseInt(fechaEnsayo.group(1)));
             return;
         }
         if (!ex.getRequestMethod().equals("GET")) {
