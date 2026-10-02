@@ -1,0 +1,42 @@
+<div class="auth-page">
+    <div class="auth-card">
+        <div class="auth-brand auth-brand-dual">
+            <img src="LOGO-FARET-spa-256.png" alt="FARET" class="auth-logo auth-logo-faret" />
+
+
+            <div class="auth-logo-divider"></div>
+
+            <img src="logo.png" alt="INNPACK" class="auth-logo auth-logo-innpack" />
+        </div>
+
+        <div class="auth-header">
+            <h2>Ingreso al sistema</h2>
+            <p>Accede con tu ID de usuario y contraseña</p>
+        </div>
+
+        <form id="auth-login-form" class="auth-form" novalidate>
+            <div class="auth-field">
+                <label for="codigoUsuario">ID de usuario</label>
+                <input type="text" id="codigoUsuario" name="codigoUsuario" placeholder="Ej: admin"
+                    autocomplete="username" maxlength="50" required />
+            </div>
+
+            <div class="auth-field">
+                <label for="password">Contraseña</label>
+                <input type="password" id="password" name="password" placeholder="Ingresa tu contraseña"
+                    autocomplete="current-password" maxlength="100" required />
+            </div>
+
+            <label style="display:flex; align-items:center; gap:8px; margin-top:10px;">
+                <input type="checkbox" id="rememberMe">
+                <span>Recordar este usuario</span>
+            </label>
+
+            <button type="submit" class="auth-submit-btn">
+                Ingresar
+            </button>
+
+            <div id="auth-message" class="auth-message" aria-live="polite"></div>
+        </form>
+    </div>
+</div>

@@ -1,0 +1,725 @@
+/* =====================================================
+   NO CONFORMIDADES — Dashboard visual (Fluent / Power BI inspired)
+   Todas las reglas están scoped a .faret-nc-module para
+   no afectar ningún otro módulo del sistema.
+===================================================== */
+
+.faret-nc-module .module-header {
+    margin-bottom: 4px;
+}
+
+/* ---------- KPI cards ---------- */
+
+.faret-nc-module .home-modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 16px;
+    margin: 18px 0 24px;
+}
+
+.faret-nc-module .home-module-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: white;
+    border: 1px solid #E5E9F0;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px rgba(15, 23, 42, 0.05);
+    border-top: 3px solid transparent;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.faret-nc-module .home-module-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(15, 23, 42, 0.05), 0 16px 32px rgba(15, 23, 42, 0.09);
+}
+
+.faret-nc-module .home-module-card-icon {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.faret-nc-module .home-module-card-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.faret-nc-module .home-module-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.faret-nc-module .home-module-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748B;
+    letter-spacing: 0.02em;
+}
+
+.faret-nc-module .home-module-card-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #0F172A;
+    line-height: 1.15;
+}
+
+.faret-nc-module .fnc-kpi-blue { border-top-color: #3B82F6; }
+.faret-nc-module .fnc-kpi-blue .home-module-card-icon { background: rgba(59, 130, 246, 0.12); color: #2563EB; }
+
+.faret-nc-module .fnc-kpi-amber { border-top-color: #F59E0B; }
+.faret-nc-module .fnc-kpi-amber .home-module-card-icon { background: rgba(245, 158, 11, 0.12); color: #D97706; }
+
+.faret-nc-module .fnc-kpi-green { border-top-color: #22C55E; }
+.faret-nc-module .fnc-kpi-green .home-module-card-icon { background: rgba(34, 197, 94, 0.12); color: #16A34A; }
+
+.faret-nc-module .fnc-kpi-red { border-top-color: #EF4444; }
+.faret-nc-module .fnc-kpi-red .home-module-card-icon { background: rgba(239, 68, 68, 0.12); color: #DC2626; }
+.faret-nc-module .fnc-kpi-red .home-module-card-value { color: #B91C1C; }
+
+.faret-nc-module .fnc-kpi-purple { border-top-color: #8B5CF6; }
+.faret-nc-module .fnc-kpi-purple .home-module-card-icon { background: rgba(139, 92, 246, 0.12); color: #7C3AED; }
+
+/* ---------- Botones (scoped) ---------- */
+
+.faret-nc-module .btn-primary,
+.faret-nc-module .btn-secondary,
+.faret-nc-module .btn-ghost,
+.faret-nc-module .btn-danger {
+    border-radius: 10px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+
+.faret-nc-module .btn-primary {
+    background: #2563EB;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+}
+
+.faret-nc-module .btn-primary:hover {
+    background: #1D4ED8;
+    box-shadow: 0 6px 14px rgba(37, 99, 235, 0.3);
+}
+
+.faret-nc-module .btn-secondary {
+    background: #F1F5F9;
+    color: #334155;
+}
+
+.faret-nc-module .btn-secondary:hover {
+    background: #E2E8F0;
+}
+
+.faret-nc-module .btn-ghost {
+    background: transparent;
+    color: #475569;
+    border: 1px solid #D8DEE9;
+}
+
+.faret-nc-module .btn-ghost:hover {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+}
+
+.faret-nc-module .btn-danger {
+    background: #FEF2F2;
+    color: #B91C1C;
+    border: 1px solid #FECACA;
+}
+
+.faret-nc-module .btn-danger:hover {
+    background: #FEE2E2;
+    border-color: #FCA5A5;
+}
+
+.faret-nc-module .fnc-ver-btn,
+.faret-nc-module .fnc-editar-btn,
+.faret-nc-module .fnc-analizar-btn {
+    font-size: 12px;
+    padding: 6px 12px;
+    margin-right: 6px;
+}
+
+/* ---------- Formulario nueva / editar NC ---------- */
+
+.faret-nc-module .fnc-form-card {
+    padding: 22px;
+    margin-bottom: 24px;
+    border: 1px solid #E5E9F0;
+}
+
+.fnc-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+    margin-top: 12px;
+}
+
+.fnc-form-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 160px;
+}
+
+.fnc-form-campo-full {
+    min-width: 100%;
+    margin-top: 14px;
+}
+
+.fnc-form-campo label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.fnc-form-campo input,
+.fnc-form-campo select,
+.fnc-form-campo textarea {
+    border: 1px solid #D8DEE9;
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 13px;
+    color: #0F172A;
+    font-family: inherit;
+    background: white;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fnc-form-campo input::placeholder,
+.fnc-form-campo textarea::placeholder {
+    color: #94A3B8;
+}
+
+.fnc-form-campo input:focus,
+.fnc-form-campo select:focus,
+.fnc-form-campo textarea:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.fnc-form-campo input:disabled,
+.fnc-form-campo select:disabled {
+    background: #F1F5F9;
+    color: #94A3B8;
+    cursor: not-allowed;
+}
+
+.fnc-form-campo input,
+.fnc-form-campo select {
+    height: 38px;
+}
+
+.fnc-form-campo textarea {
+    padding: 10px 12px;
+    resize: vertical;
+}
+
+.fnc-form-acciones {
+    display: flex;
+    gap: 10px;
+    margin-top: 18px;
+}
+
+.fnc-nota {
+    font-size: 12px;
+    color: #64748B;
+    margin-top: 10px;
+}
+
+/* ---------- Combo editable con sugerencias eliminables (ej. Responsable en Gestionar) ---------- */
+
+.fnc-combo-wrap {
+    position: relative;
+}
+
+.fnc-combo-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    margin-top: 4px;
+    background: white;
+    border: 1px solid #D8DEE9;
+    border-radius: 10px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.12);
+    max-height: 180px;
+    overflow-y: auto;
+    z-index: 20;
+}
+
+/* .fnc-combo-item* : combo de Responsable (hecho a mano, con "x" para ocultar sugerencias).
+   .catalog-combo-item* : mismo look, generado por window.CatalogCombo (shared/utils.js), que es
+   genérico entre módulos y por eso usa clases sin prefijo — ver el comentario en ese archivo. */
+.fnc-combo-item,
+.catalog-combo-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 10px;
+    font-size: 13px;
+    color: #1E293B;
+    cursor: pointer;
+}
+
+.fnc-combo-item:hover,
+.catalog-combo-item:hover {
+    background: #F1F5F9;
+}
+
+.fnc-combo-item-nombre,
+.catalog-combo-item-nombre {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.fnc-combo-item-x {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    min-width: 20px;
+    border-radius: 6px;
+    color: #94A3B8;
+    font-weight: 700;
+    font-size: 13px;
+}
+
+.fnc-combo-item-x:hover {
+    background: #FEE2E2;
+    color: #B91C1C;
+}
+
+.fnc-combo-empty,
+.catalog-combo-empty {
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #94A3B8;
+}
+
+.fnc-combo-item-crear,
+.catalog-combo-item-crear {
+    color: #2563EB;
+    font-weight: 600;
+    border-top: 1px solid #E2E8F0;
+}
+
+.fnc-combo-item-crear:hover,
+.catalog-combo-item-crear:hover {
+    background: #EFF6FF;
+}
+
+/* ---------- Selector de columnas opcionales (botón "Columnas" del listado) ---------- */
+
+.fnc-columnas-dropdown {
+    left: auto;
+    right: 0;
+    min-width: 240px;
+    padding: 6px 0;
+}
+
+.fnc-columnas-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    font-size: 13px;
+    color: #1E293B;
+    cursor: pointer;
+}
+
+.fnc-columnas-item:hover {
+    background: #F1F5F9;
+}
+
+/* ---------- Toolbar de filtros ---------- */
+
+.faret-nc-module .fnc-filtros-card {
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    border: 1px solid #E5E9F0;
+}
+
+.faret-nc-module .fnc-toolbar-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 14px;
+}
+
+.faret-nc-module .fnc-toolbar-header svg {
+    width: 16px;
+    height: 16px;
+    color: #94A3B8;
+}
+
+.fnc-filtros-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+}
+
+.fnc-filtro-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 160px;
+}
+
+.fnc-filtro-campo label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.fnc-filtro-campo input,
+.fnc-filtro-campo select {
+    height: 38px;
+    border: 1px solid #D8DEE9;
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 13px;
+    color: #0F172A;
+    background: white;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fnc-filtro-campo input:focus,
+.fnc-filtro-campo select:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.fnc-filtro-campo input:disabled {
+    background: #F1F5F9;
+    color: #94A3B8;
+}
+
+.faret-nc-module .fnc-filtro-divisor {
+    width: 1px;
+    align-self: stretch;
+    background: #E5E9F0;
+    margin: 0 2px;
+}
+
+.fnc-filtro-acciones {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+/* ---------- Indicadores estadísticos (Paso 52) ----------
+   .home-middle/.home-bottom y el tamaño de canvas de Inicio Faret están scoped a .home-module
+   (core/styles.css) y no aplican fuera de ese módulo — confirmado antes de escribir esto. Se
+   reutilizan .card/.module-title/.fnc-toolbar-header/.fnc-analisis-seccion/.fnc-nota/
+   .home-module-card-value ya existentes; solo se agrega el grid y el alto del canvas, que no
+   tienen ninguna clase existente equivalente fuera de Inicio Faret. */
+
+.faret-nc-module .fnc-stats-card {
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    border: 1px solid #E5E9F0;
+}
+
+.faret-nc-module .fnc-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 16px;
+}
+
+.faret-nc-module .fnc-stats-resumen {
+    display: flex;
+    gap: 22px;
+    margin: 2px 0 6px;
+}
+
+.faret-nc-module .fnc-stats-card canvas {
+    width: 100% !important;
+    height: 200px !important;
+    margin-top: 8px;
+}
+
+/* El Pareto rota sus etiquetas 40° (hasta 11 categorías: Top 10 + "Otros") — necesita más alto
+   que el resto de los gráficos de esta sección para que las etiquetas no se corten. */
+.faret-nc-module #fnc-chart-pareto {
+    height: 260px !important;
+}
+
+/* Máquinas/Operadores/Clientes muestran TODAS las categorías reales (sin agrupar en "Otros",
+   para no ocultar datos), ordenadas de mayor a menor. El alto del canvas se calcula en JS según
+   la cantidad real de filas (_chartBarHorizontalStats, opts.scroll) para que cada barra quede
+   legible; este contenedor limita el alto visible y agrega scroll interno para que el bloque no
+   crezca sin límite cuando hay muchas categorías. */
+.faret-nc-module .fnc-chart-scroll {
+    max-height: 220px;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+/* ---------- Paginación ---------- */
+
+.fnc-paginacion {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: #475569;
+    font-weight: 500;
+}
+
+/* ---------- Badges (severidad / estado) ---------- */
+
+.fnc-badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+}
+
+/* ---------- Tabla ---------- */
+
+.faret-nc-module .faret-registros-card {
+    padding: 22px;
+}
+
+.faret-nc-module .table-container {
+    background: white;
+    border: 1px solid #E5E9F0;
+    border-radius: 12px;
+}
+
+.faret-nc-module .table thead {
+    background: #F8FAFC;
+    color: #475569;
+}
+
+.faret-nc-module .table thead th {
+    background: #F8FAFC;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 12px 14px;
+    border-bottom: 1px solid #E5E9F0;
+}
+
+.faret-nc-module .table td {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: #1E293B;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.faret-nc-module .table tbody tr:nth-child(even) {
+    background: #FAFBFC;
+}
+
+.faret-nc-module .table tbody tr:hover {
+    background: #EFF6FF;
+}
+
+/* ---------- Modales ---------- */
+
+.fnc-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.5);
+    backdrop-filter: blur(2px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.fnc-modal {
+    width: 100%;
+    max-width: 640px;
+    max-height: 85vh;
+    overflow-y: auto;
+    padding: 24px;
+    border-radius: 18px;
+    box-shadow: 0 24px 60px rgba(15, 23, 42, 0.25);
+}
+
+.fnc-detalle-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    font-size: 13px;
+    margin-bottom: 14px;
+}
+
+.fnc-detalle-titulo,
+.fnc-detalle-descripcion {
+    font-size: 13px;
+    margin-top: 10px;
+}
+
+/* ---------- Modal Analizar NC (secciones tipo card) ---------- */
+
+.fnc-analisis-modal {
+    max-width: 940px;
+}
+
+.fnc-analisis-seccion {
+    background: #F8FAFC;
+    border: 1px solid #E5E9F0;
+    border-radius: 14px;
+    padding: 18px 20px;
+    margin-top: 16px;
+}
+
+.fnc-analisis-seccion:first-of-type {
+    margin-top: 14px;
+}
+
+.fnc-analisis-seccion-titulo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #1E293B;
+    margin-bottom: 14px;
+}
+
+.fnc-seccion-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    min-width: 24px;
+    border-radius: 999px;
+    background: #2563EB;
+    color: white;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+/* ---------- Seguimiento (comentarios) ---------- */
+
+.fnc-seguimiento-item {
+    border-bottom: 1px solid #F1F5F9;
+    padding: 8px 0;
+    font-size: 13px;
+}
+
+.fnc-seguimiento-item:last-child {
+    border-bottom: none;
+}
+
+.fnc-seguimiento-meta {
+    font-size: 11px;
+    color: #94A3B8;
+    margin-top: 2px;
+}
+
+.fnc-accion-estado-select {
+    height: 34px;
+    border: 1px solid #D8DEE9;
+    border-radius: 8px;
+    font-size: 12px;
+    padding: 0 8px;
+    background: white;
+}
+
+.fnc-accion-estado-select:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+@media (max-width: 1100px) {
+    .faret-nc-module .home-modules-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .faret-nc-module .fnc-filtro-divisor {
+        display: none;
+    }
+
+    .fnc-filtro-acciones {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .fnc-detalle-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---------- Adjuntos: PDF causa raíz + evidencia fotográfica ---------- */
+
+.faret-nc-module .fnc-adjunto-pdf-fila {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 6px;
+}
+
+.faret-nc-module .fnc-fotos-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.faret-nc-module .fnc-foto-item {
+    position: relative;
+    border: 1px solid #E5E9F0;
+    border-radius: 8px;
+    overflow: hidden;
+    cursor: pointer;
+    background: #F8FAFC;
+}
+
+.faret-nc-module .fnc-foto-item img {
+    display: block;
+    width: 100%;
+    height: 90px;
+    object-fit: cover;
+}
+
+.faret-nc-module .fnc-foto-item .fnc-foto-eliminar {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    background: rgba(15, 23, 42, 0.75);
+    color: #fff;
+    border: none;
+    border-radius: 6px;
+    width: 22px;
+    height: 22px;
+    line-height: 22px;
+    text-align: center;
+    cursor: pointer;
+    font-size: 0.85rem;
+}

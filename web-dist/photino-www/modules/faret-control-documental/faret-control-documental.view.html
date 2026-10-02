@@ -1,0 +1,241 @@
+<div class="module faret-control-documental-module">
+
+    <div class="module-header">
+        <div>
+            <div class="module-title">Control Documental</div>
+            <div class="subtitle">Protocolos, procedimientos, instructivos y registros — con historial real de versiones. Información compartida con INNPACK.</div>
+        </div>
+        <div class="module-actions">
+            <button id="fcd-exportar-btn" class="btn-secondary">Exportar Excel</button>
+            <button id="fcd-nuevo-btn" class="btn-primary">+ Nuevo Documento</button>
+        </div>
+    </div>
+
+    <div id="fcd-mensaje" class="fcd-mensaje" style="display:none;"></div>
+
+    <!-- Filtros -->
+    <div class="card fcd-filtros-card">
+        <div class="filters fcd-filtros-row">
+            <div class="fcd-campo" style="min-width:220px;">
+                <label for="fcd-filtro-texto">Buscar (código o nombre)</label>
+                <input type="text" id="fcd-filtro-texto" placeholder="Ej. PRO-CDP o Control de calidad">
+            </div>
+            <div class="fcd-campo">
+                <label for="fcd-filtro-tipo">Tipo de documento</label>
+                <select id="fcd-filtro-tipo"><option value="">Todos</option></select>
+            </div>
+            <div class="fcd-campo">
+                <label for="fcd-filtro-area">Área</label>
+                <select id="fcd-filtro-area"><option value="">Todas</option></select>
+            </div>
+            <div class="fcd-campo">
+                <label for="fcd-filtro-estado">Estado</label>
+                <select id="fcd-filtro-estado">
+                    <option value="">Todos</option>
+                    <option value="VIGENTE">Vigente</option>
+                    <option value="EN_REVISION">En revisión</option>
+                    <option value="OBSOLETO">Obsoleto</option>
+                </select>
+            </div>
+            <div class="fcd-campo">
+                <label for="fcd-filtro-alcance">Alcance</label>
+                <select id="fcd-filtro-alcance">
+                    <option value="">Todos</option>
+                    <option value="INNPACK">INNPACK</option>
+                    <option value="FARET">FARET</option>
+                    <option value="AMBAS">AMBAS</option>
+                </select>
+            </div>
+            <div class="fcd-campo fcd-filtro-acciones">
+                <button id="fcd-filtrar-btn" class="btn-primary">Filtrar</button>
+                <button id="fcd-limpiar-btn" class="btn-secondary">Limpiar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="card">
+        <div class="table-container">
+            <table class="table" id="fcd-tabla">
+                <thead>
+                    <tr>
+                        <th>Código base</th>
+                        <th>Nombre</th>
+                        <th>Tipo</th>
+                        <th>Área</th>
+                        <th>Alcance</th>
+                        <th>Estado</th>
+                        <th>Versión vigente</th>
+                        <th>Próxima revisión</th>
+                        <th>Responsable</th>
+                        <th>Adjunto</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="fcd-tbody">
+                    <tr><td colspan="11">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="pagination" id="fcd-paginacion"></div>
+    </div>
+
+    <!-- Modal Nuevo / Ver / Editar -->
+    <div id="fcd-form-modal" class="fcd-modal-overlay" style="display:none;">
+        <div class="fcd-modal card">
+            <div class="module-header">
+                <div>
+                    <div class="module-title" id="fcd-form-titulo" style="font-size:1rem;">Nuevo Documento</div>
+                    <div class="subtitle" id="fcd-form-subtitulo">Complete los datos del documento</div>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="fcd-form-editar-btn" class="btn-secondary" style="display:none;">Editar</button>
+                    <button id="fcd-form-cerrar-btn" class="btn-secondary">Cerrar</button>
+                </div>
+            </div>
+
+            <div id="fcd-form-error" class="fcd-error" style="display:none;"></div>
+
+            <div class="fcd-form-row">
+                <div class="fcd-campo">
+                    <label for="fcd-f-codigo-base">Código base *</label>
+                    <input type="text" id="fcd-f-codigo-base" placeholder="Ej. PRO-CDP">
+                </div>
+                <div class="fcd-campo" style="min-width:220px;">
+                    <label for="fcd-f-nombre">Nombre *</label>
+                    <input type="text" id="fcd-f-nombre">
+                </div>
+                <div class="fcd-campo">
+                    <label for="fcd-f-tipo-documento">Tipo de documento *</label>
+                    <input type="text" id="fcd-f-tipo-documento" list="fcd-dl-tipo">
+                    <datalist id="fcd-dl-tipo"></datalist>
+                </div>
+                <div class="fcd-campo">
+                    <label for="fcd-f-area">Área</label>
+                    <input type="text" id="fcd-f-area" list="fcd-dl-area">
+                    <datalist id="fcd-dl-area"></datalist>
+                </div>
+            </div>
+
+            <div class="fcd-form-row">
+                <div class="fcd-campo">
+                    <label for="fcd-f-alcance">Alcance *</label>
+                    <select id="fcd-f-alcance">
+                        <option value="INNPACK">INNPACK</option>
+                        <option value="FARET">FARET</option>
+                        <option value="AMBAS">AMBAS</option>
+                    </select>
+                </div>
+                <div class="fcd-campo">
+                    <label for="fcd-f-estado">Estado *</label>
+                    <select id="fcd-f-estado">
+                        <option value="VIGENTE">Vigente</option>
+                        <option value="EN_REVISION">En revisión</option>
+                        <option value="OBSOLETO">Obsoleto</option>
+                    </select>
+                </div>
+                <div class="fcd-campo">
+                    <label for="fcd-f-responsable">Responsable</label>
+                    <input type="text" id="fcd-f-responsable">
+                </div>
+                <div class="fcd-campo" style="min-width:220px;">
+                    <label for="fcd-f-ubicacion">Ubicación (ruta/URL)</label>
+                    <input type="text" id="fcd-f-ubicacion">
+                </div>
+            </div>
+
+            <div class="fcd-campo fcd-campo-full">
+                <label for="fcd-f-observaciones">Observaciones</label>
+                <textarea id="fcd-f-observaciones" rows="2"></textarea>
+            </div>
+
+            <!-- Versión inicial: solo al crear -->
+            <div class="fcd-seccion" id="fcd-version-inicial-seccion">
+                <div class="fcd-seccion-titulo"><span class="fcd-seccion-badge">1</span>Versión inicial</div>
+                <div class="fcd-form-row">
+                    <div class="fcd-campo">
+                        <label for="fcd-f-version">Versión *</label>
+                        <input type="text" id="fcd-f-version" placeholder="Ej. V01">
+                    </div>
+                    <div class="fcd-campo">
+                        <label for="fcd-f-fecha-actualizacion">Fecha actualización *</label>
+                        <input type="date" id="fcd-f-fecha-actualizacion">
+                    </div>
+                    <div class="fcd-campo">
+                        <label for="fcd-f-proxima-revision">Próxima revisión</label>
+                        <input type="date" id="fcd-f-proxima-revision">
+                    </div>
+                    <div class="fcd-campo">
+                        <label for="fcd-f-adjunto">Adjuntar archivo (opcional)</label>
+                        <input type="file" id="fcd-f-adjunto" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Historial de versiones: solo al ver/editar -->
+            <div class="fcd-seccion" id="fcd-historial-seccion" style="display:none;">
+                <div class="fcd-seccion-titulo"><span class="fcd-seccion-badge">2</span>Historial de versiones</div>
+                <div class="table-container">
+                    <table class="table">
+                        <thead>
+                            <tr>
+                                <th>Versión</th>
+                                <th>Fecha actualización</th>
+                                <th>Próxima revisión</th>
+                                <th>Vigente</th>
+                            </tr>
+                        </thead>
+                        <tbody id="fcd-versiones-tbody">
+                            <tr><td colspan="4">Sin versiones</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="fcd-form-row" style="margin-top:14px;">
+                    <div class="fcd-campo">
+                        <label for="fcd-nv-version">Nueva versión</label>
+                        <input type="text" id="fcd-nv-version" placeholder="Ej. V02">
+                    </div>
+                    <div class="fcd-campo">
+                        <label for="fcd-nv-fecha-actualizacion">Fecha actualización</label>
+                        <input type="date" id="fcd-nv-fecha-actualizacion">
+                    </div>
+                    <div class="fcd-campo">
+                        <label for="fcd-nv-proxima-revision">Próxima revisión</label>
+                        <input type="date" id="fcd-nv-proxima-revision">
+                    </div>
+                    <div class="fcd-campo">
+                        <label for="fcd-nv-adjunto">Adjuntar archivo (opcional)</label>
+                        <input type="file" id="fcd-nv-adjunto" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp">
+                    </div>
+                    <div class="fcd-campo">
+                        <label>&nbsp;</label>
+                        <button id="fcd-nv-agregar-btn" class="btn-primary">+ Agregar versión</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="fcd-form-acciones">
+                <button id="fcd-f-guardar-btn" class="btn-primary">Guardar</button>
+                <button id="fcd-f-cancelar-btn" class="btn-secondary" style="display:none;">Cancelar edición</button>
+            </div>
+        </div>
+    </div>
+
+    <input type="file" id="fcd-adjunto-input" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,.webp" style="display:none;">
+
+    <!-- Modal Ver Adjunto -->
+    <div id="fcd-adjunto-modal" class="fcd-modal-overlay" style="display:none;">
+        <div class="fcd-modal card">
+            <div class="module-header">
+                <div>
+                    <div class="module-title" id="fcd-adjunto-titulo" style="font-size:1rem;">Adjunto</div>
+                </div>
+                <button id="fcd-adjunto-cerrar-btn" class="btn-secondary">Cerrar</button>
+            </div>
+            <div id="fcd-adjunto-contenido" style="max-height:70vh; overflow:auto; text-align:center;"></div>
+        </div>
+    </div>
+
+</div>

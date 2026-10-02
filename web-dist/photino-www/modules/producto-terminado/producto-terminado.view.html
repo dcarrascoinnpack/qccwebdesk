@@ -1,0 +1,182 @@
+<div class="module producto-terminado-module">
+
+  <div class="module-header">
+    <div>
+      <div class="module-title">Producto Terminado</div>
+      <div class="subtitle">Inspecciones finales de Termoformado y Pegado (muestreo NCh44:2007) capturadas desde la app móvil</div>
+    </div>
+
+    <div class="module-actions">
+      <button class="btn-secondary" id="btnExportarProductoTerminado">Exportar Excel</button>
+      <button class="btn-primary" id="btnActualizarProductoTerminado">Actualizar</button>
+    </div>
+  </div>
+
+  <div id="ptEstadoConexion" class="card" style="margin-bottom: 16px; display: none;"></div>
+
+  <div class="kpi-row">
+
+    <div class="kpi-card">
+      <div class="kpi-label">Total inspecciones</div>
+      <div class="kpi-value" id="ptTotalInspecciones">0</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">% Lotes conformes</div>
+      <div class="kpi-value" id="ptPorcentajeConformes">0%</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">% Lotes no conformes</div>
+      <div class="kpi-value" id="ptPorcentajeNoConformes">0%</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">Unidades no conformes</div>
+      <div class="kpi-value" id="ptUnidadesNc">0</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">Defectos registrados</div>
+      <div class="kpi-value" id="ptDefectosTotales">0</div>
+    </div>
+
+  </div>
+
+  <div class="card producto-terminado-filters-card">
+    <div class="filters producto-terminado-filters">
+
+      <div class="filter-field">
+        <label for="ptFechaDesde">Fecha desde</label>
+        <input type="text" id="ptFechaDesde" placeholder="Seleccionar fecha" />
+      </div>
+
+      <div class="filter-field">
+        <label for="ptFechaHasta">Fecha hasta</label>
+        <input type="text" id="ptFechaHasta" placeholder="Seleccionar fecha" />
+      </div>
+
+      <div class="filter-field">
+        <label for="ptNp">NP</label>
+        <input type="text" id="ptNp" placeholder="Buscar NP" />
+      </div>
+
+      <div class="filter-field">
+        <label for="ptCodigoProducto">Ítem</label>
+        <input type="text" id="ptCodigoProducto" placeholder="Código producto" />
+      </div>
+
+      <div class="filter-field">
+        <label for="ptProceso">Proceso</label>
+        <select id="ptProceso">
+          <option value="">Todos</option>
+          <option value="Termoformado">Termoformado</option>
+          <option value="Pegado">Pegado</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="ptMaquina">Máquina</label>
+        <select id="ptMaquina">
+          <option value="">Todas</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="ptTurno">Turno</label>
+        <select id="ptTurno">
+          <option value="">Todos</option>
+          <option value="A">Turno A</option>
+          <option value="B">Turno B</option>
+          <option value="C">Turno C</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="ptInspector">Inspector</label>
+        <select id="ptInspector">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="ptResultado">Resultado</label>
+        <select id="ptResultado">
+          <option value="">Todos</option>
+          <option value="CONFORME">Conforme</option>
+          <option value="NO CONFORME">No Conforme</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="ptOrigen">Origen del problema</label>
+        <select id="ptOrigen">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="producto-terminado-filter-actions">
+        <button class="btn-primary" id="btnFiltrarProductoTerminado">Filtrar</button>
+        <button class="btn-secondary" id="btnLimpiarProductoTerminado">Limpiar</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="producto-terminado-charts-grid">
+
+    <div class="card producto-terminado-chart-card">
+      <div class="module-title">Pareto de defectos</div>
+      <canvas id="chartProductoTerminadoPareto"></canvas>
+    </div>
+
+    <div class="card producto-terminado-chart-card">
+      <div class="module-title">Unidades NC por origen</div>
+      <canvas id="chartProductoTerminadoOrigen"></canvas>
+    </div>
+
+    <div class="card producto-terminado-chart-card">
+      <div class="module-title">Tendencia producto no conforme</div>
+      <canvas id="chartProductoTerminadoTendencia"></canvas>
+    </div>
+
+    <div class="card producto-terminado-chart-card">
+      <div class="module-title">Termoformado vs Pegado</div>
+      <canvas id="chartProductoTerminadoComparacion"></canvas>
+    </div>
+
+  </div>
+
+  <div class="card">
+    <div class="module-title">Inspecciones</div>
+
+    <div class="table-container">
+      <table class="table" id="tablaProductoTerminado">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha / Hora</th>
+            <th>Inspector</th>
+            <th>NP</th>
+            <th>Cliente</th>
+            <th>Ítem</th>
+            <th>Proceso</th>
+            <th>Cant. Lote</th>
+            <th>Máquina</th>
+            <th>Turno</th>
+            <th>Resultado</th>
+            <th>Acciones</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyProductoTerminado">
+          <tr>
+            <td colspan="12">Cargando...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="pagination" id="paginacionProductoTerminado"></div>
+  </div>
+
+</div>

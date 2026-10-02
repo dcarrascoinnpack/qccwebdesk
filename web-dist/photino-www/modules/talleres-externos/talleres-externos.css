@@ -1,0 +1,503 @@
+/* =====================================================
+   TALLERES EXTERNOS (INNPACK) — tabla + formulario modal, mismo patrón visual
+   compacto tipo ERP ya aprobado para el módulo homónimo de Faret, pero
+   completamente autocontenido: ninguna clase de este archivo depende de
+   faret.css (todas las clases de estado/tabla/modal/formulario se definen
+   acá mismo con el prefijo .te-). .btn-*/.table/.card/.module-header/
+   .module-title/.subtitle/.home-modules-grid/.home-module-card son clases
+   genéricas ya definidas en core/styles.css y se sobreescriben (scoped) solo
+   para lograr el layout compacto; el resto se mantiene sin tocar.
+===================================================== */
+
+.talleres-externos-module {
+    gap: 8px;
+    height: calc(100vh - 60px);
+    min-height: 480px;
+}
+
+.talleres-externos-module .module-header {
+    margin-bottom: 0;
+    flex-shrink: 0;
+}
+
+.talleres-externos-module .module-title {
+    font-size: 19px;
+    margin-bottom: 1px;
+}
+
+.talleres-externos-module .subtitle {
+    margin-top: 1px;
+    font-size: 11.5px;
+}
+
+.talleres-externos-module .card {
+    margin-top: 0;
+    flex-shrink: 0;
+}
+
+.talleres-externos-module .te-success {
+    background: #DCFCE7;
+    color: #166534;
+    border: 1px solid #86EFAC;
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    font-weight: 600;
+}
+
+/* ---------- KPIs: una sola fila en pantallas normales/grandes, hasta 2 filas
+   en pantallas angostas. ---------- */
+
+.talleres-externos-module .home-modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: 10px;
+    margin-bottom: 0;
+}
+
+.talleres-externos-module .home-module-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    background: white;
+    border: 1px solid #E5E9F0;
+    border-radius: 10px;
+    padding: 10px 12px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+    border-top: 3px solid transparent;
+}
+
+.talleres-externos-module .home-module-card-icon {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.talleres-externos-module .home-module-card-icon svg {
+    width: 14px;
+    height: 14px;
+}
+
+.talleres-externos-module .home-module-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    min-width: 0;
+}
+
+.talleres-externos-module .home-module-card-title {
+    font-size: 10px;
+    font-weight: 600;
+    color: #64748B;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.talleres-externos-module .home-module-card-value {
+    font-size: 17px;
+    font-weight: 700;
+    color: #0F172A;
+    line-height: 1.2;
+}
+
+.talleres-externos-module .te-kpi-blue { border-top-color: #3B82F6; }
+.talleres-externos-module .te-kpi-blue .home-module-card-icon { background: rgba(59, 130, 246, 0.12); color: #2563EB; }
+
+.talleres-externos-module .te-kpi-amber { border-top-color: #F59E0B; }
+.talleres-externos-module .te-kpi-amber .home-module-card-icon { background: rgba(245, 158, 11, 0.12); color: #D97706; }
+
+.talleres-externos-module .te-kpi-red { border-top-color: #EF4444; }
+.talleres-externos-module .te-kpi-red .home-module-card-icon { background: rgba(239, 68, 68, 0.12); color: #DC2626; }
+.talleres-externos-module .te-kpi-red .home-module-card-value { color: #B91C1C; }
+
+.talleres-externos-module .te-kpi-green { border-top-color: #22C55E; }
+.talleres-externos-module .te-kpi-green .home-module-card-icon { background: rgba(34, 197, 94, 0.12); color: #16A34A; }
+
+.talleres-externos-module .te-kpi-purple { border-top-color: #8B5CF6; }
+.talleres-externos-module .te-kpi-purple .home-module-card-icon { background: rgba(139, 92, 246, 0.12); color: #7C3AED; }
+
+/* ---------- Filtros ---------- */
+
+.talleres-externos-module .te-filtros-card {
+    padding: 10px 14px;
+    margin-bottom: 0;
+}
+
+.talleres-externos-module .te-toolbar-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #334155;
+    margin-bottom: 6px;
+}
+
+.talleres-externos-module .te-toolbar-header svg {
+    width: 14px;
+    height: 14px;
+}
+
+.talleres-externos-module .te-filtros-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 10px;
+}
+
+.talleres-externos-module .te-filtro-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    min-width: 140px;
+}
+
+.talleres-externos-module .te-filtro-campo label {
+    font-size: 11px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.talleres-externos-module .te-filtro-campo input,
+.talleres-externos-module .te-filtro-campo select {
+    height: 32px;
+    border: 1px solid #D8DEE9;
+    border-radius: 8px;
+    padding: 0 10px;
+    font-size: 12.5px;
+    color: #0F172A;
+    background: white;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.talleres-externos-module .te-filtro-campo input:focus,
+.talleres-externos-module .te-filtro-campo select:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.talleres-externos-module .te-filtro-divisor {
+    width: 1px;
+    align-self: stretch;
+    background: #E5E9F0;
+    margin: 0 2px;
+}
+
+.talleres-externos-module .te-filtro-acciones {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+/* ---------- Tabla: la única sección que crece. ---------- */
+
+.talleres-externos-module .te-registros-card {
+    padding: 10px;
+    flex: 1 1 auto;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.talleres-externos-module .table-container {
+    max-height: none;
+    flex: 1 1 auto;
+    min-height: 0;
+}
+
+.talleres-externos-module .te-loading,
+.talleres-externos-module .te-error {
+    padding: 10px 4px;
+    font-size: 13px;
+    flex-shrink: 0;
+}
+
+.talleres-externos-module .te-error {
+    color: #B91C1C;
+}
+
+.talleres-externos-module .te-empty {
+    text-align: center;
+    color: #94A3B8;
+    padding: 16px;
+}
+
+.talleres-externos-module .te-precio-celda {
+    min-width: 180px;
+    max-width: 260px;
+    padding-left: 16px;
+    padding-right: 16px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    line-height: 1.5;
+}
+
+.talleres-externos-module .te-obs-celda {
+    max-width: 220px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.talleres-externos-module .te-paginacion {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    padding: 8px 0 2px;
+    font-size: 12.5px;
+    color: #475569;
+    flex-shrink: 0;
+}
+
+/* ---------- Badges ---------- */
+
+.talleres-externos-module .te-badge {
+    display: inline-block;
+    padding: 2px 9px;
+    border-radius: 999px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+}
+
+.talleres-externos-module .te-badge-alta { background: #FEE2E2; color: #B91C1C; }
+.talleres-externos-module .te-badge-media { background: #FEF3C7; color: #92400E; }
+.talleres-externos-module .te-badge-baja { background: #DCFCE7; color: #166534; }
+
+.talleres-externos-module .te-badge-estado-pendiente_asignacion { background: #F1F5F9; color: #475569; }
+.talleres-externos-module .te-badge-estado-asignado { background: #DBEAFE; color: #1D4ED8; }
+.talleres-externos-module .te-badge-estado-en_proceso { background: #FEF3C7; color: #92400E; }
+.talleres-externos-module .te-badge-estado-entregado { background: #DCFCE7; color: #166534; }
+.talleres-externos-module .te-badge-estado-anulado { background: #FEE2E2; color: #B91C1C; }
+
+.talleres-externos-module .te-fecha-vencida {
+    color: #B91C1C;
+    font-weight: 700;
+}
+
+/* ---------- Modal + formulario ---------- */
+
+.talleres-externos-module .te-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.45);
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px;
+    z-index: 1000;
+    overflow-y: auto;
+}
+
+.talleres-externos-module .te-modal {
+    width: 100%;
+    max-width: 720px;
+    padding: 22px;
+}
+
+.talleres-externos-module .te-form-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 14px;
+    margin-bottom: 12px;
+}
+
+.talleres-externos-module .te-form-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 5px;
+    min-width: 150px;
+    position: relative;
+}
+
+.talleres-externos-module .te-form-campo-full {
+    width: 100%;
+    margin-bottom: 12px;
+}
+
+.talleres-externos-module .te-form-campo label {
+    font-size: 11.5px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.talleres-externos-module .te-form-campo input,
+.talleres-externos-module .te-form-campo select,
+.talleres-externos-module .te-form-campo textarea {
+    height: 36px;
+    border: 1px solid #D8DEE9;
+    border-radius: 9px;
+    padding: 0 11px;
+    font-size: 12.5px;
+    color: #0F172A;
+    background: white;
+    font-family: inherit;
+}
+
+.talleres-externos-module .te-form-campo textarea {
+    height: auto;
+    padding: 8px 11px;
+    resize: vertical;
+}
+
+.talleres-externos-module .te-form-campo input:disabled {
+    background: #F8FAFC;
+    color: #94A3B8;
+}
+
+.talleres-externos-module .te-form-campo input:focus,
+.talleres-externos-module .te-form-campo select:focus,
+.talleres-externos-module .te-form-campo textarea:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.talleres-externos-module .te-form-acciones {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 14px;
+}
+
+/* Dropdown de sugerencias (con "x" para ocultar), reutilizado en 6 campos del formulario */
+
+.talleres-externos-module .te-combo-dropdown {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid #E2E8F0;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(15, 23, 42, 0.14);
+    max-height: 220px;
+    overflow-y: auto;
+    z-index: 60;
+}
+
+.talleres-externos-module .te-combo-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 7px 10px;
+    font-size: 12.5px;
+    color: #0F172A;
+    cursor: pointer;
+}
+
+.talleres-externos-module .te-combo-item:hover {
+    background: #F1F5F9;
+}
+
+.talleres-externos-module .te-combo-item-nombre {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.talleres-externos-module .te-combo-item-x {
+    color: #94A3B8;
+    font-weight: 700;
+    padding: 0 4px;
+    border-radius: 4px;
+}
+
+.talleres-externos-module .te-combo-item-x:hover {
+    background: #FEE2E2;
+    color: #B91C1C;
+}
+
+.talleres-externos-module .te-combo-empty {
+    padding: 8px 10px;
+    font-size: 12px;
+    color: #94A3B8;
+}
+
+/* ---------- Modal Gestionar catálogos ---------- */
+
+.talleres-externos-module .te-catalogos-columnas {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 20px;
+    margin-top: 14px;
+}
+
+.talleres-externos-module .te-catalogos-subtitulo {
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: 8px;
+}
+
+.talleres-externos-module .te-catalogos-lista {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    max-height: 320px;
+    overflow-y: auto;
+}
+
+.talleres-externos-module .te-catalogo-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    padding: 8px 12px;
+    border: 1px solid #E5E9F0;
+    border-radius: 8px;
+    background: #F8FAFC;
+    font-size: 13px;
+    color: #0F172A;
+}
+
+.talleres-externos-module .te-catalogo-eliminar-btn {
+    border: none;
+    background: transparent;
+    color: #94A3B8;
+    font-size: 14px;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+    padding: 2px 6px;
+    border-radius: 6px;
+}
+
+.talleres-externos-module .te-catalogo-eliminar-btn:hover {
+    background: #FEE2E2;
+    color: #B91C1C;
+}
+
+.talleres-externos-module .te-catalogos-vacio {
+    font-size: 13px;
+    color: #94A3B8;
+    padding: 8px 0;
+}
+
+@media (max-width: 900px) {
+    .talleres-externos-module .te-filtro-divisor {
+        display: none;
+    }
+
+    .talleres-externos-module .te-filtro-acciones {
+        margin-left: 0;
+        width: 100%;
+    }
+
+    .talleres-externos-module .te-catalogos-columnas {
+        grid-template-columns: 1fr;
+    }
+}

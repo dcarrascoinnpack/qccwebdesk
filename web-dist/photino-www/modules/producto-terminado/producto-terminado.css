@@ -1,0 +1,99 @@
+/* Producto Terminado (INNPACK) — mismo lenguaje visual que Dashboard Calidad
+   (core/styles.css, bloque .dashboard-calidad-module), scoped a este módulo. */
+
+.producto-terminado-module .kpi-row {
+    margin-bottom: 0;
+}
+
+.producto-terminado-module .card {
+    overflow: hidden;
+}
+
+/* Filtros */
+.producto-terminado-module .producto-terminado-filters {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    gap: 14px;
+    align-items: end;
+}
+
+.producto-terminado-module .filter-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.producto-terminado-module .filter-field label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #64748b;
+}
+
+.producto-terminado-module .filter-field input,
+.producto-terminado-module .filter-field select {
+    height: 40px;
+    width: 100%;
+    border: 1px solid #cbd5e1;
+    border-radius: 8px;
+    padding: 0 10px;
+    background: white;
+}
+
+.producto-terminado-module .producto-terminado-filter-actions {
+    display: flex;
+    gap: 10px;
+    align-items: end;
+}
+
+/* Grid de gráficos */
+.producto-terminado-module .producto-terminado-charts-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    margin-bottom: 20px;
+}
+
+.producto-terminado-module .producto-terminado-chart-card {
+    min-height: 300px;
+    max-height: 340px;
+    padding: 18px;
+}
+
+.producto-terminado-module .producto-terminado-chart-card canvas {
+    width: 100% !important;
+    height: 230px !important;
+    max-height: 230px !important;
+    display: block;
+}
+
+/* Tablas */
+.producto-terminado-module .table-container {
+    max-height: 360px;
+}
+
+.producto-terminado-module .card:has(.table-container) {
+    max-height: none;
+}
+
+/* Responsive */
+@media (max-width: 1300px) {
+    .producto-terminado-module .producto-terminado-filters {
+        grid-template-columns: repeat(3, minmax(150px, 1fr));
+    }
+
+    .producto-terminado-module .producto-terminado-charts-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+@media (max-width: 900px) {
+    .producto-terminado-module .producto-terminado-filters {
+        grid-template-columns: 1fr;
+    }
+}
+
+.producto-terminado-module .producto-terminado-filters-card {
+    min-height: auto;
+    max-height: none;
+    padding: 18px;
+}

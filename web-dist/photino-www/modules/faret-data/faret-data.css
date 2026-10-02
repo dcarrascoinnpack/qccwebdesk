@@ -1,0 +1,282 @@
+/* =====================================================
+   DATA — Dashboard visual (Fluent / Power BI inspired)
+   Todas las reglas están scoped a .faret-data-module para
+   no afectar ningún otro módulo del sistema.
+===================================================== */
+
+.faret-data-module .module-header {
+    margin-bottom: 4px;
+}
+
+/* ---------- KPI cards ---------- */
+
+.faret-data-module .home-modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 16px;
+    margin: 18px 0 24px;
+}
+
+.faret-data-module .home-module-card {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    background: white;
+    border: 1px solid #E5E9F0;
+    border-radius: 16px;
+    padding: 20px;
+    box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04), 0 8px 20px rgba(15, 23, 42, 0.05);
+    border-top: 3px solid transparent;
+    transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.faret-data-module .home-module-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(15, 23, 42, 0.05), 0 16px 32px rgba(15, 23, 42, 0.09);
+}
+
+.faret-data-module .home-module-card-icon {
+    width: 44px;
+    height: 44px;
+    min-width: 44px;
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.faret-data-module .home-module-card-icon svg {
+    width: 22px;
+    height: 22px;
+}
+
+.faret-data-module .home-module-card-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.faret-data-module .home-module-card-title {
+    font-size: 12px;
+    font-weight: 600;
+    color: #64748B;
+    letter-spacing: 0.02em;
+}
+
+.faret-data-module .home-module-card-value {
+    font-size: 26px;
+    font-weight: 700;
+    color: #0F172A;
+    line-height: 1.15;
+}
+
+.faret-data-module .fd-kpi-value-sm {
+    font-size: 16px;
+    font-weight: 700;
+}
+
+.faret-data-module .fd-kpi-blue { border-top-color: #3B82F6; }
+.faret-data-module .fd-kpi-blue .home-module-card-icon { background: rgba(59, 130, 246, 0.12); color: #2563EB; }
+
+.faret-data-module .fd-kpi-purple { border-top-color: #8B5CF6; }
+.faret-data-module .fd-kpi-purple .home-module-card-icon { background: rgba(139, 92, 246, 0.12); color: #7C3AED; }
+
+.faret-data-module .fd-kpi-red { border-top-color: #EF4444; }
+.faret-data-module .fd-kpi-red .home-module-card-icon { background: rgba(239, 68, 68, 0.12); color: #DC2626; }
+.faret-data-module .fd-kpi-red .home-module-card-value { color: #B91C1C; }
+
+.faret-data-module .fd-kpi-amber { border-top-color: #F59E0B; }
+.faret-data-module .fd-kpi-amber .home-module-card-icon { background: rgba(245, 158, 11, 0.12); color: #D97706; }
+
+/* ---------- Toolbar de filtros ---------- */
+
+.faret-data-module .fd-filtros-card {
+    padding: 18px 22px;
+    margin-bottom: 24px;
+    border: 1px solid #E5E9F0;
+}
+
+.faret-data-module .fd-toolbar-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+    font-weight: 700;
+    color: #475569;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 14px;
+}
+
+.faret-data-module .fd-toolbar-header svg {
+    width: 16px;
+    height: 16px;
+    color: #94A3B8;
+}
+
+.fd-filtros-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 16px;
+}
+
+.fd-filtro-campo {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    min-width: 160px;
+}
+
+.fd-filtro-campo label {
+    font-size: 12px;
+    font-weight: 600;
+    color: #475569;
+}
+
+.fd-filtro-campo input,
+.fd-filtro-campo select {
+    height: 38px;
+    border: 1px solid #D8DEE9;
+    border-radius: 10px;
+    padding: 0 12px;
+    font-size: 13px;
+    color: #0F172A;
+    background: white;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.fd-filtro-campo input::placeholder {
+    color: #94A3B8;
+}
+
+.fd-filtro-campo input:focus,
+.fd-filtro-campo select:focus {
+    outline: none;
+    border-color: #3B82F6;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.14);
+}
+
+.faret-data-module .fd-filtro-divisor {
+    width: 1px;
+    align-self: stretch;
+    background: #E5E9F0;
+    margin: 0 2px;
+}
+
+.fd-filtro-acciones {
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+}
+
+.fd-paginacion {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-top: 16px;
+    font-size: 13px;
+    color: #475569;
+    font-weight: 500;
+}
+
+/* ---------- Botones (scoped) ---------- */
+
+.faret-data-module .btn-primary,
+.faret-data-module .btn-secondary,
+.faret-data-module .btn-ghost {
+    border-radius: 10px;
+    padding: 9px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    transition: all 0.15s ease;
+}
+
+.faret-data-module .btn-primary {
+    background: #2563EB;
+    box-shadow: 0 4px 10px rgba(37, 99, 235, 0.25);
+}
+
+.faret-data-module .btn-primary:hover {
+    background: #1D4ED8;
+    box-shadow: 0 6px 14px rgba(37, 99, 235, 0.3);
+}
+
+.faret-data-module .btn-secondary {
+    background: #F1F5F9;
+    color: #334155;
+}
+
+.faret-data-module .btn-secondary:hover {
+    background: #E2E8F0;
+}
+
+.faret-data-module .btn-ghost {
+    background: transparent;
+    color: #475569;
+    border: 1px solid #D8DEE9;
+}
+
+.faret-data-module .btn-ghost:hover {
+    background: #F8FAFC;
+    border-color: #CBD5E1;
+}
+
+/* ---------- Tabla ---------- */
+
+.faret-data-module .faret-registros-card {
+    padding: 22px;
+}
+
+.faret-data-module .table-container {
+    background: white;
+    border: 1px solid #E5E9F0;
+    border-radius: 12px;
+}
+
+.faret-data-module .table thead {
+    background: #F8FAFC;
+    color: #475569;
+}
+
+.faret-data-module .table thead th {
+    background: #F8FAFC;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    padding: 12px 14px;
+    border-bottom: 1px solid #E5E9F0;
+}
+
+.faret-data-module .table td {
+    padding: 12px 14px;
+    font-size: 13px;
+    color: #1E293B;
+    border-bottom: 1px solid #F1F5F9;
+}
+
+.faret-data-module .table tbody tr:nth-child(even) {
+    background: #FAFBFC;
+}
+
+.faret-data-module .table tbody tr:hover {
+    background: #EFF6FF;
+}
+
+@media (max-width: 1100px) {
+    .faret-data-module .home-modules-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .faret-data-module .fd-filtro-divisor {
+        display: none;
+    }
+
+    .fd-filtro-acciones {
+        margin-left: 0;
+        width: 100%;
+    }
+}

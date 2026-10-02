@@ -1,0 +1,103 @@
+<div class="module trazabilidad-module">
+
+  <div class="module-header">
+    <div>
+      <div class="module-title">Trazabilidad</div>
+      <div class="subtitle">Consulta de NP en Planificación FARET y su paletizado — módulo de solo lectura, no registra nada nuevo</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="filtros-row" style="display:flex; gap:12px; align-items:flex-end;">
+      <div class="form-group">
+        <label for="ftzNp">NP a consultar</label>
+        <input type="text" id="ftzNp" placeholder="Ej: 22443">
+      </div>
+      <button class="btn-primary" id="btnFtzConsultar">Consultar</button>
+    </div>
+  </div>
+
+  <div id="ftzEstadoConexion" class="card" style="margin-bottom: 16px; display: none;"></div>
+
+  <div id="ftzResultado" style="display:none;">
+
+    <div class="card" style="margin-bottom: 16px;">
+      <div class="module-header" style="margin-bottom: 8px;">
+        <div class="module-title" style="font-size: 16px;">Resumen de la NP</div>
+        <button class="btn-secondary" id="btnFtzImprimir">Imprimir Reporte</button>
+      </div>
+      <div class="kpi-row">
+        <div class="kpi-card">
+          <div class="kpi-label">Cliente</div>
+          <div class="kpi-value" id="ftzCliente" style="font-size: 16px;">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Producto</div>
+          <div class="kpi-value" id="ftzProducto" style="font-size: 14px;">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Cantidad NP</div>
+          <div class="kpi-value" id="ftzCantidad">-</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Procesos planificados</div>
+          <div class="kpi-value" id="ftzPlanificados">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Procesos pendientes</div>
+          <div class="kpi-value" id="ftzPendientes">0</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-bottom: 16px;">
+      <div class="module-title" style="font-size: 16px;">Trazabilidad de Planificación (procesos)</div>
+      <div class="table-container">
+        <table class="table" id="ftzTablaProcesos">
+          <thead>
+            <tr>
+              <th>Proceso</th>
+              <th>Sección</th>
+              <th>Máquina</th>
+              <th>Cantidad</th>
+              <th>Cant. Producida</th>
+              <th>Estado</th>
+              <th>Fecha Entrega</th>
+              <th>Materiales</th>
+            </tr>
+          </thead>
+          <tbody id="ftzProcesosBody">
+            <tr><td colspan="8" style="text-align:center;">Consulta un NP para ver sus procesos</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="subtitle" style="margin-top: 8px;">
+        Materiales: SKU y nombre del material planificado/asignado por proceso (vía FPS), no necesariamente el lote físico exacto consumido.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="module-title" style="font-size: 16px;">Terminaciones y Paletizado</div>
+      <div class="table-container">
+        <table class="table" id="ftzTablaPaletizado">
+          <thead>
+            <tr>
+              <th>Código Paletizado</th>
+              <th>Fecha</th>
+              <th>Planta</th>
+              <th>Taller</th>
+              <th>Tipo</th>
+              <th>Cantidad</th>
+              <th>Descripción</th>
+            </tr>
+          </thead>
+          <tbody id="ftzPaletizadoBody">
+            <tr><td colspan="7" style="text-align:center;">Sin datos</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+  </div>
+
+</div>

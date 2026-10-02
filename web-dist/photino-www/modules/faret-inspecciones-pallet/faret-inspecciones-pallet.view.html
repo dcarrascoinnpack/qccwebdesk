@@ -1,0 +1,98 @@
+<div class="module faret-module faret-inspecciones-pallet-module">
+
+    <div class="module-header">
+        <div>
+            <div class="module-title">Inspecciones Pallet / Papel</div>
+            <div class="subtitle">Formulario Control Pallet / Papel enviado desde la aplicación móvil FARET</div>
+        </div>
+        <div style="display:flex; gap:10px;">
+            <button id="fip-exportar-btn" class="btn-secondary">Exportar Excel</button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card fip-filtros-card">
+        <div class="fip-toolbar-header">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 5h18l-7 8v6l-4-2v-4L3 5Z"/></svg>
+            <span>Filtros</span>
+        </div>
+        <div class="fip-filtros-row">
+            <div class="fip-filtro-campo">
+                <label for="fip-filtro-fecha-desde">Fecha desde</label>
+                <input type="date" id="fip-filtro-fecha-desde">
+            </div>
+            <div class="fip-filtro-campo">
+                <label for="fip-filtro-fecha-hasta">Fecha hasta</label>
+                <input type="date" id="fip-filtro-fecha-hasta">
+            </div>
+            <div class="fip-filtro-campo">
+                <label for="fip-filtro-tipo-material">Tipo material</label>
+                <select id="fip-filtro-tipo-material">
+                    <option value="">Todos</option>
+                    <option value="NV">NV</option>
+                    <option value="PAPEL">PAPEL</option>
+                </select>
+            </div>
+            <div class="fip-filtro-campo">
+                <label for="fip-filtro-numero-pallet">N° Pallet</label>
+                <input type="text" id="fip-filtro-numero-pallet" placeholder="Buscar...">
+            </div>
+            <div class="fip-filtro-campo">
+                <label for="fip-filtro-operador">Operador</label>
+                <select id="fip-filtro-operador">
+                    <option value="">Todos</option>
+                </select>
+            </div>
+            <div class="fip-filtro-campo">
+                <label for="fip-filtro-maquina">Máquina</label>
+                <select id="fip-filtro-maquina">
+                    <option value="">Todas</option>
+                </select>
+            </div>
+            <div class="fip-filtro-divisor"></div>
+            <div class="fip-filtro-acciones">
+                <button id="fip-filtrar-btn" class="btn-primary">Filtrar</button>
+                <button id="fip-limpiar-btn" class="btn-secondary">Limpiar</button>
+                <button id="fip-refresh-btn" class="btn-ghost" title="Actualizar">↻ Actualizar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabla -->
+    <div class="card faret-registros-card">
+        <div id="fip-loading" class="faret-loading" style="display:none;">Cargando...</div>
+        <div id="fip-error" class="faret-error" style="display:none;"></div>
+
+        <div id="fip-filas-fijadas"></div>
+
+        <div class="table-container">
+            <table class="table faret-table" id="fip-tabla">
+                <thead>
+                    <tr>
+                        <th class="fip-th-ordenable" data-campo="fechaRegistro">Fecha <span class="fip-sort-icon">↕</span></th>
+                        <th>Hora</th>
+                        <th class="fip-th-ordenable" data-campo="operador">Operador Calidad <span class="fip-sort-icon">↕</span></th>
+                        <th class="fip-th-ordenable" data-campo="tipoMaterial">Tipo material <span class="fip-sort-icon">↕</span></th>
+                        <th class="fip-th-ordenable" data-campo="numeroPallet">N° Pallet <span class="fip-sort-icon">↕</span></th>
+                        <th>Dimensión</th>
+                        <th>Fibra</th>
+                        <th class="fip-th-ordenable" data-campo="areaControl">Área de control <span class="fip-sort-icon">↕</span></th>
+                        <th class="fip-th-ordenable" data-campo="maquina">Máquina <span class="fip-sort-icon">↕</span></th>
+                        <th>Checklist</th>
+                        <th>Acciones</th>
+                    </tr>
+                </thead>
+                <tbody id="fip-tbody">
+                    <tr><td colspan="12" class="faret-empty">Cargando...</td></tr>
+                </tbody>
+            </table>
+        </div>
+
+        <div class="fip-paginacion">
+            <button id="fip-anterior-btn" class="btn-secondary" disabled>‹ Anterior</button>
+            <span id="fip-pagina-info">Página 1</span>
+            <button id="fip-siguiente-btn" class="btn-secondary" disabled>Siguiente ›</button>
+        </div>
+    </div>
+
+</div>

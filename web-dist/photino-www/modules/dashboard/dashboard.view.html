@@ -1,0 +1,184 @@
+<div class="module dashboard-calidad-module">
+
+  <div class="module-header">
+    <div>
+      <div class="module-title">Dashboard Calidad</div>
+      <div class="subtitle">Registros de calidad, cumplimiento, no conformidades y desempeño por inspector</div>
+    </div>
+
+    <div class="module-actions">
+      <button class="btn-secondary" id="btnExportarDashboard">Exportar Excel</button>
+      <button class="btn-primary" id="btnActualizarDashboard">Actualizar</button>
+    </div>
+  </div>
+
+  <div class="kpi-row">
+
+    <div class="kpi-card">
+      <div class="kpi-label">Controles hoy</div>
+      <div class="kpi-value" id="dashControlesHoy">0</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">Controles período</div>
+      <div class="kpi-value" id="dashControlesPeriodo">0</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">Cumplimiento general</div>
+      <div class="kpi-value" id="dashCumplimientoGeneral">0%</div>
+    </div>
+
+    <div class="kpi-card">
+      <div class="kpi-label">No conformidades</div>
+      <div class="kpi-value" id="dashNoConformidades">0</div>
+    </div>
+
+  </div>
+
+  <div class="card dashboard-filters-card">
+    <div class="filters dashboard-filters">
+
+      <div class="filter-field">
+        <label for="dashboardFechaDesde">Fecha desde</label>
+        <input type="text" id="dashboardFechaDesde" placeholder="Seleccionar fecha" />
+      </div>
+
+      <div class="filter-field">
+        <label for="dashboardFechaHasta">Fecha hasta</label>
+        <input type="text" id="dashboardFechaHasta" placeholder="Seleccionar fecha" />
+      </div>
+
+      <div class="filter-field">
+        <label for="dashboardInspector">Inspectora</label>
+        <select id="dashboardInspector">
+          <option value="">Todas</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="dashboardTurno">Turno</label>
+        <select id="dashboardTurno">
+          <option value="">Todos</option>
+          <option value="A">Turno A</option>
+          <option value="B">Turno B</option>
+          <option value="C">Turno C</option>
+        </select>
+      </div>
+
+      <div class="filter-field">
+        <label for="dashboardProceso">Proceso</label>
+        <select id="dashboardProceso">
+          <option value="">Todos</option>
+        </select>
+      </div>
+
+      <div class="dashboard-filter-actions">
+        <button class="btn-primary" id="btnFiltrarDashboard">Filtrar</button>
+        <button class="btn-secondary" id="btnLimpiarDashboard">Limpiar</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="dashboard-charts-grid">
+
+    <div class="card dashboard-chart-card">
+      <div class="module-title">Cumplimiento por inspector</div>
+      <canvas id="chartDashboardCumplimientoInspector"></canvas>
+    </div>
+
+    <div class="card dashboard-chart-card">
+      <div class="module-title">No conformidades detectadas por inspector</div>
+      <canvas id="chartDashboardNoConformidadesInspector"></canvas>
+    </div>
+
+  </div>
+
+  <div class="dashboard-charts-grid-2">
+
+    <div class="card dashboard-chart-card">
+      <div class="module-title">Controles por proceso e inspector</div>
+      <canvas id="chartDashboardControlesProceso"></canvas>
+    </div>
+
+    <div class="card dashboard-chart-card">
+      <div class="module-title">Tendencia de cumplimiento</div>
+      <canvas id="chartDashboardTendenciaCumplimiento"></canvas>
+    </div>
+
+  </div>
+
+  <div class="card dashboard-chart-card">
+    <div class="module-title">Desempeño individual por inspector</div>
+
+    <div class="table-container">
+      <table class="table" id="tablaDashboardDesempeno">
+        <thead>
+          <tr>
+            <th>Inspector</th>
+            <th>Cumplimiento</th>
+            <th>Programados</th>
+            <th>Realizados</th>
+            <th>No conformidades</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+
+        <tbody id="tbodyDashboardDesempeno">
+          <tr>
+            <td colspan="6">Cargando...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="card dashboard-table-card dashboard-ultimos-card">
+    <div class="dashboard-table-header">
+      <div class="module-title">Últimos registros</div>
+
+      <div class="dashboard-validation-actions">
+        <button class="btn-primary" id="btnValidarTodoDashboard">Validar Todo</button>
+        <button class="btn-secondary" id="btnRechazarTodoDashboard">Rechazar Todo</button>
+      </div>
+    </div>
+
+    <div class="table-container">
+      <table class="table" id="tablaDashboardUltimos">
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Fecha</th>
+            <th>Hora</th>
+            <th>Usuario</th>
+            <th>Proceso</th>
+            <th>Máquina</th>
+            <th>NP</th>
+            <th>Código Producto</th>
+            <th>Producto</th>
+            <th>Turno</th>
+            <th>Estado</th>
+            <th>Observación</th>
+            <th>Cantidad Merma</th>
+            <th>Detalle Merma</th>
+            <th>Tipo Defecto</th>
+            <th>Lote Bobina utilizada</th>
+            <th>Código Bobina utilizada</th>
+            <th>Descripción Bobina utilizada</th>
+            <th>Observación Bobina utilizada</th>
+            <th>Estado Validación</th>
+            <th>Acciones</th>
+            <th>Imagen</th>
+          </tr>
+        </thead>
+        <tbody id="tbodyDashboardUltimos">
+          <tr>
+            <td colspan="22">Cargando...</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>

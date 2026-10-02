@@ -1,0 +1,22 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e4]:
+    - heading "Bienvenido" [level=1] [ref=e9]
+    - paragraph [ref=e10]: Quality Control Center
+    - paragraph [ref=e11]: Iniciando sistema...
+  - generic [ref=e13]:
+    - generic [ref=e14]:
+      - generic [ref=e15]: Panel de Calidad
+      - generic [ref=e16]:
+        - generic [ref=e17]: DB Calidad
+        - generic [ref=e19]: QCC
+    - generic [ref=e24]:
+      - generic [ref=e25]:
+        - heading "Selecciona la empresa" [level=2] [ref=e26]
+        - paragraph [ref=e27]: Elige el panel al que deseas ingresar
+      - generic [ref=e28]:
+        - generic [ref=e29] [cursor=pointer]:
+          - img "INNPACK" [ref=e31]
+          - generic [ref=e32]: INNPACK
+        - generic [ref=e33] [cursor=pointer]:
+          - img "FARET" [ref=e35]
+          - generic [ref=e36]: FARET

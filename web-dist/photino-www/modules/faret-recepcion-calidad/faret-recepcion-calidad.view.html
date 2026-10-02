@@ -1,0 +1,142 @@
+<div class="module recepcion-calidad-module faret-recepcion-calidad-module">
+
+  <div class="module-header">
+    <div>
+      <div class="module-title">Control de Recepción - Calidad</div>
+      <div class="subtitle">Selección de bobinas recibidas (SAP FARET_PRODUCCION) para muestreo NCh44. Por ahora solo bobinas de papel — PVA y otros insumos quedan para una etapa futura.</div>
+    </div>
+    <div class="module-actions">
+      <button class="btn-primary" id="frcqBtnNuevoLote">+ Nuevo Lote de Inspección</button>
+    </div>
+  </div>
+
+  <div class="card" style="margin-bottom: 16px;">
+    <div class="filtros-row" style="display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;">
+      <div class="form-group">
+        <label for="frcqFiltroEstado">Estado</label>
+        <select id="frcqFiltroEstado">
+          <option value="">Todos</option>
+          <option value="PendienteMuestreo">Pendiente de muestreo</option>
+          <option value="PendienteLaboratorio">Pendiente de Laboratorio</option>
+          <option value="EnAnalisis">En análisis</option>
+          <option value="RecibidaConforme">Recibida conforme</option>
+          <option value="RecibidaConObservacion">Recibida con observación</option>
+          <option value="NoConforme">No conforme</option>
+        </select>
+      </div>
+      <button class="btn-secondary" id="frcqBtnFiltrar">Filtrar</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="table-container">
+      <table class="table" id="frcqTablaLotes">
+        <thead>
+          <tr>
+            <th>ID</th><th>Fecha</th><th>Proveedor</th><th>Código</th>
+            <th>Descripción</th><th>Bobinas</th><th>Muestreadas</th><th>Estado</th><th></th>
+          </tr>
+        </thead>
+        <tbody id="frcqLotesBody">
+          <tr><td colspan="9" style="text-align:center;">Cargando...</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- MODAL: Nuevo lote (solo Bobina vía SAP FARET_PRODUCCION) -->
+  <div id="frcqModalNuevoLote" class="rcq-modal-overlay" style="display:none;">
+    <div class="card rcq-modal rcq-modal-ancho">
+      <div class="module-title" style="font-size:16px;">Nuevo Lote de Inspección</div>
+
+      <div class="rcq-form-row">
+        <div class="rcq-form-campo"><label>Desde</label><input type="date" id="frcqSapDesde"></div>
+        <div class="rcq-form-campo"><label>Hasta</label><input type="date" id="frcqSapHasta"></div>
+        <div style="align-self:flex-end; margin-bottom:12px;">
+          <button class="btn-secondary" id="frcqBtnConsultarSap">Consultar SAP</button>
+        </div>
+      </div>
+
+      <div class="table-container" style="max-height:220px; overflow-y:auto;">
+        <table class="table" id="frcqTablaSap">
+          <thead>
+            <tr><th></th><th>Fecha</th><th>Proveedor</th><th>Guía</th><th>Código</th><th>Descripción</th><th>Cant.</th><th>Ancho</th><th>Gramaje</th></tr>
+          </thead>
+          <tbody id="frcqSapBody">
+            <tr><td colspan="9" style="text-align:center;">Consulta un rango de fechas</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div id="frcqBobinasBloque" style="display:none; margin-top:12px;">
+        <div class="module-title" style="font-size:13px;">Bobinas encontradas para esta línea (desmarca las que no correspondan a este lote)</div>
+        <div id="frcqBobinasLista" class="rcq-checklist"></div>
+      </div>
+
+      <div class="rcq-form-acciones">
+        <button class="btn-secondary" id="frcqNlCancelar">Cancelar</button>
+        <button class="btn-primary" id="frcqNlCrear">Crear Lote</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Detalle de lote -->
+  <div id="frcqModalDetalle" class="rcq-modal-overlay" style="display:none;">
+    <div class="card rcq-modal rcq-modal-ancho">
+      <div class="module-title" style="font-size:16px;">Lote #<span id="frcqDetId"></span></div>
+      <div class="rcq-detalle-resumen" id="frcqDetResumen"></div>
+      <div id="frcqDetNc"></div>
+
+      <div class="module-title" style="font-size:14px; margin-top:14px;">Plan de muestreo (NCh44)</div>
+      <div id="frcqPlanExistente" class="subtitle"></div>
+      <div class="rcq-form-row">
+        <div class="rcq-form-campo">
+          <label>Nivel de inspección</label>
+          <select id="frcqPlanNivel"><option value="II">II (general)</option></select>
+        </div>
+        <div class="rcq-form-campo">
+          <label>AQL</label>
+          <select id="frcqPlanAql"><option value="2.5">2.5</option></select>
+        </div>
+        <div style="align-self:flex-end; margin-bottom:12px;">
+          <button class="btn-secondary" id="frcqBtnGenerarPlan">Generar plan</button>
+        </div>
+      </div>
+      <div class="subtitle">Solo Nivel II / AQL 2.5 tienen la tabla NCh44 cargada en esta primera etapa. Validar contra el documento oficial antes de usar para decisiones reales.</div>
+
+      <div class="module-title" style="font-size:14px; margin-top:14px;">Bobinas del lote — selección de muestreadas</div>
+      <div class="rcq-form-row">
+        <button class="btn-secondary" id="frcqBtnSeleccionAleatoria">Selección aleatoria según plan</button>
+      </div>
+      <div id="frcqBobinasLoteLista" class="rcq-checklist"></div>
+      <div class="rcq-form-acciones" style="justify-content:flex-start;">
+        <button class="btn-secondary" id="frcqBtnGuardarMuestreadas">Guardar bobinas muestreadas</button>
+      </div>
+
+      <div class="module-title" style="font-size:14px; margin-top:14px;">Muestra de Laboratorio</div>
+      <div id="frcqMuestraInfo" class="subtitle"></div>
+      <div class="rcq-form-acciones" style="justify-content:flex-start;">
+        <button class="btn-secondary" id="frcqBtnCrearMuestra">Crear muestra de Laboratorio</button>
+      </div>
+
+      <div class="module-title" style="font-size:14px; margin-top:14px;">Estado final</div>
+      <div class="rcq-form-row">
+        <div class="rcq-form-campo">
+          <select id="frcqEstadoManual">
+            <option value="RecibidaConforme">Recibida conforme</option>
+            <option value="RecibidaConObservacion">Recibida con observación</option>
+            <option value="NoConforme">No conforme</option>
+          </select>
+        </div>
+        <div style="align-self:flex-end; margin-bottom:12px;">
+          <button class="btn-secondary" id="frcqBtnActualizarEstado">Actualizar estado</button>
+        </div>
+      </div>
+
+      <div class="rcq-form-acciones">
+        <button class="btn-secondary" id="frcqDetCerrar">Cerrar</button>
+      </div>
+    </div>
+  </div>
+
+</div>
