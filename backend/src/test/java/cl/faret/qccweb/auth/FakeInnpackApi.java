@@ -47,6 +47,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/fps/materiales-por-proceso", this::fpsMateriales);
         server.createContext("/sap/api/recepcion/bobinas", this::sapBobinas);
         server.createContext("/api/home/dashboard", this::dashboard);
+        server.createContext("/api/home/frecuencias", this::frecuenciasActualizar);
         server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
         server.createContext("/api/dashboard/filtros", ex -> dashboardLectura(ex, true));
         server.createContext("/api/dashboard/resumen", ex -> dashboardLectura(ex, false));
@@ -96,6 +97,9 @@ public final class FakeInnpackApi implements AutoCloseable {
     public void reiniciarDashboard() {
         revocados.clear();
         authorizationRecibidos.clear();
+        cuerposFrecuenciaRecibidos.clear();
+        productoTerminadoEliminados.clear();
+        cuerposFechaProductoTerminadoRecibidos.clear();
         queriesMaquinas.clear();
         peticionesDashboard.clear();
         peticionesProduccion.clear();
@@ -417,6 +421,39 @@ public final class FakeInnpackApi implements AutoCloseable {
             default -> responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"kpis\":{\"controlesHoy\":42,"
                     + "\"noConformesHoy\":3,\"mermaHoy\":12.5},\"alertas\":[],\"usuarioDelToken\":" + sub + "},\"errors\":null}");
         }
+    }
+
+    // ------------------------------------------------------------------ Fase 4f: inicio.frecuencias.actualizar
+
+    private final java.util.List<JsonNode> cuerposFrecuenciaRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    public java.util.List<JsonNode> cuerposFrecuenciaRecibidos() {
+        return java.util.List.copyOf(cuerposFrecuenciaRecibidos);
+    }
+
+    /** Como HomeService.ActualizarFrecuenciaAsync: frecuenciaMinutos &gt; 0, sin verificación de existencia. */
+    private void frecuenciasActualizar(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (!ex.getRequestMethod().equals("PUT")) {
+            responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
+            return;
+        }
+        String path = ex.getRequestURI().getRawPath();
+        int id = Integer.parseInt(path.substring("/api/home/frecuencias/".length()));
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposFrecuenciaRecibidos.add(b);
+        if (id <= 0 || b.path("frecuenciaMinutos").asInt(0) <= 0) {
+            responder(ex, 400, fallo("Parámetros inválidos para actualizar la frecuencia."));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + "},\"errors\":null}");
     }
 
     private final java.util.List<String> queriesMaquinas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
@@ -925,6 +962,16 @@ public final class FakeInnpackApi implements AutoCloseable {
             ex.close();
             return;
         }
+        java.util.regex.Matcher fechaRuta = java.util.regex.Pattern.compile("^/api/producto-terminado/(\\d+)/fecha$").matcher(path);
+        if (ex.getRequestMethod().equals("PUT") && fechaRuta.matches()) {
+            actualizarFechaProductoTerminado(ex, Integer.parseInt(fechaRuta.group(1)));
+            return;
+        }
+        java.util.regex.Matcher eliminarRuta = java.util.regex.Pattern.compile("^/api/producto-terminado/(\\d+)$").matcher(path);
+        if (ex.getRequestMethod().equals("DELETE") && eliminarRuta.matches()) {
+            eliminarProductoTerminado(ex, Integer.parseInt(eliminarRuta.group(1)), query);
+            return;
+        }
         if (!ex.getRequestMethod().equals("GET")) {
             responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
             return;
@@ -958,6 +1005,50 @@ public final class FakeInnpackApi implements AutoCloseable {
             data = dataProductoTerminadoDetalle(id, empresa, sub);
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
+    }
+
+    // ------------------------------------------------------------------ Fase 4f: escrituras de Producto Terminado
+
+    private final java.util.Set<Integer> productoTerminadoEliminados = ConcurrentHashMap.newKeySet();
+    private final java.util.List<JsonNode> cuerposFechaProductoTerminadoRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    public java.util.List<JsonNode> cuerposFechaProductoTerminadoRecibidos() {
+        return java.util.List.copyOf(cuerposFechaProductoTerminadoRecibidos);
+    }
+
+    /** Como ProductoTerminadoService.EliminarAsync: la API SÍ verifica existencia (404 real). */
+    private void eliminarProductoTerminado(HttpExchange ex, int id, String query) throws IOException {
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("(?:^|&)empresa=([^&]*)").matcher(query == null ? "" : query);
+        String empresa = m.find() ? m.group(1) : "";
+        if (!empresa.equals("INNPACK") && !empresa.equals("FARET")) {
+            responder(ex, 400, fallo("Falta indicar la empresa (INNPACK o FARET)"));
+            return;
+        }
+        if (id == 404 || !productoTerminadoEliminados.add(id)) {
+            responder(ex, 404, fallo("No se encontró la inspección solicitada"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{},\"errors\":null}");
+    }
+
+    /** Como ProductoTerminadoService.ActualizarFechaAsync: empresa/fecha obligatorias, hora opcional, 404 real. */
+    private void actualizarFechaProductoTerminado(HttpExchange ex, int id) throws IOException {
+        JsonNode b = mapper.readTree(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+        cuerposFechaProductoTerminadoRecibidos.add(b);
+        String empresa = b.path("empresa").asString("");
+        if (!empresa.equals("INNPACK") && !empresa.equals("FARET")) {
+            responder(ex, 400, fallo("Falta indicar la empresa (INNPACK o FARET)"));
+            return;
+        }
+        if (b.path("fechaRegistro").asString("").isBlank()) {
+            responder(ex, 400, fallo("Fecha inválida"));
+            return;
+        }
+        if (id == 404 || productoTerminadoEliminados.contains(id)) {
+            responder(ex, 400, fallo("No se encontró la inspección solicitada"));
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + "},\"errors\":null}");
     }
 
     private final java.util.List<String> peticionesCertificados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());

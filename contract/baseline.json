@@ -1090,6 +1090,30 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-10-02T16:04:00Z"
+    },
+    "inicio.frecuencias.actualizar": {
+      "huella": "86ad4791aa8a90f13ae5998ddaecd60853cc1e0d3619c7644c2116bf304c904c",
+      "huellaFrontend": "6106d91997fe95b920a5f5c12ce34fe84386799ead93a145f3d33d95d9efdfe2",
+      "handler": "HomeHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T16:24:04Z"
+    },
+    "productoTerminado.eliminar": {
+      "huella": "6b1021dcfa7b1c7836041abd88dff0af0cc925494c9a8807a97dc8f95e228d52",
+      "huellaFrontend": "a7134f6a571e6ec47ac055749eade856028a3c5ba7728638a828f9cd1f76d97e",
+      "handler": "ProductoTerminadoHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T16:24:04Z"
+    },
+    "productoTerminado.actualizarFecha": {
+      "huella": "4e8a4825c5e075e7d328e9608b038c7812967eb7a2dd41c9c5689ba8375a94db",
+      "huellaFrontend": "97f35f8bafd29ea5274dc86ad1d557b7cc3aa6ccc651d6b3b862ea0e56526a44",
+      "handler": "ProductoTerminadoHandler",
+      "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
+      "photinoVersion": "1.8.14",
+      "aprobado": "2026-10-02T16:24:04Z"
     }
   }
 }

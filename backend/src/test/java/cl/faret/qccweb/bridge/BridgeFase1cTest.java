@@ -141,7 +141,7 @@ class BridgeFase1cTest {
     void accionDesconocidaORegistradaEnPhotinoPeroNoHabilitadaSeRechaza() throws Exception {
         MockHttpSession sesion = login("admin1");
         int antes = API.llamadasDashboard();
-        for (String accion : List.of("usuarios.create", "inicio.frecuencias.actualizar", "excel.guardar",
+        for (String accion : List.of("usuarios.create", "muestraLab.consultarNp", "excel.guardar",
                 "noConformidades.catalogos.clientes.desactivar", "accion.inventada", "Inicio.getDashboard", "inicio.getdashboard")) {
             bridge(sesion, "{\"action\":\"" + accion + "\"}")
                     .andExpect(status().isForbidden())
@@ -178,7 +178,7 @@ class BridgeFase1cTest {
     @Test
     void soloAccionesHabilitadasHastaFase3s() {
         assertThat(policy.accionesRegistradas()).containsExactlyInAnyOrder(
-                "inicio.getDashboard", "permisos.mios", "liberacionCalidad.inspectores", "maquinasSeguimiento.obtenerResumen",
+                "inicio.getDashboard", "inicio.frecuencias.actualizar", "permisos.mios", "liberacionCalidad.inspectores", "maquinasSeguimiento.obtenerResumen",
                 "dashboard.obtenerFiltros", "dashboard.obtenerResumen",
                 "dashboard.validarRegistro", "dashboard.rechazarRegistro", "dashboard.eliminarRegistro",
                 "dashboard.validarTodo", "dashboard.rechazarTodo",
@@ -189,6 +189,7 @@ class BridgeFase1cTest {
                 "registrosControl.validarRegistro", "registrosControl.rechazarRegistro", "registrosControl.eliminarRegistro",
                 "productoTerminado.filtros", "productoTerminado.resumen", "productoTerminado.list",
                 "productoTerminado.detalle", "productoTerminado.exportarDetalle",
+                "productoTerminado.eliminar", "productoTerminado.actualizarFecha",
                 "certificadosLiberacion.buscar", "certificadosLiberacion.calidadPdf.descargar",
                 "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
                 "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",

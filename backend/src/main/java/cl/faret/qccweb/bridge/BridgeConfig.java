@@ -164,6 +164,10 @@ public class BridgeConfig {
                 // Fase 1c — Inicio. Solo lectura; no reenvía nada del payload.
                 new ActionPolicy.Regla(
                         "inicio.getDashboard", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), inicio::getDashboard),
+                // Fase 4f — frecuencias.actualizar (configuración global; sin autor en la API).
+                new ActionPolicy.Regla(
+                        "inicio.frecuencias.actualizar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), inicio::frecuenciasActualizar, InicioBridgeHandler::recursoFrecuenciasActualizar),
                 // Fase 3u — permisos.mios (Photino 1.8.14): niveles efectivos por módulo de la PROPIA sesión, para el
                 // menú y el modo "Solo vista". Calculados en el gateway (rol + personalizados leídos al iniciar sesión).
                 new ActionPolicy.Regla(
@@ -251,9 +255,7 @@ public class BridgeConfig {
                         "registrosControl.eliminarRegistro", Set.of("INNPACK"),
                         ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO, Map.of(), registrosControl::eliminarRegistro,
                         (p, data) -> RegistrosControlBridgeHandler.recursoRegistro(p, "eliminar")),
-                // Fase 2f — Producto Terminado, SOLO LECTURA (5 acciones). Escrituras
-                // productoTerminado.eliminar / actualizarFecha fuera (deny-by-default). Solo INNPACK:
-                // no existe login FARET en la web todavía.
+                // Fase 2f — Producto Terminado (5 lecturas). Solo INNPACK: no existe login FARET en la web todavía.
                 new ActionPolicy.Regla(
                         "productoTerminado.filtros", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion, productoTerminado::filtros),
                 new ActionPolicy.Regla(
@@ -265,6 +267,14 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "productoTerminado.exportarDetalle", Set.of("INNPACK"), ROLES_INNPACK, empresaDeSesion,
                         productoTerminado::exportarDetalle),
+                // Fase 4f — eliminar / actualizarFecha. empresa/usuarioNombre ← sesión (ni siquiera claves
+                // aceptadas del payload); id se rechaza antes de llamar a la API, igual que Photino.
+                new ActionPolicy.Regla(
+                        "productoTerminado.eliminar", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), productoTerminado::eliminar, ProductoTerminadoBridgeHandler::recursoEliminar),
+                new ActionPolicy.Regla(
+                        "productoTerminado.actualizarFecha", Set.of("INNPACK"), ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO,
+                        Map.of(), productoTerminado::actualizarFecha, ProductoTerminadoBridgeHandler::recursoActualizarFecha),
                 // Fase 2g — Certificados de Liberación, SOLO LECTURA. "empresa" es un filtro de negocio
                 // (select de la vista, valores del sistema legado), validado en el handler, no identidad.
                 // El PDF lo valida el gateway y lo descarga el navegador (web-bridge.js), sin archivos

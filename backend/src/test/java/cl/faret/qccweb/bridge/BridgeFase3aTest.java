@@ -194,7 +194,8 @@ class BridgeFase3aTest {
                         "muestraLab.adjunto.subir", "muestraLab.anular", "muestraLab.ensayo.anular",
                         "muestraLab.actualizarFechaEnsayo", "muestraLab.metodo.guardar", "muestraLab.metodo.activar",
                         "muestraLab.especificacion.guardar", "muestraLab.especificacion.activar",
-                        "muestraLab.eliminar", "muestraLab.adjunto.eliminar");
+                        "muestraLab.eliminar", "muestraLab.adjunto.eliminar",
+                        "inicio.frecuencias.actualizar", "productoTerminado.eliminar", "productoTerminado.actualizarFecha");
         for (String otra : List.of("noConformidades.catalogos.clientes.desactivar",
                 "noConformidades.catalogos.nciAreas.crear")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);

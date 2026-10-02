@@ -54,7 +54,6 @@ class BridgeFase2fTest {
     private static final String DETALLE = "productoTerminado.detalle";
     private static final String EXPORTAR = "productoTerminado.exportarDetalle";
     private static final List<String> LECTURAS = List.of(FILTROS, RESUMEN, LIST, DETALLE, EXPORTAR);
-    private static final List<String> ESCRITURAS = List.of("productoTerminado.eliminar", "productoTerminado.actualizarFecha");
     private static final String BASE = "GET /api/producto-terminado";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
@@ -278,20 +277,6 @@ class BridgeFase2fTest {
         for (String a : LECTURAS) {
             assertThat(policy.evaluar(a, usuario("INNPACK", "operador"))).isInstanceOf(ActionPolicy.Decision.Permitida.class);
         }
-    }
-
-    // ------------------------------------------------------------- escrituras bloqueadas
-
-    @Test
-    void escriturasDelModuloSiguenBloqueadas() throws Exception {
-        MockHttpSession admin = login("admin1");
-        for (String escritura : ESCRITURAS) {
-            accion(admin, "{\"action\":\"" + escritura + "\",\"data\":{\"empresa\":\"INNPACK\",\"id\":9001,\"fechaRegistro\":\"2026-09-24\"}}")
-                    .andExpect(status().isForbidden())
-                    .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
-            assertThat(policy.accionesRegistradas()).doesNotContain(escritura);
-        }
-        assertThat(API.peticionesProductoTerminado()).isEmpty();
     }
 
     // --------------------------------------------------------------- roles

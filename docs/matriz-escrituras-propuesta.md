@@ -14,7 +14,7 @@ el 2026-09-28 (Fase 3o)**.
 > acción habilitada. `ROL_PROPUESTO_NEGOCIO` es la política FUTURA del sistema completo (Photino/API + Web, aplicada de
 > forma coordinada), no una restricción de la web. `ESTADO_VALIDACION_NEGOCIO` = `PENDIENTE_VALIDACION_NEGOCIO` en todas.
 
-Escrituras habilitadas en la web: **75** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
+Escrituras habilitadas en la web: **78** (`recepcion.plan.generar`, `recepcion.crear`, `recepcion.bobinas.muestrear`, `recepcion.muestra.crear`, `recepcion.estado.actualizar`, `recepcion.nc.crear`, `noConformidades.create`, `noConformidades.update`, `noConformidades.eliminar`,
 `noConformidades.adjuntos.eliminar`, `noConformidades.gestion.actualizar`,
 `noConformidades.cerrar`, `noConformidades.acciones.actualizar`, `noConformidades.adjuntos.subir`, `noConformidades.seguimiento.crear`,
 `noConformidades.acciones.crear`, `noConformidades.analisis.guardar`, `noConformidades.catalogos.{clientes,
@@ -27,8 +27,9 @@ categoriasDefecto,tiposFalla,supervisores,revisores,areas,familiasProducto,impac
 `muestraLab.{crear,ph.guardar,humedad.guardar,gramaje.guardar,cobb.guardar,espesor.guardar,rct.guardar,
 fct.guardar,ect.guardar,bctMedido.guardar,bctTeorico.guardar,viscosidad.guardar,solidos.guardar,lugol.guardar,
 nc.crear,adjunto.subir,anular,ensayo.anular,actualizarFechaEnsayo,metodo.guardar,metodo.activar,
-especificacion.guardar,especificacion.activar,eliminar,adjunto.eliminar}`, estado
-VALIDADA; mismos roles que Photino). Las otras 6 siguen denegadas por `ActionPolicy`
+especificacion.guardar,especificacion.activar,eliminar,adjunto.eliminar}`, `inicio.frecuencias.actualizar` y
+`productoTerminado.{eliminar,actualizarFecha}`, estado
+VALIDADA; mismos roles que Photino). Las otras 3 siguen denegadas por `ActionPolicy`
 (deny-by-default) hasta su propia fase.
 
 - Evidencia: Photino `6c42e05` (v1.8.12; referencia web actualizada a `dd147ad` en la Fase 3r y a `fd7f076` (v1.8.14) en la Fase 3u) — `MessageRouter`, handlers, `InnpackApi/*ApiService`, controllers JS;
@@ -73,7 +74,7 @@ contract check C#/JS + gate de release).
 | `ROL_PROPUESTO_NEGOCIO` `operador, admin, admin_ti` / `admin, admin_ti` / `admin` / `admin_ti` | 38 / 38 / 4 / 1 (propuesta; `ROL_ACTUAL_WEB` = Photino) |
 | Sin autor registrado por la API (solo auditoría gateway) | 29 |
 | Autor tomado del cliente (a sobrescribir) | 25 |
-| Estado | 6 APROBADA · 75 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
+| Estado | 3 APROBADA · 78 VALIDADA — roles `PENDIENTE_VALIDACION_NEGOCIO` |
 
 ## Matriz por módulo
 
@@ -105,7 +106,7 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `inicio.frecuencias.actualizar` | PUT `api/home/frecuencias/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | cambia la frecuencia objetivo de control por proceso | sí: volver a editar | **MEDIO** | configuración global; sin autor en API | APROBADA |
+| `inicio.frecuencias.actualizar` | PUT `api/home/frecuencias/{id}` | INNPACK (sin parámetro) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | cambia la frecuencia objetivo de control por proceso | sí: volver a editar | **MEDIO** | configuración global; sin autor en API | VALIDADA (Fase 4f, gateway 0.4.0; roles = Photino; id/frecuenciaMinutos > 0 se rechazan antes de llamar a la API, igual que el handler C# de Photino; sin autor en la API) |
 
 ### muestraLab (25)
 
@@ -166,8 +167,8 @@ llega del cliente · qué fija el gateway desde `SessionUser` · efecto · rollb
 
 | action | método · endpoint | empresa | ROL_ACTUAL_PHOTINO | ROL_ACTUAL_WEB | ROL_PROPUESTO_NEGOCIO | ESTADO_VALIDACION_NEGOCIO | API hoy | identidad desde cliente | Web fija desde SessionUser | efecto | rollback | riesgo | justificación | estado |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| `productoTerminado.actualizarFecha` | PUT `api/producto-terminado/{id}/fecha` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `usuarioNombre` | `usuarioNombre` ← nombreCompleto | corrige la fecha de una inspección de producto terminado | sí: volver a corregir | **MEDIO** | altera trazabilidad; empresa de sesión | APROBADA |
-| `productoTerminado.eliminar` | DELETE `api/producto-terminado/{id}?empresa={Uri.EscapeDataString(empresa)}` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | — (deshabilitada) | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina una inspección de producto terminado | no desde la UI | **ALTO** | destructivo; sin autor | APROBADA |
+| `productoTerminado.actualizarFecha` | PUT `api/producto-terminado/{id}/fecha` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | cliente: `usuarioNombre` | `usuarioNombre` ← nombreCompleto | corrige la fecha de una inspección de producto terminado | sí: volver a corregir | **MEDIO** | altera trazabilidad; empresa de sesión | VALIDADA (Fase 4f, gateway 0.4.0; roles = Photino; usuarioNombre siempre de sesion (en Photino lo lee de sessionStorage, no del servidor); fechaRegistro/horaRegistro restringidos al formato real de los input date/time de Photino; la API SI verifica existencia (404 real)) |
+| `productoTerminado.eliminar` | DELETE `api/producto-terminado/{id}?empresa={Uri.EscapeDataString(empresa)}` | INNPACK de sesión (`IdentityOverride` EMPRESA) | cualquier sesión INNPACK (sin gating de rol) | **operador, admin, admin_ti** | **admin, admin_ti** | PENDIENTE_VALIDACION_NEGOCIO | `[Authorize]` (cualquier JWT) | ninguna (la API no registra autor) | — (auditoría del gateway obligatoria) | elimina una inspección de producto terminado | no desde la UI | **ALTO** | destructivo; sin autor | VALIDADA (Fase 4f, gateway 0.4.0; roles = Photino; empresa de sesion; id se rechaza antes de llamar a la API; la API SI verifica existencia por si misma (404 real), no hace falta releer antes de borrar) |
 
 ### recepcion (6)
 
@@ -634,6 +635,36 @@ del usuario de paridad exacta con el riesgo aceptado); `registrosProduccion.vali
   `BridgeFase1cTest`/`BridgeFase3aTest` (listas exhaustivas de acciones) y `BridgeFase2cTest`/`BridgeFase2dTest`/
   `BridgeFase2eTest` (las 13 acciones salen de "escrituras bloqueadas"; `registrosControl` no tenía ese test, no aplica).
   Suite completa 719/720 (solo `QccApiApplicationTests.contextLoads` legacy, esperado).
+
+## Inicio + Producto Terminado — VALIDADA (Fase 4f, 2026-10-02) — ÚLTIMAS ESCRITURAS INNPACK SALVO USUARIOS
+
+Las últimas 3 escrituras pendientes de INNPACK (fuera de Laboratorio, ya cerrado en 4e): `inicio.frecuencias.actualizar`
+(configuración global de frecuencia objetivo por proceso) y `productoTerminado.{eliminar,actualizarFecha}`
+(borrado lógico / corrección de fecha-hora de una inspección, Punto 7 del REG-LAB-04). Con esto **solo quedan
+APROBADAS (sin habilitar) las 3 de `usuarios.*` (create/delete/resetPassword)** — la excepción de paridad que el
+usuario decidió definir aparte (gestión de usuarios puede diferir de Photino). Todo el resto de la matriz de
+escrituras INNPACK queda **VALIDADA: 78/81**.
+
+Hallazgo de `productoTerminado.actualizarFecha`: Photino lee `usuarioNombre` del PAYLOAD (`GetString(jsonDataRaiz,
+"usuarioNombre")`), no de una sesión de servidor — porque en el propio JS lo arma desde
+`sessionStorage.getItem("nombreUsuario")` en el momento del envío. Mismo criterio de todo el sistema: el gateway NO
+confía en ningún valor de identidad que llegue del cliente, así que lo fija siempre desde `SessionUser` (ni siquiera
+es clave aceptada del payload) — la única diferencia frente a otros módulos es que acá Photino mismo ya tenía la
+costumbre de mandarlo explícito (en vez de resolverlo server-side como en Laboratorio), no que la web relaje nada.
+
+- Web: `id` se rechaza en el GATEWAY antes de llamar a la API en las 3 (igual que el handler C# de Photino, que
+  valida `id &gt; 0`/`frecuenciaMinutos &gt; 0` antes de reenviar). `fechaRegistro`/`horaRegistro` restringidos al
+  formato real de los `<input type="date">`/`<input type="time">` de Photino (`horaRegistro` opcional). La API de
+  Producto Terminado SÍ verifica existencia por sí misma en ambas escrituras (errores reales "No se encontró la
+  inspección solicitada"), igual que Laboratorio — ningún mecanismo adicional de detección de conflicto necesario.
+  `empresa` sigue viniendo exclusivamente de la sesión (`IdentityOverride`), como ya regía para las 5 lecturas del
+  módulo desde la Fase 2f.
+- Pruebas: `BridgeFase4fTest` (8: parámetros inválidos y campo no permitido en las 3, eliminación exitosa e
+  idempotente con el error real de la API, fecha/hora con formatos inválidos y válidos -con y sin hora-, usuario
+  manipulado rechazado, registro inexistente, roles, auditoría con recurso por acción); se eliminó el test
+  `escriturasDelModuloSiguenBloqueadas` de `BridgeFase2fTest` (ya no quedan escrituras bloqueadas en el módulo);
+  ajustes en `BridgeFase1cTest`/`BridgeFase3aTest` (listas exhaustivas). Suite completa 816/817 (solo
+  `QccApiApplicationTests.contextLoads` legacy, esperado).
 
 ## Laboratorio — eliminar / adjunto.eliminar — VALIDADA (Fase 4e-5, 2026-10-02) — MÓDULO COMPLETO 25/25
 
