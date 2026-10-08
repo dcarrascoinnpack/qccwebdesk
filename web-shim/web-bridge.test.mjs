@@ -445,3 +445,92 @@ test("formularios.list y detalle van al gateway como cualquier lectura, sin abri
     assert.equal(shim.registro.ventanas.length, 0);
     assert.equal(shim.registro.descargas.length, 0);
 });
+
+// ---------------------------------------------------------------- Fase 6a: sesión FARET (faret.login / faret.logout)
+function shimConRespuesta(cuerpo, status = 200) {
+    const shim = cargarShim();
+    shim.ctx.fetch = (url, opciones) => {
+        shim.registro.fetch.push({ url, opciones });
+        return Promise.resolve({ status, ok: status < 400, json: () => Promise.resolve(cuerpo) });
+    };
+    return shim;
+}
+
+test("faret.login va a POST auth/faret/login con CSRF, cuerpo {identificador,password} planos y responde {username, role} como Photino", async () => {
+    const shim = shimConRespuesta({ ok: true, success: true, data: { username: "Ana Calidad", role: "CALIDAD" }, error: null });
+    const res = await shim.ctx.PhotinoBridge.send({ action: "faret.login", identificador: "ana", password: "ClaveFaret#2026" });
+
+    assert.deepEqual(plano(res), { ok: true, success: true, data: { username: "Ana Calidad", role: "CALIDAD" }, error: null });
+    assert.equal(shim.registro.fetch.length, 1);
+    assert.equal(shim.registro.fetch[0].url, "api/v1/auth/faret/login");
+    assert.equal(shim.registro.fetch[0].opciones.method, "POST");
+    assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
+    assert.deepEqual(JSON.parse(shim.registro.fetch[0].opciones.body), { identificador: "ana", password: "ClaveFaret#2026" });
+    // Nunca pasa por el bridge ni lleva _modulo: es autenticación.
+    assert.equal(JSON.parse(shim.registro.fetch[0].opciones.body)._modulo, undefined);
+});
+
+test("un login FARET rechazado se devuelve tal cual (mensaje genérico del gateway)", async () => {
+    const shim = shimConRespuesta({ ok: false, success: false, data: null, error: "Usuario o contraseña incorrectos." }, 401);
+    const res = await shim.ctx.PhotinoBridge.send({ action: "faret.login", identificador: "ana", password: "mala" });
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "Usuario o contraseña incorrectos.");
+});
+
+test("'Recordar' de Faret nunca guarda contraseña, rol ni autoingreso en localStorage (solo el identificador)", () => {
+    const shim = cargarShim();
+    shim.ctx.localStorage.setItem("lcc_faret_identificador", "ana");
+    shim.ctx.localStorage.setItem("lcc_faret_password", "ClaveFaret#2026");
+    shim.ctx.localStorage.setItem("lcc_faret_remember_login", "true");
+    shim.ctx.localStorage.setItem("lcc_faret_rol", "ADMIN");
+    shim.ctx.localStorage.setItem("lcc_faret_nombreUsuario", "Ana");
+    assert.equal(shim.ctx.localStorage.getItem("lcc_faret_identificador"), "ana");
+    for (const k of ["lcc_faret_password", "lcc_faret_remember_login", "lcc_faret_rol", "lcc_faret_nombreUsuario"]) {
+        assert.equal(shim.ctx.localStorage.getItem(k), null, k);
+    }
+});
+
+test("auth.me con sesión FARET deja en sessionStorage las claves Faret de core/app.js y no las INNPACK", async () => {
+    const shim = shimConRespuesta({ ok: true, success: true, data: {
+        Id: 10, CodigoUsuario: "ana", NombreCompleto: "Ana Calidad", Rol: "CALIDAD", Activo: true, Empresa: "FARET"
+    }, error: null });
+    const res = await shim.ctx.PhotinoBridge.send({ action: "auth.me" });
+    assert.equal(res.ok, true);
+    const ss = shim.ctx.sessionStorage;
+    assert.equal(ss.getItem("empresa"), "FARET");
+    assert.equal(ss.getItem("faretLoggedIn"), "true");
+    assert.equal(ss.getItem("faretNombreUsuario"), "Ana Calidad");
+    assert.equal(ss.getItem("faretRol"), "CALIDAD");
+    assert.equal(ss.getItem("isLoggedIn"), null);
+    assert.equal(ss.getItem("codigoUsuario"), null);
+    assert.equal(ss.getItem("rolUsuario"), null);
+});
+
+test("auth.me con sesión INNPACK sigue igual que antes (sin claves Faret)", async () => {
+    const shim = shimConRespuesta({ ok: true, success: true, data: {
+        Id: 1, CodigoUsuario: "operador1", NombreCompleto: "Operador Uno", Rol: "operador", Activo: true, Empresa: "INNPACK"
+    }, error: null });
+    await shim.ctx.PhotinoBridge.send({ action: "auth.me" });
+    const ss = shim.ctx.sessionStorage;
+    assert.equal(ss.getItem("empresa"), "INNPACK");
+    assert.equal(ss.getItem("isLoggedIn"), "true");
+    assert.equal(ss.getItem("codigoUsuario"), "operador1");
+    assert.equal(ss.getItem("faretLoggedIn"), null);
+    assert.equal(ss.getItem("faretRol"), null);
+});
+
+test("faret.logout invalida la sesión del servidor (POST logout con CSRF) y limpia la sesión UI Faret", async () => {
+    const shim = shimConRespuesta({ ok: true, success: true, data: { message: "Sesión cerrada correctamente" }, error: null });
+    shim.ctx.sessionStorage.setItem("faretLoggedIn", "true");
+    shim.ctx.sessionStorage.setItem("faretRol", "CALIDAD");
+    shim.ctx.sessionStorage.setItem("empresa", "FARET");
+    const res = await shim.ctx.PhotinoBridge.send({ action: "faret.logout" });
+    assert.equal(res.ok, true);
+    assert.equal(shim.registro.fetch.length, 1);
+    assert.equal(shim.registro.fetch[0].url, "api/v1/auth/logout");
+    assert.equal(shim.registro.fetch[0].opciones.method, "POST");
+    assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
+    assert.equal(shim.ctx.sessionStorage.getItem("faretLoggedIn"), null);
+    assert.equal(shim.ctx.sessionStorage.getItem("faretRol"), null);
+    assert.equal(shim.ctx.sessionStorage.getItem("empresa"), null);
+});

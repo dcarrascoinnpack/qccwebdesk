@@ -1138,6 +1138,22 @@
       "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
       "photinoVersion": "1.8.15",
       "aprobado": "2026-10-08T16:29:24Z"
+    },
+    "faret.login": {
+      "huella": "83e616e85c0b3c85a44efbbb227db5d07800a85eb99af003565e106258af4c4d",
+      "huellaFrontend": "8787ed1a368b448ffc02a8956df73407b1ba427b4b56b3703606c105e97e442a",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-08T16:56:56Z"
+    },
+    "faret.logout": {
+      "huella": "e8928ff5fe72254dda0fcc3367255ef9593491e5c94d848b6e3dc537f8e230c5",
+      "huellaFrontend": "f2cfd08c921d3bad296d06d4f6565ba1c8dbcfbcd5831dfef9eeb509226963fa",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-08T16:56:56Z"
     }
   }
 }

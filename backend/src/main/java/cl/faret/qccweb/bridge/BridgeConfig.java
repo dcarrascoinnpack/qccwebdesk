@@ -42,6 +42,10 @@ import tools.jackson.databind.ObjectMapper;
 public class BridgeConfig {
 
     static final Set<String> ROLES_INNPACK = Set.of("admin", "admin_ti", "operador");
+    /** Roles que emite QualityControlFaret.Api (UsuariosService.RolesValidos); la web los compara en minúsculas. */
+    static final Set<String> ROLES_FARET = Set.of("admin", "admin_ti", "calidad", "inspector", "consulta");
+    /** permisos.mios es de la propia sesión: cualquier rol de cualquiera de las dos empresas (Fase 6a). */
+    static final Set<String> ROLES_SESION_AMBAS_EMPRESAS = Set.of("admin", "admin_ti", "operador", "calidad", "inspector", "consulta");
     /** Gestión de Usuarios: solo admin_ti desde Photino 1.8.14 (UsuariosHandler.IsAdmin y PermisosService). */
     static final Set<String> ROLES_ADMIN_TI_INNPACK = Set.of("admin_ti");
     /**
@@ -176,8 +180,9 @@ public class BridgeConfig {
                         Map.of(), inicio::frecuenciasActualizar, InicioBridgeHandler::recursoFrecuenciasActualizar),
                 // Fase 3u — permisos.mios (Photino 1.8.14): niveles efectivos por módulo de la PROPIA sesión, para el
                 // menú y el modo "Solo vista". Calculados en el gateway (rol + personalizados leídos al iniciar sesión).
+                // Fase 6a: también sesiones FARET (PermisosModulo ya filtra los módulos por la empresa de la sesión).
                 new ActionPolicy.Regla(
-                        PermisosModulo.ACCION_PERMISOS_MIOS, Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        PermisosModulo.ACCION_PERMISOS_MIOS, Set.of("INNPACK", "FARET"), ROLES_SESION_AMBAS_EMPRESAS, Map.of(),
                         (payload, usuario) -> BridgeResult.ok(PermisosModulo.nivelesEfectivos(usuario))),
                 // Fase 2a — Máquinas y Procesos. Solo lectura; solo maquinaId/sinLimite (sin identidad).
                 // Photino y la API no restringen por rol (cualquier usuario INNPACK autenticado).

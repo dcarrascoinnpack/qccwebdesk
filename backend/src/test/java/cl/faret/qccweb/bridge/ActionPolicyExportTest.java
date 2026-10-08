@@ -82,6 +82,8 @@ class ActionPolicyExportTest {
 
         assertThat(buscar(leido, "auth.login").get("via").asString()).isEqualTo("AuthController POST /api/v1/auth/login");
         assertThat(buscar(leido, "auth.me").get("via").asString()).isEqualTo("AuthController GET /api/v1/auth/session");
+        assertThat(buscar(leido, "faret.login").get("via").asString()).isEqualTo("AuthController POST /api/v1/auth/faret/login");
+        assertThat(buscar(leido, "faret.logout").get("via").asString()).isEqualTo("AuthController POST /api/v1/auth/logout");
     }
 
     /** Todo lo habilitado en la web: reglas del bridge + acciones de autenticación. */

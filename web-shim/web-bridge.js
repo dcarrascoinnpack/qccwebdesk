@@ -33,7 +33,7 @@
     };
     var AUTH_URL = "api/v1/auth/";
     var TIMEOUT_MS = 35000; // > read-timeout del gateway (30 s, = Photino): el gateway responde primero
-    var EMPRESA_WEB = "INNPACK"; // Fase 1b: solo login INNPACK
+    var EMPRESA_WEB = "INNPACK"; // empresa por defecto si el servidor no la informa (Fase 1b); FARET desde la Fase 6a
 
     // Claves de "Recordar usuario" de Photino que en web NUNCA se guardan: contraseñas, rol,
     // nombre y el flag de autoingreso. Solo se permite recordar el identificador de usuario
@@ -99,10 +99,21 @@
         } catch (e) { /* sin sessionStorage */ }
     }
 
-    /** Refleja en sessionStorage (solo para la UI) la identidad que dice el servidor. */
+    /**
+     * Refleja en sessionStorage (solo para la UI) la identidad que dice el servidor. Una sesión FARET usa las
+     * claves que lee core/app.js para Faret (faretLoggedIn/faretNombreUsuario/faretRol), igual que las deja
+     * faret-login.controller.js tras faret.login.
+     */
     function aplicarSesionUi(data) {
         try {
             limpiarSesionUi();
+            if (String(data.Empresa || "").toUpperCase() === "FARET") {
+                window.sessionStorage.setItem("empresa", "FARET");
+                window.sessionStorage.setItem("faretLoggedIn", "true");
+                window.sessionStorage.setItem("faretNombreUsuario", data.NombreCompleto || data.CodigoUsuario || "");
+                window.sessionStorage.setItem("faretRol", data.Rol || "");
+                return;
+            }
             window.sessionStorage.setItem("empresa", data.Empresa || EMPRESA_WEB);
             window.sessionStorage.setItem("isLoggedIn", "true");
             window.sessionStorage.setItem("codigoUsuario", data.CodigoUsuario || "");
@@ -470,6 +481,20 @@
                 });
 
             case "auth.logout":
+                return peticion("POST", AUTH_URL + "logout").then(function (r) {
+                    limpiarSesionUi();
+                    return r.body;
+                });
+
+            // Fase 6a — login FARET. Photino manda identificador/password PLANOS (no en data) y responde
+            // {username, role}; la sesión (token de la API FARET) vive solo en el servidor.
+            case "faret.login":
+                return peticion("POST", AUTH_URL + "faret/login", {
+                    identificador: payload.identificador,
+                    password: payload.password
+                }).then(function (r) { return r.body; });
+
+            case "faret.logout":
                 return peticion("POST", AUTH_URL + "logout").then(function (r) {
                     limpiarSesionUi();
                     return r.body;

@@ -9,6 +9,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
  * gateway no guarda credenciales propias para el login, solo reenvía las del usuario a la API.
  *
  * @param innpackApiBaseUrl  URL base de la API INNPACK (fuente maestra de usuarios INNPACK)
+ * @param faretApiBaseUrl    URL base de QualityControlFaret.Api (fuente maestra de usuarios FARET, Fase 6a)
  * @param connectTimeout     timeout de conexión hacia la API
  * @param readTimeout        timeout de lectura hacia la API
  * @param sessionIdleTimeout expiración de la sesión web por inactividad
@@ -22,6 +23,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties(prefix = "qcc.web.auth")
 public record AuthProperties(
         String innpackApiBaseUrl,
+        String faretApiBaseUrl,
         Duration connectTimeout,
         Duration readTimeout,
         Duration sessionIdleTimeout,

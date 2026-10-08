@@ -82,7 +82,7 @@ public class GatewaySecurityConfig {
                         // Sin esto, un 403 (p. ej. CSRF) se reenvía a /error y termina como 401.
                         .requestMatchers("/error").permitAll()
                         .requestMatchers(HttpMethod.GET, "/version", "/actuator/health").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/login", "/api/v1/auth/faret/login", "/api/v1/auth/logout").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/v1/auth/session").permitAll()
                         .requestMatchers(HttpMethod.GET, FRONTEND_ESTATICO).permitAll()
                         .requestMatchers(HttpMethod.HEAD, FRONTEND_ESTATICO).permitAll()

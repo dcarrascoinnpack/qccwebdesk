@@ -11,6 +11,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -27,8 +29,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Autenticación web INNPACK (Fase 1b). Traduce el contrato de Photino:
- * auth.login → POST /login · auth.me → GET /session · auth.logout → POST /logout.
+ * Autenticación web INNPACK (Fase 1b) y FARET (Fase 6a). Traduce el contrato de Photino:
+ * auth.login → POST /login · faret.login → POST /faret/login · auth.me → GET /session · auth.logout y
+ * faret.logout → POST /logout.
  * Las respuestas mantienen la forma normalizada de Photino { ok, success, data, error }.
  */
 @RestController
@@ -38,14 +41,18 @@ public class AuthController {
     /**
      * Acciones de Photino que la web atiende aquí (vía web-bridge.js) y no en /api/v1/bridge.
      * Se declaran en el contract check para que un cambio en la lógica de autenticación de Photino
-     * (AuthHandler / AuthService) las pase a REVISAR. auth.logout no se incluye: el frontend de
-     * Photino nunca la llama (el shim invalida la sesión web por su cuenta).
+     * (AuthHandler / AuthService / FaretHandler) las pase a REVISAR. auth.logout no se incluye: el frontend de
+     * Photino nunca la llama (el shim invalida la sesión web por su cuenta). faret.logout sí: core/app.js la envía
+     * al cerrar sesión FARET y el shim la traduce a POST /logout.
      */
     public static final Map<String, String> ACCIONES_PHOTINO = Map.of(
             "auth.login", "POST /api/v1/auth/login",
-            "auth.me", "GET /api/v1/auth/session");
+            "auth.me", "GET /api/v1/auth/session",
+            "faret.login", "POST /api/v1/auth/faret/login",
+            "faret.logout", "POST /api/v1/auth/logout");
 
     static final String EMPRESA_INNPACK = "INNPACK";
+    static final String EMPRESA_FARET = "FARET";
     static final String MENSAJE_CREDENCIALES = "Usuario o contraseña incorrectos.";
     static final String MENSAJE_REQUERIDOS = "Completa todos los campos";
     static final String MENSAJE_BLOQUEO = "Demasiados intentos. Espera unos minutos e inténtalo nuevamente.";
@@ -68,7 +75,16 @@ public class AuthController {
         }
     }
 
+    /** Cuerpo de faret.login de Photino (faret-login.controller.js): identificador (correo o username) + password. */
+    public record FaretLoginRequest(String identificador, String password) {
+        @Override
+        public String toString() {
+            return "FaretLoginRequest[identificador=" + identificador + ", password=***]";
+        }
+    }
+
     private final InnpackAuthClient authClient;
+    private final FaretAuthClient faretAuthClient;
     private final LoginRateLimiter rateLimiter;
     private final ClientIpResolver ipResolver;
     private final AuditLogger audit;
@@ -79,6 +95,7 @@ public class AuthController {
 
     public AuthController(
             InnpackAuthClient authClient,
+            FaretAuthClient faretAuthClient,
             LoginRateLimiter rateLimiter,
             ClientIpResolver ipResolver,
             AuditLogger audit,
@@ -87,6 +104,7 @@ public class AuthController {
             AuthProperties properties,
             Clock clock) {
         this.authClient = authClient;
+        this.faretAuthClient = faretAuthClient;
         this.rateLimiter = rateLimiter;
         this.ipResolver = ipResolver;
         this.audit = audit;
@@ -109,6 +127,36 @@ public class AuthController {
             return error(HttpStatus.BAD_REQUEST, MENSAJE_REQUERIDOS);
         }
 
+        return procesarLogin(inicio, ip, usuario, password, EMPRESA_INNPACK, authClient::login, authClient::misPermisos,
+                this::datosLogin, request, response);
+    }
+
+    /**
+     * Login FARET (Fase 6a): equivalente web de faret.login. Photino lo envía con `identificador` (correo o username)
+     * y `password` planos (no dentro de data) y responde {username, role}. Mismo rate limiter, auditoría y duración
+     * mínima que el login INNPACK; la sesión queda con empresa FARET y el primer rol de la lista de la API.
+     */
+    @PostMapping("/faret/login")
+    public ResponseEntity<Map<String, Object>> loginFaret(
+            @RequestBody(required = false) FaretLoginRequest body, HttpServletRequest request, HttpServletResponse response) {
+        long inicio = System.nanoTime();
+        String ip = ipResolver.resolver(request);
+        String identificador = body == null || body.identificador() == null ? "" : body.identificador().trim();
+        String password = body == null ? null : body.password();
+
+        if (identificador.isEmpty() || password == null || password.isEmpty()
+                || identificador.length() > MAX_LARGO_USUARIO || password.length() > MAX_LARGO_PASSWORD) {
+            return error(HttpStatus.BAD_REQUEST, MENSAJE_REQUERIDOS);
+        }
+        return procesarLogin(inicio, ip, identificador, password, EMPRESA_FARET, faretAuthClient::login,
+                faretAuthClient::misPermisos, this::datosLoginFaret, request, response);
+    }
+
+    /** Flujo común de login (rate limit → API → mis-permisos → sesión) para INNPACK y FARET. */
+    private ResponseEntity<Map<String, Object>> procesarLogin(long inicio, String ip, String usuario, String password,
+            String empresa, BiFunction<String, String, InnpackAuthClient.Resultado> autenticar,
+            Function<String, Map<String, String>> permisosDe, Function<InnpackAuthClient.Autenticado, Map<String, Object>> datos,
+            HttpServletRequest request, HttpServletResponse response) {
         LoginRateLimiter.Decision decision = rateLimiter.verificarYRegistrar(ip, usuario);
         if (!decision.permitido()) {
             audit.loginBloqueado(usuario, ip, decision.motivo());
@@ -118,22 +166,22 @@ public class AuthController {
                     .body(respuesta(false, null, MENSAJE_BLOQUEO));
         }
 
-        InnpackAuthClient.Resultado resultado = authClient.login(usuario, password);
+        InnpackAuthClient.Resultado resultado = autenticar.apply(usuario, password);
         password = null; // la contraseña no se usa más allá de esta llamada
 
         ResponseEntity<Map<String, Object>> salida;
         if (resultado instanceof InnpackAuthClient.Autenticado ok) {
             rateLimiter.registrarExito(ip, usuario);
-            // Photino 1.8.14 (MessageRouter.CargarPermisosInnpackAsync): sin permisos no se entra.
-            Map<String, String> permisos = authClient.misPermisos(ok.token());
+            // Photino 1.8.14 (MessageRouter.CargarPermisos{Innpack,Faret}Async): sin permisos no se entra.
+            Map<String, String> permisos = permisosDe.apply(ok.token());
             if (permisos == null) {
                 audit.loginErrorUpstream(ok.codigoUsuario(), ip, "mis-permisos no disponible");
                 esperarDuracionMinima(inicio);
                 return error(HttpStatus.SERVICE_UNAVAILABLE, MENSAJE_PERMISOS);
             }
-            HttpSession sesion = crearSesion(ok, permisos, request, response);
-            audit.loginOk(ok.codigoUsuario(), ip, EMPRESA_INNPACK, sesion.getId());
-            salida = ResponseEntity.ok(respuesta(true, datosLogin(ok), null));
+            HttpSession sesion = crearSesion(ok, permisos, empresa, request, response);
+            audit.loginOk(ok.codigoUsuario(), ip, empresa, sesion.getId());
+            salida = ResponseEntity.ok(respuesta(true, datos.apply(ok), null));
         } else if (resultado instanceof InnpackAuthClient.Rechazado rechazado) {
             rateLimiter.registrarFallo(ip, usuario);
             audit.loginFallido(usuario, ip, rechazado.motivoInterno());
@@ -181,7 +229,7 @@ public class AuthController {
      * Sesión nueva en cada login: se invalida cualquier sesión previa del navegador (protección
      * contra session fixation) y se rota el token CSRF.
      */
-    private HttpSession crearSesion(InnpackAuthClient.Autenticado ok, Map<String, String> permisosModulo,
+    private HttpSession crearSesion(InnpackAuthClient.Autenticado ok, Map<String, String> permisosModulo, String empresa,
             HttpServletRequest request, HttpServletResponse response) {
         HttpSession anterior = request.getSession(false);
         if (anterior != null) {
@@ -194,12 +242,12 @@ public class AuthController {
         Instant tope = ahora.plus(properties.sessionMaxDuration());
         Instant expira = ok.tokenExpira() != null && ok.tokenExpira().isBefore(tope) ? ok.tokenExpira() : tope;
         SessionUser usuario = new SessionUser(
-                ok.userId(), ok.codigoUsuario(), ok.nombreCompleto(), ok.rol(), EMPRESA_INNPACK, ok.token(), ahora, expira,
+                ok.userId(), ok.codigoUsuario(), ok.nombreCompleto(), ok.rol(), empresa, ok.token(), ahora, expira,
                 permisosModulo);
 
         List<SimpleGrantedAuthority> permisos = List.of(
                 new SimpleGrantedAuthority("ROLE_" + ok.rol().toUpperCase(Locale.ROOT)),
-                new SimpleGrantedAuthority("EMPRESA_" + EMPRESA_INNPACK));
+                new SimpleGrantedAuthority("EMPRESA_" + empresa));
         SecurityContext contexto = SecurityContextHolder.createEmptyContext();
         contexto.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(usuario, null, permisos));
         SecurityContextHolder.setContext(contexto);
@@ -217,6 +265,14 @@ public class AuthController {
         data.put("CodigoUsuario", ok.codigoUsuario());
         data.put("NombreCompleto", ok.nombreCompleto());
         data.put("Rol", ok.rol());
+        return data;
+    }
+
+    /** faret.login de Photino responde {username, role} (username = usuario.nombre de la API, role = primer rol). */
+    private Map<String, Object> datosLoginFaret(InnpackAuthClient.Autenticado ok) {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("username", ok.nombreCompleto());
+        data.put("role", ok.rol());
         return data;
     }
 

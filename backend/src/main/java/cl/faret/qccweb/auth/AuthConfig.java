@@ -38,6 +38,11 @@ public class AuthConfig {
         return new InnpackAuthClient(properties, mapper);
     }
 
+    @Bean
+    public FaretAuthClient faretAuthClient(AuthProperties properties, ObjectMapper mapper) {
+        return new FaretAuthClient(properties, mapper);
+    }
+
     /** Contexto de seguridad guardado solo en la sesión HTTP del servidor. */
     @Bean
     public SecurityContextRepository securityContextRepository() {

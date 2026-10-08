@@ -42,6 +42,8 @@ qcc:
     auth:
       # Misma API y endpoint de login que usa Photino (config.json → QualityControlInnpackApi).
       innpack-api-base-url: ${QCC_INNPACK_API_BASE_URL:https://api.faret.cl/innpack}
+      # Login FARET (Fase 6a): misma API y endpoint que Photino (config.json → QualityControlFaretApi, api/Auth/login).
+      faret-api-base-url: ${QCC_FARET_API_BASE_URL:https://api.faret.cl/qualitycontrol}
       connect-timeout: 5s
       read-timeout: 30s   # = HttpClient.Timeout de Photino (InnpackApiClient.cs); el shim espera 35 s
       session-idle-timeout: ${QCC_WEB_SESSION_IDLE:30m}
