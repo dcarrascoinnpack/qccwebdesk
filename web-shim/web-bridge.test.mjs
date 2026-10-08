@@ -365,3 +365,83 @@ test("muestraLab.adjunto.abrir: PDF se previsualiza, docx se descarga; payload e
     assert.equal(shim.registro.descargas.length, 1);
     assert.equal(shim.registro.descargas[0].nombre, "certificado.docx");
 });
+
+// ---------------------------------------------------------------- Fase 5a-2: formularios.abrirPdf (pestaña nueva)
+const ACCION_ABRIR_PDF = "formularios.abrirPdf";
+const URL_PDF = "https://solicitudes.faret.cl/formularios/pdf/insp_15.pdf";
+
+/** Gateway simulado que responde {abierto, url} ya validada; window.open registrado (devuelve null como con noopener). */
+function shimConApertura(cuerpo) {
+    const shim = cargarShim();
+    shim.registro.ventanas = [];
+    shim.ctx.open = (url, target, features) => { shim.registro.ventanas.push({ url, target, features }); return null; };
+    shim.ctx.fetch = (url, opciones) => {
+        shim.registro.fetch.push({ url, opciones });
+        return Promise.resolve({ status: 200, ok: true, json: () => Promise.resolve(cuerpo) });
+    };
+    return shim;
+}
+
+test("formularios.abrirPdf pasa por el gateway (con CSRF y _modulo) y abre la URL validada en una pestaña nueva sin opener", async () => {
+    const shim = shimConApertura({ ok: true, success: true, data: { abierto: true, url: URL_PDF }, error: null });
+    shim.ctx.App = { currentModule: "formularios" };
+    const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ABRIR_PDF, data: { url: URL_PDF } });
+
+    // Misma respuesta que Photino ({abierto:true}); la url del gateway no se reexpone al controller.
+    assert.deepEqual(plano(res), { ok: true, success: true, data: { abierto: true }, error: null });
+    assert.equal(shim.registro.fetch.length, 1, "una sola llamada, al gateway");
+    assert.equal(shim.registro.fetch[0].url, "api/v1/bridge");
+    assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
+    assert.equal(JSON.parse(shim.registro.fetch[0].opciones.body)._modulo, "formularios");
+    assert.equal(JSON.parse(shim.registro.fetch[0].opciones.body).data.url, URL_PDF);
+    assert.deepEqual(plano(shim.registro.ventanas), [{ url: URL_PDF, target: "_blank", features: "noopener,noreferrer" }]);
+    assert.equal(shim.registro.descargas.length, 0, "no es una descarga");
+    assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesApertura), [ACCION_ABRIR_PDF]);
+    // Sigue sin ser una acción "de navegador": el contract check la ve en la ActionPolicy del gateway.
+    assert.deepEqual(plano(shim.ctx.QCC_WEB.accionesNavegador), ["excel.guardar"]);
+});
+
+test("un error del gateway en formularios.abrirPdf se devuelve tal cual y no abre nada", async () => {
+    const shim = shimConApertura({ ok: false, success: false, data: null, error: "URL de PDF inválida" });
+    const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ABRIR_PDF, data: { url: "https://evil.com/x.pdf" } });
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "URL de PDF inválida");
+    assert.equal(shim.registro.ventanas.length, 0);
+});
+
+test("el navegador vuelve a exigir https + host exacto aunque el gateway responda ok (defensa en profundidad)", async () => {
+    const casos = [
+        "http://solicitudes.faret.cl/x.pdf",
+        "https://evil.com/x.pdf",
+        "https://solicitudes.faret.cl.evil.com/x.pdf",
+        "https://solicitudes.faret.cl@evil.com/x.pdf",
+        "javascript:alert(1)",
+        "https://solicitudes.faret.cl/x y.pdf",
+        "https://solicitudes.faret.cl/x.pdf\n",
+        "https://solicitudes.faret.cl/" + "a".repeat(2048),
+        "",
+        null,
+        42,
+    ];
+    for (const url of casos) {
+        const shim = shimConApertura({ ok: true, success: true, data: { abierto: true, url }, error: null });
+        const res = await shim.ctx.PhotinoBridge.send({ action: ACCION_ABRIR_PDF, data: { url: URL_PDF } });
+        assert.equal(res.ok, false, String(url));
+        assert.equal(res.error, "URL de PDF inválida", String(url));
+        assert.equal(shim.registro.ventanas.length, 0, String(url));
+    }
+    const sinData = shimConApertura({ ok: true, success: true, data: null, error: null });
+    const res = await sinData.ctx.PhotinoBridge.send({ action: ACCION_ABRIR_PDF, data: { url: URL_PDF } });
+    assert.equal(res.ok, false);
+    assert.equal(sinData.registro.ventanas.length, 0);
+});
+
+test("formularios.list y detalle van al gateway como cualquier lectura, sin abrir ni descargar nada", async () => {
+    const shim = shimConApertura({ ok: true, success: true, data: [{ id: 15, pdfUrl: URL_PDF }], error: null });
+    const res = await shim.ctx.PhotinoBridge.send({ action: "formularios.list", data: { tipo: "inspeccionesVehiculares", patente: "" } });
+    assert.equal(res.ok, true);
+    assert.equal(res.data[0].pdfUrl, URL_PDF);
+    assert.equal(shim.registro.fetch.length, 1);
+    assert.equal(shim.registro.ventanas.length, 0);
+    assert.equal(shim.registro.descargas.length, 0);
+});

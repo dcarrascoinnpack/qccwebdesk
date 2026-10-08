@@ -191,6 +191,7 @@ class BridgeFase1cTest {
                 "productoTerminado.detalle", "productoTerminado.exportarDetalle",
                 "productoTerminado.eliminar", "productoTerminado.actualizarFecha",
                 "certificadosLiberacion.buscar", "certificadosLiberacion.calidadPdf.descargar",
+                "formularios.list", "formularios.detalle", "formularios.abrirPdf",
                 "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
                 "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
                 "controlDocumental.eliminar", "controlDocumental.adjunto.subir",

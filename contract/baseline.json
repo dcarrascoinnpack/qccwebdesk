@@ -1114,6 +1114,30 @@
       "photinoCommit": "fd7f0766c69324b14f454c8dd48ece5a28d88434",
       "photinoVersion": "1.8.14",
       "aprobado": "2026-10-02T16:24:04Z"
+    },
+    "formularios.list": {
+      "huella": "438648e437277f34ecbaab051f32076585ee41e69b3bfab6111ff73de8b34120",
+      "huellaFrontend": "0866cf5669b418b8808c47f44ff32557d5eb915845f2db8a25783a70c4b41ac7",
+      "handler": "FormulariosHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-08T16:29:24Z"
+    },
+    "formularios.detalle": {
+      "huella": "8e5ec5e6a6305f9739fde3fd4ad0ca19fa1b52a6cbc4eec2dca0264a00ac32be",
+      "huellaFrontend": "0dcee459f9da2a3926048535b03ee6858ef0e759c01d59ffa4df3ac11720230a",
+      "handler": "FormulariosHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-08T16:29:24Z"
+    },
+    "formularios.abrirPdf": {
+      "huella": "bb3563e21be81e35d5fdca45a76066bec1dc5b296803255fa95a8005a62e7b6a",
+      "huellaFrontend": "293961b1c95cffaedc3f1410db6564b868fd4c2b2ab5480cda8e3d5202e6834b",
+      "handler": "FormulariosHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-08T16:29:24Z"
     }
   }
 }

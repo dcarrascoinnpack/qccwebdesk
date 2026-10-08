@@ -58,6 +58,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/api/registros-control", this::registrosControl);
         server.createContext("/api/producto-terminado", this::productoTerminado);
         server.createContext("/api/certificados-liberacion", this::certificadosLiberacion);
+        server.createContext("/api/formularios", this::formularios);
         server.createContext("/api/control-documental", this::controlDocumental);
         server.createContext("/api/no-conformidades", this::noConformidades);
         server.createContext("/api/nc-catalogos", this::noConformidades);
@@ -1049,6 +1050,78 @@ public final class FakeInnpackApi implements AutoCloseable {
             return;
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":" + id + "},\"errors\":null}");
+    }
+
+    private final java.util.List<String> peticionesFormularios = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "GET <ruta>[?<query cruda>]" recibidos en api/formularios* (para verificar el mapeo). */
+    public java.util.List<String> peticionesFormularios() {
+        return java.util.List.copyOf(peticionesFormularios);
+    }
+
+    public void limpiarFormularios() {
+        peticionesFormularios.clear();
+    }
+
+    /** Listado de formularios (tope 300 de la API): un ítem por tipo, con pdfUrl armada por la API. */
+    public static String dataFormularios(String tipo, String query) {
+        if (query != null && query.contains("patente=VACIO")) {
+            return "[]";
+        }
+        return switch (tipo) {
+            case "inspecciones-vehiculares" -> "[{\"id\":15,\"conductor\":\"Juan Pérez\",\"patente\":\"ABCD12\",\"fechaInspeccion\":\"2026-10-05T00:00:00\","
+                    + "\"responsable\":\"Resp <b>Uno</b>\",\"firmaPath\":null,\"pdfPath\":\"pdf/insp_15.pdf\","
+                    + "\"pdfUrl\":\"https://solicitudes.faret.cl/formularios/pdf/insp_15.pdf\",\"estado\":\"guardado\","
+                    + "\"creadoEn\":\"2026-10-05T18:59:21\",\"actualizadoEn\":null,\"totalItems\":12,\"totalCumple\":11,\"totalNoCumple\":1}]";
+            case "revision-camion-jornada" -> "[{\"id\":7,\"conductor\":\"Pedro\",\"patentes\":\"AB1234; CD5678\",\"llavesPorteria\":\"SI\","
+                    + "\"camionCerrado\":\"SI\",\"comentario\":\"=HYPERLINK(1)\",\"pdfPath\":null,\"pdfUrl\":null,\"creadoEn\":\"2026-10-04T08:00:00\"}]";
+            case "checklist-bodega-cajas" -> "[{\"id\":3,\"revisadoPor\":\"María\",\"estadoCalles\":\"OK\",\"observaciones\":\"\","
+                    + "\"requiereTicketSg\":false,\"totalItems\":20,\"totalNc\":0,\"pdfPath\":\"https://solicitudes.faret.cl/pdf/chk_3.pdf\","
+                    + "\"pdfUrl\":\"https://solicitudes.faret.cl/pdf/chk_3.pdf\",\"creadoEn\":\"2026-10-03T09:30:00\"}]";
+            case "revision-bodega-oficinas" -> "[{\"id\":9,\"revisadoPor\":\"Ana\",\"enviarTicketSg\":true,\"totalItems\":30,\"totalNc\":2,"
+                    + "\"observacionesPasillos\":\"ok\",\"observacionesBodega\":\"\",\"observacionesOficinas\":\"\",\"observacionesExterior\":\"\","
+                    + "\"pdfPath\":\"pdf/rbo_9.pdf\",\"pdfUrl\":\"https://solicitudes.faret.cl/formularios/pdf/rbo_9.pdf\",\"creadoEn\":\"2026-10-02T10:00:00\"}]";
+            default -> "[]";
+        };
+    }
+
+    /** Detalle (ítems) de un formulario; id 404 → no existe (la API real responde lista vacía, no 404). */
+    public static String dataFormulariosDetalle(String tipo, int id) {
+        if (id == 404) {
+            return "[]";
+        }
+        return tipo.equals("inspecciones-vehiculares")
+                ? "[{\"id\":1,\"inspeccionId\":" + id + ",\"itemNumero\":1,\"descripcion\":\"Luces\",\"cumple\":\"SI\",\"observacion\":null},"
+                    + "{\"id\":2,\"inspeccionId\":" + id + ",\"itemNumero\":2,\"descripcion\":\"Frenos <i>x</i>\",\"cumple\":\"NO\",\"observacion\":\"Revisar\"}]"
+                : "[{\"id\":1,\"revisionId\":" + id + ",\"seccion\":\"Calle 1\",\"grupo\":\"Orden\",\"item\":\"Pasillo libre\",\"ubicacion\":\"A\",\"respuesta\":\"OK\"}]";
+    }
+
+    /** api/formularios/{tipo}[/{id}] como la API real: [Authorize], ApiResponse<T>, 404 ASP.NET en rutas desconocidas. */
+    private void formularios(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String path = ex.getRequestURI().getRawPath();
+        String query = ex.getRequestURI().getRawQuery();
+        peticionesFormularios.add(ex.getRequestMethod() + " " + path + (query == null ? "" : "?" + query));
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (modoDashboard == ModoDashboard.ERROR_NEGOCIO) {
+            responder(ex, 503, fallo("Formularios no está configurado en el servidor"));
+            return;
+        }
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile("^/api/formularios/(inspecciones-vehiculares|revision-camion-jornada|checklist-bodega-cajas|revision-bodega-oficinas)(?:/(\\d+))?$")
+                .matcher(path);
+        if (!ex.getRequestMethod().equals("GET") || !m.matches() || (m.group(2) != null && m.group(1).equals("revision-camion-jornada"))) {
+            responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
+            return;
+        }
+        String data = m.group(2) == null ? dataFormularios(m.group(1), query) : dataFormulariosDetalle(m.group(1), Integer.parseInt(m.group(2)));
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
     }
 
     private final java.util.List<String> peticionesCertificados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());

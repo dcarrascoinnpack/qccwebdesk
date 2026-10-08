@@ -4,6 +4,7 @@ import cl.faret.qccweb.auth.AuthProperties;
 import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.FormulariosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.LiberacionCalidadBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
@@ -111,6 +112,11 @@ public class BridgeConfig {
     }
 
     @Bean
+    public FormulariosBridgeHandler formulariosBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
+        return new FormulariosBridgeHandler(api, mapper);
+    }
+
+    @Bean
     public ControlDocumentalBridgeHandler controlDocumentalBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
         return new ControlDocumentalBridgeHandler(api, mapper);
     }
@@ -156,7 +162,7 @@ public class BridgeConfig {
             ControlDocumentalBridgeHandler controlDocumental, NoConformidadesBridgeHandler noConformidades,
             RecepcionCalidadBridgeHandler recepcionCalidad, UsuariosBridgeHandler usuarios,
             MuestraLaboratorioBridgeHandler laboratorio, TalleresExternosBridgeHandler talleres,
-            LiberacionCalidadBridgeHandler liberacionCalidad) {
+            LiberacionCalidadBridgeHandler liberacionCalidad, FormulariosBridgeHandler formularios) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -284,6 +290,15 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "certificadosLiberacion.calidadPdf.descargar", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                         certificados::calidadPdfDescargar),
+                // Fase 5a-2 — Formularios (Photino 1.8.15), SOLO LECTURA, dato compartido INNPACK/FARET (sin empresa).
+                // tipo = lista cerrada → segmento de ruta; abrirPdf: el gateway valida la URL (https + host exacto, como
+                // Photino) y el navegador abre la pestaña (web-bridge.js), sin Process.Start ni archivos.
+                new ActionPolicy.Regla(
+                        "formularios.list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), formularios::list),
+                new ActionPolicy.Regla(
+                        "formularios.detalle", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), formularios::detalle),
+                new ActionPolicy.Regla(
+                        "formularios.abrirPdf", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), formularios::abrirPdf),
                 // Fase 2h — Control Documental, SOLO LECTURA (payload plano). "alcanceEmpresa" es filtro
                 // de negocio validado en el handler. adjunto.abrir: previsualiza o descarga en el
                 // navegador, sin archivos temporales.

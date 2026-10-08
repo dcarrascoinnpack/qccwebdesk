@@ -202,6 +202,13 @@
         // Mismo contrato y mismo flujo de Photino en Laboratorio (%TEMP%\QCC_MuestraLaboratorio).
         "muestraLab.adjunto.abrir": abrirAdjuntoEnNavegador
     };
+    // Acciones que pasan por el gateway (valida la URL: https + host exacto, como el handler de Photino)
+    // y cuya respuesta {abierto, url} se convierte en una pestaña nueva del navegador. Photino abría la
+    // URL con el visor del sistema (Process.Start); aquí nada sale del navegador.
+    var ACCIONES_APERTURA = {
+        "formularios.abrirPdf": abrirUrlEnNavegador
+    };
+    var URL_PDF_FORMULARIOS = /^https:\/\/solicitudes\.faret\.cl(\/|$)/i;
     var MAX_ADJUNTO_BYTES = 25 * 1024 * 1024;
     var MIME_PREVISUALIZABLES = ["application/pdf", "image/png", "image/jpeg", "image/jpg", "image/gif", "image/bmp", "image/webp"];
     var MIME_DESCARGA = MIME_PREVISUALIZABLES.concat([
@@ -410,6 +417,23 @@
         } catch (e) { /* sin DOM */ }
     }
 
+    /**
+     * Respuesta ok del gateway para formularios.abrirPdf: {abierto:true, url} ya validada en el servidor.
+     * El navegador vuelve a exigir https + host exacto (defensa en profundidad) y abre la pestaña sin
+     * opener ni referrer. Responde {abierto:true} como Photino; si el navegador bloquea la ventana
+     * emergente, error claro (el controller lo muestra con alert, igual que cualquier res.error).
+     */
+    function abrirUrlEnNavegador(respuesta) {
+        var data = respuesta && respuesta.data;
+        var url = data && typeof data.url === "string" ? data.url : "";
+        if (!url || url.length > 2048 || !URL_PDF_FORMULARIOS.test(url) || /[\u0000-\u001f\u007f\s]/.test(url)) {
+            return respuestaError("URL de PDF inválida");
+        }
+        // Con noopener el navegador devuelve null aunque la pestaña se abra: no se usa el retorno.
+        window.open(url, "_blank", "noopener,noreferrer");
+        return respuestaOk({ abierto: true });
+    }
+
     /** La sesión del servidor terminó (expirada/cerrada): volver al inicio sin datos de sesión. */
     function sesionPerdida() {
         limpiarSesionUi();
@@ -474,6 +498,13 @@
                             return respuestaError("No se pudo completar la descarga en el navegador.");
                         }
                     }
+                    if (r.body && r.body.ok === true && Object.prototype.hasOwnProperty.call(ACCIONES_APERTURA, payload.action)) {
+                        try {
+                            return ACCIONES_APERTURA[payload.action](r.body);
+                        } catch (e) {
+                            return respuestaError("No se pudo abrir el PDF en el navegador.");
+                        }
+                    }
                     return r.body;
                 });
         }
@@ -523,6 +554,7 @@
         bridge: "web",
         bridgeUrl: BRIDGE_URL,
         accionesNavegador: Object.keys(ACCIONES_NAVEGADOR),
-        accionesDescarga: Object.keys(ACCIONES_DESCARGA)
+        accionesDescarga: Object.keys(ACCIONES_DESCARGA),
+        accionesApertura: Object.keys(ACCIONES_APERTURA)
     };
 })();

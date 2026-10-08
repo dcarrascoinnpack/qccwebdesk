@@ -30,6 +30,7 @@ public class NavegadorSimuladoMockMvc implements MockMvcBuilderCustomizer {
             Map.entry("registrosControl", "registros-control"),
             Map.entry("productoTerminado", "producto-terminado"),
             Map.entry("certificadosLiberacion", "certificados-liberacion"),
+            Map.entry("formularios", "formularios"),
             Map.entry("controlDocumental", "control-documental"),
             Map.entry("noConformidades", "no-conformidades"),
             Map.entry("liberacionCalidad", "no-conformidades"),
