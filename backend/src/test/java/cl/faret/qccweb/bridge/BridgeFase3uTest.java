@@ -40,7 +40,7 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 
 /**
- * Fase 3u — permisos por módulo igual que Photino 1.8.14 (fd7f076, PermisosService): al iniciar sesión se leen los
+ * Fase 3u — permisos por módulo igual que Photino 1.8.15 (9e1b556 desde la Fase 5a-1, PermisosService): al iniciar sesión se leen los
  * permisos personalizados (GET api/auth/mis-permisos con el token del usuario; si fallan, no se entra), cada acción
  * viaja con el módulo abierto (`_modulo`) y el gateway aplica SIN_ACCESO / VER / EDITAR con los mensajes de Photino.
  * Seguridad transparente de la web: las lecturas también deben pertenecer al módulo declarado. API SIMULADA.
@@ -61,7 +61,8 @@ class BridgeFase3uTest {
     private static final String PERMISOS_NO_CARGADOS = "No se pudieron cargar los permisos del usuario. Intenta nuevamente.";
     private static final List<String> MODULOS_INNPACK = List.of("inicio", "dashboard", "registros-produccion", "no-conformidades",
             "nc-internas", "control-documental", "maquinas-seguimiento", "registros-control", "talleres-externos",
-            "producto-terminado", "certificados-liberacion", "recepcion-calidad", "muestra-laboratorio", "trazabilidad", "usuarios");
+            "producto-terminado", "certificados-liberacion", "despachos-diarios", "recepcion-calidad", "muestra-laboratorio",
+            "trazabilidad", "formularios", "usuarios");
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
     private static final String PASS = "ClavePermisos#2026";
@@ -272,6 +273,18 @@ class BridgeFase3uTest {
         assertThat(PermisosModulo.esLectura("recepcion.sap.consultar")).isTrue();
         assertThat(PermisosModulo.esLectura("noConformidades.catalogos.clientes.crear")).isFalse();
         assertThat(PermisosModulo.esLectura("inicio.frecuencias.actualizar")).isFalse();
+        // Photino 1.8.15 (9e1b556, Fase 5a-1): Formularios y Despachos Diarios (INNPACK y Faret, sin escrituras);
+        // formularios.abrirPdf es lectura (AccionesLectura); CONSULTA de Faret también entra a faret-despachos-diarios.
+        assertThat(PermisosModulo.esLectura("formularios.abrirPdf")).isTrue();
+        assertThat(PermisosModulo.validar("formularios.list", "formularios", operador)).isNull();
+        assertThat(PermisosModulo.validar("despachosDiarios.resumen", "despachos-diarios", operador)).isNull();
+        assertThat(PermisosModulo.validar("formularios.list", "despachos-diarios", operador)).isEqualTo(NO_PERMITIDA);
+        assertThat(PermisosModulo.validar("formularios.guardar", "formularios", operador)).isEqualTo(NO_PERMITIDA);
+        SessionUser consultaFaret = new SessionUser(2, "c", "C", "CONSULTA", "FARET", "t", Instant.now(),
+                Instant.now().plusSeconds(60), Map.of());
+        assertThat(PermisosModulo.nivelEfectivo("faret-despachos-diarios", consultaFaret)).isEqualTo("EDITAR");
+        assertThat(PermisosModulo.nivelEfectivo("faret-formularios", consultaFaret)).isEqualTo("SIN_ACCESO");
+        assertThat(PermisosModulo.nivelEfectivo("faret-certificados-liberacion", consultaFaret)).isEqualTo("SIN_ACCESO");
     }
 
     // ------------------------------------------------------------------ helpers

@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Permisos por módulo (Fase 3u) — port de PermisosService de Photino 1.8.14 (fd7f076), la misma regla:
+ * Permisos por módulo (Fase 3u) — port de PermisosService de Photino 1.8.15 (9e1b556, Fase 5a-1), la misma regla:
  * <ol>
  * <li>admin_ti → EDITAR en todo, siempre.</li>
  * <li>Gestión de Usuarios → solo admin_ti (no se personaliza).</li>
@@ -58,15 +58,18 @@ public final class PermisosModulo {
         m.put("talleres-externos", new ModuloDef("INNPACK", List.of("talleresExternos")));
         m.put("producto-terminado", new ModuloDef("INNPACK", List.of("productoTerminado")));
         m.put("certificados-liberacion", new ModuloDef("INNPACK", List.of()));
+        m.put("despachos-diarios", new ModuloDef("INNPACK", List.of()));
         m.put("recepcion-calidad", new ModuloDef("INNPACK", List.of("recepcion")));
         m.put("muestra-laboratorio", new ModuloDef("INNPACK", List.of("muestraLab")));
         m.put("trazabilidad", new ModuloDef("INNPACK", List.of()));
+        m.put("formularios", new ModuloDef("INNPACK", List.of()));
         m.put("usuarios", new ModuloDef("INNPACK", List.of("usuarios")));
         m.put("faret", new ModuloDef("FARET", List.of()));
         m.put("faret-inspecciones", new ModuloDef("FARET", List.of("faret.inspecciones")));
         m.put("faret-inspecciones-pallet", new ModuloDef("FARET", List.of("faret.inspeccionesPallet")));
         m.put("faret-producto-terminado", new ModuloDef("FARET", List.of("productoTerminado")));
         m.put("faret-certificados-liberacion", new ModuloDef("FARET", List.of()));
+        m.put("faret-despachos-diarios", new ModuloDef("FARET", List.of()));
         m.put("faret-nc", new ModuloDef("FARET", List.of("faret.nc", "faret.pncCatalogos", "faret.catalogos")));
         m.put("faret-nc-internas", new ModuloDef("FARET", List.of("noConformidades")));
         m.put("faret-control-documental", new ModuloDef("FARET", List.of("controlDocumental")));
@@ -75,6 +78,7 @@ public final class PermisosModulo {
         m.put("faret-maquinas", new ModuloDef("FARET", List.of()));
         m.put("faret-data", new ModuloDef("FARET", List.of()));
         m.put("faret-trazabilidad", new ModuloDef("FARET", List.of()));
+        m.put("faret-formularios", new ModuloDef("FARET", List.of()));
         m.put("faret-laboratorio", new ModuloDef("FARET", List.of("faretLab")));
         m.put("faret-recepcion-calidad", new ModuloDef("FARET", List.of("recepcion")));
         m.put("faret-usuarios", new ModuloDef("FARET", List.of("faret.usuarios")));
@@ -83,7 +87,7 @@ public final class PermisosModulo {
 
     /**
      * Web: prefijos de acción que cada pantalla INNPACK envía (lecturas y escrituras), según el frontend de Photino
-     * fd7f076. No Conformidades además lee filtros de dashboard, el resumen de máquinas y la columna "Liberación
+     * 9e1b556 (1.8.15). No Conformidades además lee filtros de dashboard, el resumen de máquinas y la columna "Liberación
      * Calidad" (shared/utils.js). Módulo sin entrada (Faret: sin sesión web aún) → solo la regla de Photino.
      */
     private static final Map<String, Set<String>> PREFIJOS_LECTURA_WEB = Map.ofEntries(
@@ -98,9 +102,11 @@ public final class PermisosModulo {
             Map.entry("talleres-externos", Set.of("talleresExternos")),
             Map.entry("producto-terminado", Set.of("productoTerminado")),
             Map.entry("certificados-liberacion", Set.of("certificadosLiberacion")),
+            Map.entry("despachos-diarios", Set.of("despachosDiarios")),
             Map.entry("recepcion-calidad", Set.of("recepcion")),
             Map.entry("muestra-laboratorio", Set.of("muestraLab")),
             Map.entry("trazabilidad", Set.of("trazabilidad")),
+            Map.entry("formularios", Set.of("formularios")),
             Map.entry("usuarios", Set.of("usuarios")));
 
     /** Módulos que nunca bajan de VER. */
@@ -126,6 +132,7 @@ public final class PermisosModulo {
             "faret.inspecciones.adjuntos",
             "faret.nc.adjuntos.abrir",
             "faret.talleresExternos.catalogos",
+            "formularios.abrirPdf",
             "inicio.getDashboard",
             "liberacionCalidad.inspectores",
             "maquinasSeguimiento.obtenerResumen",
@@ -243,7 +250,8 @@ public final class PermisosModulo {
             return rol.equals("ADMIN") ? EDITAR : SIN_ACCESO;
         }
         if (rol.equals("CONSULTA")) {
-            return Set.of("faret", "faret-talleres-externos", "faret-nc", "faret-nc-internas").contains(modulo) ? EDITAR : SIN_ACCESO;
+            return Set.of("faret", "faret-talleres-externos", "faret-nc", "faret-nc-internas", "faret-despachos-diarios").contains(modulo)
+                    ? EDITAR : SIN_ACCESO;
         }
         return EDITAR;
     }
