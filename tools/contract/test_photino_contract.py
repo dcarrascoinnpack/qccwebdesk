@@ -871,8 +871,9 @@ class LimpiezaCsTest(unittest.TestCase):
 
 PHOTINO_REAL = os.path.join(os.path.dirname(__file__), "..", "..", "..", "qualitycontrol_desktop_faret")
 # Commit de Photino que la web reproduce (Fase 3r: 6c42e05 → dd147ad, NC Internas; Fase 3u: → fd7f076, v1.8.14,
-# permisos por módulo). El módulo PNC mantiene el contrato de sus acciones en los tres.
-REFERENCIA = "fd7f076"
+# permisos por módulo; Fase 5a-1: → 9e1b556, v1.8.15, Formularios y Despachos Diarios). El módulo PNC mantiene el
+# contrato de sus acciones en los cuatro.
+REFERENCIA = "9e1b556"
 
 
 @unittest.skipUnless(os.path.isdir(os.path.join(PHOTINO_REAL, ".git")), "repo Photino no disponible")
@@ -886,7 +887,7 @@ class PhotinoRealTest(unittest.TestCase):
         baseline = pc.leer_json(os.path.join(raiz, "contract", "baseline.json"))
         web = {"acciones": [{"accion": a} for a in baseline["acciones"]]}
         rep = pc.construir_reporte(fuente, inv, pc.comparar(inv, web, baseline), web, baseline)
-        self.assertEqual(rep["resumen"]["accionesFrontend"], 250)
+        self.assertEqual(rep["resumen"]["accionesFrontend"], 254)
         self.assertEqual(rep["resumen"]["noUsadas"], 33)
         self.assertEqual(rep["resumen"]["photinoSinHandler"], 0)
         self.assertEqual(rep["resumen"]["dinamicasSinResolver"], 0)
