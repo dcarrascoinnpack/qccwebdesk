@@ -204,7 +204,7 @@ public class AuthController {
             sesion.invalidate();
         }
         SecurityContextHolder.clearContext();
-        csrfTokenRepository.saveToken(null, request, response);
+        rotarCsrf(request, response);
         return ResponseEntity.ok(respuesta(true, Map.of("message", "Sesión cerrada correctamente"), null));
     }
 
@@ -253,8 +253,18 @@ public class AuthController {
         SecurityContextHolder.setContext(contexto);
         securityContextRepository.saveContext(contexto, request, response);
 
-        csrfTokenRepository.saveToken(null, request, response);
+        rotarCsrf(request, response);
         return sesion;
+    }
+
+    /**
+     * Rota el token CSRF (login/logout) y EMITE el nuevo en la misma respuesta. Antes solo se borraba la cookie y la
+     * primera petición POST siguiente (permisos.mios justo tras el login, o un login inmediato tras el logout) recibía
+     * 403 hasta que otra respuesta volviera a sembrar la cookie; Photino carga los permisos en esa primera llamada
+     * (Fase 6a: con FARET no había una segunda llamada que lo disimulara).
+     */
+    private void rotarCsrf(HttpServletRequest request, HttpServletResponse response) {
+        csrfTokenRepository.saveToken(csrfTokenRepository.generateToken(request), request, response);
     }
 
     private Map<String, Object> datosLogin(InnpackAuthClient.Autenticado ok) {

@@ -116,8 +116,10 @@ class AuthFase6aTest {
                 .andExpect(jsonPath("$.data.NombreCompleto").value("Ana Calidad"))
                 .andExpect(jsonPath("$.data.Rol").value("CALIDAD"))
                 .andExpect(jsonPath("$.data.Id").value(10));
-        assertThat(salida.getAll()).contains("evento=LOGIN_OK usuario=ana empresa=FARET")
-                .doesNotContain(FakeFaretApi.firmaDeToken(10), PASS);
+        assertThat(salida.getAll()).contains("evento=LOGIN_OK usuario=ana empresa=FARET");
+        // Ni el token FARET ni la contraseña llegan a la auditoría (se mira solo el log de la app, no el volcado de MockMvc).
+        assertThat(salida.getAll().lines().filter(l -> l.contains("evento=")).toList())
+                .noneMatch(l -> l.contains(FakeFaretApi.firmaDeToken(10)) || l.contains(PASS));
     }
 
     @Test
