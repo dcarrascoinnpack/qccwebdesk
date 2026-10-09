@@ -4,6 +4,7 @@ import cl.faret.qccweb.auth.AuthProperties;
 import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.FaretBorradosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesGestionBridgeHandler;
@@ -79,6 +80,11 @@ public class BridgeConfig {
      * admin, admin_ti y calidad. El resto de las escrituras modificadoras de NC usan ROLES_FARET (EDITAR en faret-nc, como Photino).
      */
     static final Set<String> ROLES_FARET_NC_CERRAR = Set.of("admin", "admin_ti", "calidad");
+    /**
+     * BORRADOS FARET (Fase F5, decisión del usuario): irreversibles y MejoraContinua / Calidad no tienen autenticación, así que solo
+     * admin, admin_ti y calidad (Photino los daba a todos menos CONSULTA).
+     */
+    static final Set<String> ROLES_FARET_BORRADOS = Set.of("admin", "admin_ti", "calidad");
     /** Catálogos PNC con `crear`: acción -> {segmento de ruta de api/pnc-catalogos, largo máximo de `nombre` (columna real)}. */
     static final Map<String, Object[]> PNC_CATALOGOS_CREAR = new java.util.LinkedHashMap<>();
 
@@ -202,6 +208,15 @@ public class BridgeConfig {
         return new FaretNoConformidadesRegistroBridgeHandler(qualityControl, mejoraContinua, mapper);
     }
 
+    /** Borrados FARET (Fase F5): QualityControlFaret.Api con el Bearer del usuario; MejoraContinua y Calidad sin Authorization. */
+    @Bean
+    public FaretBorradosBridgeHandler faretBorradosBridgeHandler(
+            @Qualifier("faretQualityControlApiClient") FaretApiClient qualityControl,
+            @Qualifier("faretMejoraContinuaApiClient") FaretApiClient mejoraContinua,
+            @Qualifier("faretCalidadApiClient") FaretApiClient calidad, ObjectMapper mapper) {
+        return new FaretBorradosBridgeHandler(qualityControl, mejoraContinua, calidad, mapper);
+    }
+
     /**
      * Lecturas del inicio FARET (Fase 6b): QualityControlFaret.Api con el Bearer del usuario de la sesión; MejoraContinua
      * y Calidad sin Authorization (Photino no les manda token).
@@ -268,7 +283,7 @@ public class BridgeConfig {
             LiberacionCalidadBridgeHandler liberacionCalidad, FormulariosBridgeHandler formularios,
             FaretBridgeHandler faret, FaretTalleresExternosBridgeHandler faretTalleres,
             FaretNoConformidadesBridgeHandler faretNc, FaretNoConformidadesGestionBridgeHandler faretNcGestion,
-            FaretNoConformidadesRegistroBridgeHandler faretNcRegistro) {
+            FaretNoConformidadesRegistroBridgeHandler faretNcRegistro, FaretBorradosBridgeHandler faretBorrados) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -911,6 +926,20 @@ public class BridgeConfig {
         reglas.add(new ActionPolicy.Regla(
                 "faret.nc.actualizarRegistro", Set.of("FARET"), ROLES_FARET, Map.of(), faretNcRegistro::actualizarRegistro,
                 FaretNoConformidadesRegistroBridgeHandler::recursoActualizarRegistro));
+        // Fase F5 - BORRADOS FARET (irreversibles): solo admin, admin_ti y calidad. Lista cerrada de claves (solo ids), ids enteros
+        // positivos, sin identidad del navegador. eliminarFila = 2 pasos SIN compensación (Data con Bearer + gestión NC sin Authorization).
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.adjuntos.eliminar", Set.of("FARET"), ROLES_FARET_BORRADOS, Map.of(), faretBorrados::adjuntoEliminar,
+                FaretBorradosBridgeHandler::recursoAdjuntoEliminar));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.eliminarFila", Set.of("FARET"), ROLES_FARET_BORRADOS, Map.of(), faretBorrados::eliminarFila,
+                FaretBorradosBridgeHandler::recursoEliminarFila));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.inspecciones.eliminar", Set.of("FARET"), ROLES_FARET_BORRADOS, Map.of(), faretBorrados::inspeccionEliminar,
+                FaretBorradosBridgeHandler::recursoInspeccionEliminar));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.inspeccionesPallet.eliminar", Set.of("FARET"), ROLES_FARET_BORRADOS, Map.of(),
+                faretBorrados::inspeccionPalletEliminar, FaretBorradosBridgeHandler::recursoInspeccionPalletEliminar));
         return new ActionPolicy(reglas);
     }
 }

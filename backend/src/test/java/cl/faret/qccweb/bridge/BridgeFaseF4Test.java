@@ -784,8 +784,8 @@ class BridgeFaseF4Test {
         }
         assertThat(MC.peticiones()).hasSize(antes);
         assertThat(QC.escrituras()).isEmpty();
-        // Lo que el frontend de 9e1b556 no usa sigue denegado.
-        for (String a : List.of("faret.nc.eliminarFila", "faret.nc.adjuntos.eliminar")) {
+        // Lo que el frontend de 9e1b556 no usa sigue denegado (los borrados son de la Fase F5).
+        for (String a : List.of("faret.usuarios.eliminarDefinitivo", "faret.pncCatalogos.clientes.desactivar")) {
             accion(ana, a, mapa("id", 7)).andExpect(status().isForbidden());
         }
     }

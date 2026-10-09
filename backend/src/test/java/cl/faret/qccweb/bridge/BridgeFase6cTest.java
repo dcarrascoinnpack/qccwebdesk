@@ -321,7 +321,7 @@ class BridgeFase6cTest {
         accion(ana, "{\"action\":\"faret.nc.get\",\"id\":1}").andExpect(status().isForbidden());
         accion(ana, "{\"action\":\"faret.nc.get\",\"_modulo\":\"inventado\",\"id\":1}").andExpect(status().isForbidden());
         // Siguen denegadas las escrituras de NC que la web no habilita (las aditivas son de la Fase F3; create, update, gestion, cerrar, acciones.actualizar, crearRegistro y actualizarRegistro, de la F4).
-        for (String a : List.of("faret.nc.eliminarFila", "faret.nc.adjuntos.eliminar")) {
+        for (String a : List.of("faret.usuarios.eliminarDefinitivo", "faret.pncCatalogos.clientes.desactivar")) {
             accion(ana, "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\",\"id\":1}").andExpect(status().isForbidden());
         }
         assertThat(MC.peticiones()).isEmpty();
@@ -569,8 +569,8 @@ class BridgeFase6cTest {
         accion(login("clara"), "{\"action\":\"faret.inspecciones.list\",\"_modulo\":\"faret-inspecciones\"}").andExpect(status().isForbidden());
         accion(login("clara"), "{\"action\":\"faret.inspeccionesPallet.list\",\"_modulo\":\"faret-inspecciones-pallet\"}").andExpect(status().isForbidden());
         accion(login("ana"), "{\"action\":\"faret.inspecciones.list\"}").andExpect(status().isForbidden());
-        // Eliminar sigue denegada.
-        for (String a : List.of("faret.inspecciones.eliminar", "faret.inspeccionesPallet.eliminar")) {
+        // Lo que la web no habilita sigue denegado (eliminar es de la Fase F5).
+        for (String a : List.of("faret.inspecciones.desactivar", "faret.inspeccionesPallet.crear")) {
             accion(login("admin"), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-inspecciones\",\"id\":1}").andExpect(status().isForbidden());
         }
         assertThat(CALIDAD.peticiones()).isEmpty();
@@ -679,7 +679,7 @@ class BridgeFase6cTest {
                 .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
         accion(login("ana"), "{\"action\":\"faret.nc.adjuntos.abrir\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
         accion(login("ana"), "{\"action\":\"faret.nc.adjuntos.abrir\",\"_modulo\":\"faret-data\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
-        for (String a : List.of("faret.nc.adjuntos.eliminar")) {
+        for (String a : List.of("faret.nc.adjuntos.eliminarTodos")) {
             accion(login("admin"), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
         }
         assertThat(MC.peticiones()).isEmpty();
