@@ -3,6 +3,7 @@ package cl.faret.qccweb.bridge.handlers;
 import cl.faret.qccweb.auth.SessionUser;
 import cl.faret.qccweb.bridge.BridgeAction;
 import cl.faret.qccweb.bridge.BridgeResult;
+import cl.faret.qccweb.bridge.LecturasDeSesion;
 import cl.faret.qccweb.bridge.PermisosModulo;
 import cl.faret.qccweb.upstream.FaretApiClient;
 import cl.faret.qccweb.upstream.InnpackApiClient;
@@ -381,7 +382,13 @@ public class FaretBridgeHandler {
         if (!mejoraContinua.configurada()) {
             return BridgeResult.error(MENSAJE_MC_NO_CONFIGURADA);
         }
-        return FaretRespuestas.crudoMc(mejoraContinua.get(usuario, RUTA_NC), mapper);
+        BridgeResult upstream = FaretRespuestas.crudoMc(mejoraContinua.get(usuario, RUTA_NC), mapper);
+        if (upstream.ok()) {
+            // Fase F4: la vista abre los formularios de edición/gestión con los datos de ESTA lista; se registra la huella de cada NC
+            // para detectar lost update en faret.nc.update y faret.nc.gestion.actualizar.
+            FaretNoConformidadesGestionBridgeHandler.HuellasNc.registrarLista(upstream.data());
+        }
+        return upstream;
     }
 
     /**
@@ -391,6 +398,28 @@ public class FaretBridgeHandler {
      */
     public BridgeResult ncDetalle(String sufijo, ObjectNode payload, SessionUser usuario) {
         BridgeResult upstream = ncPorId(sufijo, payload, usuario, false);
+        Integer ncId = enteroPositivo(payload.get("id"));
+        if (sufijo.isEmpty() && upstream.ok() && ncId != null) {
+            // Fase F4: huella de la NC que la sesión queda viendo (lost update en faret.nc.update / gestion.actualizar).
+            FaretNoConformidadesGestionBridgeHandler.HuellasNc.registrar(ncId, upstream.data());
+        }
+        if ("/acciones".equals(sufijo) && upstream.ok() && ncId != null && upstream.data() instanceof ArrayNode items) {
+            // Fase F4: ANTES de escapar se registra cada acción ORIGINAL (NC + JSON) para faret.nc.acciones.actualizar: la vista reenvía
+            // descripcion/responsable tomados de esta lista (ya escapados) y el gateway los reemplaza por los originales.
+            for (JsonNode item : items) {
+                JsonNode aid = item.get("id");
+                if (item.isObject() && aid != null && aid.canConvertToInt()) {
+                    LecturasDeSesion.registrar(FaretNoConformidadesGestionBridgeHandler.recursoLecturaAccion(aid.asInt()), ncId + "|" + item);
+                }
+            }
+        }
+        if ("/seguimiento".equals(sufijo)) {
+            // Fase F4: la vista inserta comentario/autor en innerHTML; se escapan solo si traen marcado (textos guardados desde Photino).
+            return NoConformidadesBridgeHandler.escaparCampos(upstream, "comentario", "autor");
+        }
+        if ("/acciones".equals(sufijo)) {
+            return NoConformidadesBridgeHandler.escaparCampos(upstream, "descripcion", "responsable", "prioridad");
+        }
         if ("/adjuntos".equals(sufijo) && upstream.ok() && upstream.data() instanceof ArrayNode items) {
             // Fase F3: la vista inserta nombreArchivo en innerHTML y en title="..."; se sanea igual que noConformidades.adjuntos.list.
             for (JsonNode item : items) {

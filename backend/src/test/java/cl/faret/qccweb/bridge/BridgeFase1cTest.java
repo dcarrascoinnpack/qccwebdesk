@@ -246,7 +246,9 @@ class BridgeFase1cTest {
                 "faret.pncCatalogos.niveles.crear", "faret.pncCatalogos.impactos.crear",
                 "faret.talleresExternos.create", "faret.talleresExternos.update", "faret.talleresExternos.eliminar",
                 "faret.talleresExternos.catalogos.eliminarTaller", "faret.talleresExternos.catalogos.eliminarProceso",
-                "faret.nc.seguimiento.crear", "faret.nc.acciones.crear", "faret.nc.analisis.guardar", "faret.nc.adjuntos.subir");
+                "faret.nc.seguimiento.crear", "faret.nc.acciones.crear", "faret.nc.analisis.guardar", "faret.nc.adjuntos.subir",
+                "faret.nc.create", "faret.nc.update", "faret.nc.gestion.actualizar", "faret.nc.cerrar", "faret.nc.acciones.actualizar",
+                "faret.nc.crearRegistro", "faret.nc.actualizarRegistro");
     }
 
     // ------------------------------------------------------ manipulación desde DevTools

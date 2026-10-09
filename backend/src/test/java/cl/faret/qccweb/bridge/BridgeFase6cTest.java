@@ -320,10 +320,8 @@ class BridgeFase6cTest {
         MockHttpSession ana = login("ana");
         accion(ana, "{\"action\":\"faret.nc.get\",\"id\":1}").andExpect(status().isForbidden());
         accion(ana, "{\"action\":\"faret.nc.get\",\"_modulo\":\"inventado\",\"id\":1}").andExpect(status().isForbidden());
-        // Las escrituras de NC no aditivas siguen denegadas (seguimiento.crear, analisis.guardar, acciones.crear y adjuntos.subir: Fase F3).
-        for (String a : List.of("faret.nc.create", "faret.nc.crearRegistro", "faret.nc.actualizarRegistro", "faret.nc.update",
-                "faret.nc.eliminarFila", "faret.nc.gestion.actualizar", "faret.nc.cerrar",
-                "faret.nc.acciones.actualizar", "faret.nc.adjuntos.eliminar")) {
+        // Siguen denegadas las escrituras de NC que la web no habilita (las aditivas son de la Fase F3; create, update, gestion, cerrar, acciones.actualizar, crearRegistro y actualizarRegistro, de la F4).
+        for (String a : List.of("faret.nc.eliminarFila", "faret.nc.adjuntos.eliminar")) {
             accion(ana, "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\",\"id\":1}").andExpect(status().isForbidden());
         }
         assertThat(MC.peticiones()).isEmpty();

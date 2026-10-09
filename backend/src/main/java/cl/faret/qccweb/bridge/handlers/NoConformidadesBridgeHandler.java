@@ -473,7 +473,7 @@ public class NoConformidadesBridgeHandler {
     }
 
     /** Escapa como HTML (UTF-8: solo & < > " ') los campos string indicados de cada ítem de una lista. */
-    private static BridgeResult escaparCampos(BridgeResult upstream, String... campos) {
+    static BridgeResult escaparCampos(BridgeResult upstream, String... campos) {
         if (upstream.ok() && upstream.data() instanceof ArrayNode items) {
             for (JsonNode item : items) {
                 if (item instanceof ObjectNode c) {

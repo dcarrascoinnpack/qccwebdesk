@@ -6,6 +6,8 @@ import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesGestionBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesRegistroBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretTalleresExternosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FormulariosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
@@ -72,6 +74,11 @@ public class BridgeConfig {
      * [Authorize(Roles = "ADMIN,ADMIN_TI,CALIDAD")] de la API (decisión del usuario: los de la API).
      */
     static final Set<String> ROLES_FARET_TALLERES_CATALOGO_ELIMINAR = Set.of("admin", "admin_ti", "calidad");
+    /**
+     * Cierre de una NC FARET (Fase F4a, decisión del usuario): irreversible desde la vista y MejoraContinua no tiene auth, así que solo
+     * admin, admin_ti y calidad. El resto de las escrituras modificadoras de NC usan ROLES_FARET (EDITAR en faret-nc, como Photino).
+     */
+    static final Set<String> ROLES_FARET_NC_CERRAR = Set.of("admin", "admin_ti", "calidad");
     /** Catálogos PNC con `crear`: acción -> {segmento de ruta de api/pnc-catalogos, largo máximo de `nombre` (columna real)}. */
     static final Map<String, Object[]> PNC_CATALOGOS_CREAR = new java.util.LinkedHashMap<>();
 
@@ -180,6 +187,21 @@ public class BridgeConfig {
         return new FaretNoConformidadesBridgeHandler(mejoraContinua, mapper);
     }
 
+    /** Escrituras modificadoras de No Conformidades FARET (Fase F4a): MejoraContinua, SIN Authorization (como Photino). */
+    @Bean
+    public FaretNoConformidadesGestionBridgeHandler faretNoConformidadesGestionBridgeHandler(
+            @Qualifier("faretMejoraContinuaApiClient") FaretApiClient mejoraContinua, ObjectMapper mapper) {
+        return new FaretNoConformidadesGestionBridgeHandler(mejoraContinua, mapper);
+    }
+
+    /** Registros de Data PNC desde NC FARET (Fase F4b): QualityControlFaret.Api con el Bearer del usuario + MejoraContinua sin Authorization. */
+    @Bean
+    public FaretNoConformidadesRegistroBridgeHandler faretNoConformidadesRegistroBridgeHandler(
+            @Qualifier("faretQualityControlApiClient") FaretApiClient qualityControl,
+            @Qualifier("faretMejoraContinuaApiClient") FaretApiClient mejoraContinua, ObjectMapper mapper) {
+        return new FaretNoConformidadesRegistroBridgeHandler(qualityControl, mejoraContinua, mapper);
+    }
+
     /**
      * Lecturas del inicio FARET (Fase 6b): QualityControlFaret.Api con el Bearer del usuario de la sesión; MejoraContinua
      * y Calidad sin Authorization (Photino no les manda token).
@@ -245,7 +267,8 @@ public class BridgeConfig {
             MuestraLaboratorioBridgeHandler laboratorio, TalleresExternosBridgeHandler talleres,
             LiberacionCalidadBridgeHandler liberacionCalidad, FormulariosBridgeHandler formularios,
             FaretBridgeHandler faret, FaretTalleresExternosBridgeHandler faretTalleres,
-            FaretNoConformidadesBridgeHandler faretNc) {
+            FaretNoConformidadesBridgeHandler faretNc, FaretNoConformidadesGestionBridgeHandler faretNcGestion,
+            FaretNoConformidadesRegistroBridgeHandler faretNcRegistro) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -848,7 +871,7 @@ public class BridgeConfig {
         // único control de acceso y un 401 de ella es un error normal). Los 5 roles de Photino con EDITAR en faret-nc. El frontend manda el
         // autor desde sessionStorage (autor / creadoPor / actualizadoPor / subidoPor): se acepta la clave pero se pisa con la sesión.
         // analisis.guardar: POST/PUT lo decide el gateway (ignora existeAnalisis) con detección de lost update. adjuntos.subir va SOLO
-        // por /api/v1/bridge/archivo. NO se habilitan nc.create/update/eliminar/gestion/cerrar/acciones.actualizar/adjuntos.eliminar.
+        // por /api/v1/bridge/archivo. Las modificadoras de la Fase F4 van más abajo; no se habilitan eliminarFila ni adjuntos.eliminar.
         reglas.add(new ActionPolicy.Regla(
                 "faret.nc.seguimiento.crear", Set.of("FARET"), ROLES_FARET, Map.of("autor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                 faretNc::seguimientoCrear, FaretNoConformidadesBridgeHandler::recursoSeguimiento));
@@ -862,6 +885,32 @@ public class BridgeConfig {
         reglas.add(new ActionPolicy.Regla(
                 "faret.nc.adjuntos.subir", Set.of("FARET"), ROLES_FARET, Map.of("subidoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
                 faretNc::adjuntosSubir, FaretNoConformidadesBridgeHandler::recursoAdjunto));
+        // Fase F4a - ESCRITURAS MODIFICADORAS de No Conformidades FARET (MejoraContinua, SIN Authorization). Los 5 roles de Photino (EDITAR en
+        // faret-nc), salvo cerrar (admin, admin_ti, calidad: decisión del usuario). Identidad: la vista manda actualizadoPor / cerradoPor
+        // desde sessionStorage; se acepta la clave pero se pisa con la sesión. Datos de negocio (reportadoPor, responsable) no se tocan.
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.create", Set.of("FARET"), ROLES_FARET, Map.of(), faretNcGestion::crear,
+                FaretNoConformidadesGestionBridgeHandler::recursoCrear));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.update", Set.of("FARET"), ROLES_FARET, Map.of(), faretNcGestion::actualizar,
+                FaretNoConformidadesGestionBridgeHandler::recursoActualizar));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.gestion.actualizar", Set.of("FARET"), ROLES_FARET, Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                faretNcGestion::gestionActualizar, FaretNoConformidadesGestionBridgeHandler::recursoGestion));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.cerrar", Set.of("FARET"), ROLES_FARET_NC_CERRAR, Map.of("cerradoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                faretNcGestion::cerrar, FaretNoConformidadesGestionBridgeHandler::recursoCierre));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.acciones.actualizar", Set.of("FARET"), ROLES_FARET, Map.of("actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                faretNcGestion::accionesActualizar, FaretNoConformidadesGestionBridgeHandler::recursoAccionActualizada));
+        // Fase F4b - registros de Data PNC desde NC FARET (QualityControlFaret.Api con el Bearer del usuario; el autor lo pone la API desde el
+        // sub del JWT, sin identidad del navegador). crearRegistro = 2 pasos SIN compensación (como Photino); actualizarRegistro = campos parciales.
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.crearRegistro", Set.of("FARET"), ROLES_FARET, Map.of(), faretNcRegistro::crearRegistro,
+                FaretNoConformidadesRegistroBridgeHandler::recursoCrearRegistro));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.actualizarRegistro", Set.of("FARET"), ROLES_FARET, Map.of(), faretNcRegistro::actualizarRegistro,
+                FaretNoConformidadesRegistroBridgeHandler::recursoActualizarRegistro));
         return new ActionPolicy(reglas);
     }
 }

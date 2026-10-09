@@ -24,6 +24,7 @@ public final class FakeFaretSinAuthApi implements AutoCloseable {
     private final HttpServer server;
     private final String prefijo;
     private final Map<String, Respuesta> respuestas = new ConcurrentHashMap<>();
+    private final Map<String, java.util.Deque<Respuesta>> colas = new ConcurrentHashMap<>();
     private final List<String> peticiones = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final List<String> cuerpos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final List<String> authorizations = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
@@ -56,7 +57,13 @@ public final class FakeFaretSinAuthApi implements AutoCloseable {
         respuestas.put(metodo + " " + ruta, new Respuesta(status, body));
     }
 
+    /** Encola una respuesta para un método y ruta exactos: se consumen en orden (FIFO) ANTES de la fija de {@link #responder}, p. ej. para una NC que cambia entre dos lecturas. */
+    public void encolar(String metodo, String ruta, int status, String body) {
+        colas.computeIfAbsent(metodo + " " + ruta, k -> new java.util.concurrent.ConcurrentLinkedDeque<>()).add(new Respuesta(status, body));
+    }
+
     public void limpiar() {
+        colas.clear();
         respuestas.clear();
         peticiones.clear();
         cuerpos.clear();
@@ -92,7 +99,11 @@ public final class FakeFaretSinAuthApi implements AutoCloseable {
         String relativa = uri.substring(prefijo.length());
         peticiones.add(ex.getRequestMethod() + " " + relativa);
         String ruta = ex.getRequestURI().getRawPath().substring(prefijo.length());
-        Respuesta r = respuestas.get(ex.getRequestMethod() + " " + ruta);
+        java.util.Deque<Respuesta> cola = colas.get(ex.getRequestMethod() + " " + ruta);
+        Respuesta r = cola == null ? null : cola.pollFirst();
+        if (r == null) {
+            r = respuestas.get(ex.getRequestMethod() + " " + ruta);
+        }
         if (r == null) {
             r = respuestas.get(ruta);
         }

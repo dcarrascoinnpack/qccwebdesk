@@ -78,7 +78,7 @@ public class FaretNoConformidadesBridgeHandler {
     }
 
     /** Error de validación del payload: el mensaje va tal cual al navegador. Sin stack trace. */
-    private static final class Invalido extends RuntimeException {
+    static final class Invalido extends RuntimeException {
         Invalido(String mensaje) {
             super(mensaje, null, false, false);
         }
@@ -348,7 +348,7 @@ public class FaretNoConformidadesBridgeHandler {
         return r.toString();
     }
 
-    private static String recursoNc(ObjectNode payload) {
+    static String recursoNc(ObjectNode payload) {
         try {
             Integer id = enteroPositivo(payload.get("id"));
             return "faret:nc:" + (id == null ? "?" : id);
@@ -357,7 +357,7 @@ public class FaretNoConformidadesBridgeHandler {
         }
     }
 
-    private static String idCreado(Object dataRespuesta, String prefijo) {
+    static String idCreado(Object dataRespuesta, String prefijo) {
         JsonNode id = dataRespuesta instanceof JsonNode d && d.isObject() ? d.get("id") : null;
         return id != null && id.isIntegralNumber() && id.canConvertToLong() ? prefijo + id.asLong() : "";
     }
@@ -393,14 +393,14 @@ public class FaretNoConformidadesBridgeHandler {
 
     // ------------------------------------------------------------------------------------------- validación
 
-    private static void cerrada(ObjectNode payload, Set<String> permitidas) {
+    static void cerrada(ObjectNode payload, Set<String> permitidas) {
         String campo = NoConformidadesBridgeHandler.campoNoPermitido(payload, permitidas);
         if (campo != null) {
             throw new Invalido(campo);
         }
     }
 
-    private static int idNc(ObjectNode payload) {
+    static int idNc(ObjectNode payload) {
         Integer id = enteroPositivo(payload.get("id"));
         if (id == null) {
             throw new Invalido(NoConformidadesBridgeHandler.MENSAJE_ID_NC);
@@ -409,7 +409,7 @@ public class FaretNoConformidadesBridgeHandler {
     }
 
     /** Entero int32 positivo: número entero o texto de dígitos; ausente, null, vacío o <= 0 -> null. bool/objeto/array/decimal se rechazan. */
-    private static Integer enteroPositivo(JsonNode n) {
+    static Integer enteroPositivo(JsonNode n) {
         if (n == null || n.isNull()) {
             return null;
         }
@@ -436,7 +436,7 @@ public class FaretNoConformidadesBridgeHandler {
     }
 
     /** Mismo criterio que _usuarioActual() de Photino (nombre, si no el código), pero desde la SESIÓN y acotado al largo de la columna. */
-    private static String autorDeSesion(SessionUser usuario, int max) {
+    static String autorDeSesion(SessionUser usuario, int max) {
         String autor = NoConformidadesBridgeHandler.autorDeSesion(usuario);
         if (autor == null || autor.isBlank()) {
             throw new Invalido(NoConformidadesBridgeHandler.MENSAJE_PARAMETRO_INVALIDO);
@@ -467,7 +467,7 @@ public class FaretNoConformidadesBridgeHandler {
         return c;
     }
 
-    private static String textoObligatorio(ObjectNode p, String clave, int max, String mensajeFalta, boolean multilinea) {
+    static String textoObligatorio(ObjectNode p, String clave, int max, String mensajeFalta, boolean multilinea) {
         String t = texto(p, clave, max, multilinea);
         if (t == null || t.isEmpty()) {
             throw new Invalido(mensajeFalta);
@@ -479,7 +479,7 @@ public class FaretNoConformidadesBridgeHandler {
      * Texto opcional: ausente/null -> null; string (no número, bool, objeto ni array) con trim, sin controles ni sustitutos UTF-16
      * sueltos, sin marcado HTML y de largo <= max en unidades UTF-16 (como NVARCHAR); max < 0 = campo largo (tope en bytes UTF-8).
      */
-    private static String texto(ObjectNode p, String clave, int max, boolean multilinea) {
+    static String texto(ObjectNode p, String clave, int max, boolean multilinea) {
         JsonNode n = p.get(clave);
         if (n == null || n.isNull()) {
             return null;
@@ -505,7 +505,7 @@ public class FaretNoConformidadesBridgeHandler {
         return t;
     }
 
-    private static boolean tieneSustitutoSuelto(String s) {
+    static boolean tieneSustitutoSuelto(String s) {
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
             if (Character.isHighSurrogate(c) && i + 1 < s.length() && Character.isLowSurrogate(s.charAt(i + 1))) {
