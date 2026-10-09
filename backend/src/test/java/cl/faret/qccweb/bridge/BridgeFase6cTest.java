@@ -41,7 +41,7 @@ import tools.jackson.databind.ObjectMapper;
  * Fase 6c — lecturas FARET restantes (Photino 1.8.15, 9e1b556, FaretHandler.cs), solo GET, payload PLANO. A: catálogos
  * (areas, operadores, maquinas) y catálogos PNC (QualityControlFaret.Api con Bearer). B: no conformidades (MejoraContinua, sin Authorization).
  * C: talleres externos / registros / importación / data.resumen (Bearer). D: Calidad (sin Authorization). E: faret.nc.adjuntos.abrir
- * (MejoraContinua). TODAS las APIs son fakes en localhost.
+ * (MejoraContinua). F: faret.usuarios.list / permisos.get (solo admin_ti, Bearer). TODAS las APIs son fakes en localhost.
  */
 @SpringBootTest(properties = {
     "spring.config.name=" + QccWebGatewayApplication.CONFIG_NAME,
@@ -62,6 +62,8 @@ class BridgeFase6cTest {
         QC.agregar(new FakeFaretApi.Usuario(10, "admin", "admin@faret.cl", PASS, "Admin Faret", List.of("ADMIN")));
         QC.agregar(new FakeFaretApi.Usuario(20, "ana", "ana@faret.cl", PASS, "Ana Calidad", List.of("CALIDAD")));
         QC.agregar(new FakeFaretApi.Usuario(30, "clara", null, PASS, "Clara Consulta", List.of("CONSULTA")));
+        QC.agregar(new FakeFaretApi.Usuario(50, "tecnico", "tecnico@faret.cl", PASS, "Tecnico TI", List.of("ADMIN_TI")));
+        INNPACK.agregar(new FakeInnpackApi.Usuario(41, "adminti1", PASS, "Admin TI Innpack", "admin_ti", true));
         INNPACK.agregar(new FakeInnpackApi.Usuario(40, "operador1", PASS, "Operador Uno", "operador", true));
     }
 
@@ -683,6 +685,173 @@ class BridgeFase6cTest {
             accion(login("admin"), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
         }
         assertThat(MC.peticiones()).isEmpty();
+    }
+
+    // ----------------------------------------------------------------------------- F: Gestión de Usuarios FARET (lectura)
+
+    private static final String USUARIOS = "/api/usuarios";
+    private static final List<String> USUARIOS_LECTURAS = List.of("faret.usuarios.list", "faret.usuarios.permisos.get");
+
+    @Test
+    void usuariosListSoloReproyectaLosCamposDelDtoYNuncaDejaPasarUnHash() throws Exception {
+        MockHttpSession sesion = login("tecnico");
+        QC.respuestaLectura(USUARIOS, 200, "{\"success\":true,\"data\":[{\"id\":10,\"nombre\":\"Admin <b>Faret</b>\",\"correo\":\"a@faret.cl\",\"username\":\"adm\\\"in\","
+                + "\"rol\":\"ADMIN\",\"activo\":true,\"roles\":[\"ADMIN\"],\"createdAt\":\"2026-01-02T03:04:05\",\"passwordHash\":\"$2a$10$secreto\","
+                + "\"password\":\"x\",\"token\":\"t\",\"intentos\":3},{\"id\":20,\"nombre\":\"Ana\",\"correo\":null,\"username\":\"ana\",\"rol\":\"CALIDAD\",\"activo\":false,\"roles\":[]}],\"errors\":null}");
+        MvcResult r = accion(sesion, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"faret-usuarios\",\"empresa\":\"INNPACK\",\"ruta\":\"/x\"}")
+                .andExpect(status().isOk()).andReturn();
+        JsonNode data = json(r).get("data");
+        assertThat(data).hasSize(2);
+        assertThat(data.get(0).propertyNames()).containsExactlyInAnyOrder("id", "nombre", "correo", "username", "rol", "activo", "roles", "createdAt");
+        assertThat(data.get(0).get("nombre").asString()).isEqualTo("Admin &lt;b&gt;Faret&lt;/b&gt;");
+        assertThat(data.get(0).get("username").asString()).isEqualTo("adm&quot;in");
+        assertThat(data.get(1).get("correo").isNull()).isTrue();
+        assertThat(data.get(1).get("activo").asBoolean()).isFalse();
+        String crudo = r.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(crudo).doesNotContain("secreto").doesNotContain("passwordHash").doesNotContain("password").doesNotContain("intentos");
+        assertThat(QC.lecturas()).containsExactly("GET /api/usuarios");
+        assertThat(QC.lecturasDeUsuario()).containsExactly(50);
+        assertThat(MC.peticiones()).isEmpty();
+        assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
+    @Test
+    void usuariosListSoloActivosComoPhotinoYErroresDeLaApi() throws Exception {
+        MockHttpSession sesion = login("tecnico");
+        QC.respuestaLectura(USUARIOS, 200, "{\"success\":true,\"data\":[],\"errors\":null}");
+        for (String extra : List.of("\"soloActivos\":true", "\"soloActivos\":\"True\"", "\"soloActivos\":false", "\"soloActivos\":\" false \"", "\"soloActivos\":\"si\"",
+                "\"soloActivos\":1", "\"soloActivos\":null", "\"x\":1")) {
+            accion(sesion, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"faret-usuarios\"," + extra + "}").andExpect(jsonPath("$.ok").value(true));
+        }
+        assertThat(QC.lecturas()).containsExactly("GET /api/usuarios?soloActivos=true", "GET /api/usuarios?soloActivos=true", "GET /api/usuarios?soloActivos=false",
+                "GET /api/usuarios?soloActivos=false", "GET /api/usuarios", "GET /api/usuarios", "GET /api/usuarios", "GET /api/usuarios");
+        QC.limpiarLecturas();
+        for (String valor : List.of("{\"a\":1}", "[true]", "[]")) {
+            accion(sesion, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"faret-usuarios\",\"soloActivos\":" + valor + "}")
+                    .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+        }
+        assertThat(QC.lecturas()).isEmpty();
+        // El fake por defecto responde un objeto (no un arreglo): respuesta inválida; errores de la API como en el resto de FARET.
+        accion(sesion, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"faret-usuarios\"}").andExpect(jsonPath("$.error").value("Error al comunicarse con la API Faret"));
+        QC.respuestaLectura(USUARIOS, 403, "{\"success\":false,\"message\":\"Solo ADMIN_TI\",\"data\":null}");
+        accion(sesion, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"faret-usuarios\"}").andExpect(jsonPath("$.error").value("Solo ADMIN_TI"));
+        QC.respuestaLectura(USUARIOS, 500, "<html>boom</html>");
+        MvcResult r = accion(sesion, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"faret-usuarios\"}")
+                .andExpect(jsonPath("$.error").value("Error al comunicarse con la API Faret")).andReturn();
+        assertThat(r.getResponse().getContentAsString(StandardCharsets.UTF_8)).doesNotContain("boom");
+        QC.respuestaLectura(USUARIOS, 200, "{\"success\":true,\"data\":[1,2],\"errors\":null}");
+        accion(sesion, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"faret-usuarios\"}").andExpect(jsonPath("$.error").value("Error al comunicarse con la API Faret"));
+    }
+
+    @Test
+    void permisosGetArmaLaMatrizDePhotinoSinCamposExtraDeLaApi() throws Exception {
+        MockHttpSession sesion = login("tecnico");
+        QC.respuestaLectura(USUARIOS + "/20/permisos", 200, "{\"success\":true,\"data\":[{\"modulo\":\"faret-data\",\"nivel\":\"ver\",\"modificadoPor\":\"Tecnico TI\","
+                + "\"fechaModificacion\":\"2026-02-03T10:00:00\",\"usuarioId\":20,\"hash\":\"zzz\"},{\"modulo\":\"faret-nc\",\"nivel\":null},{\"modulo\":\"inexistente\",\"nivel\":\"EDITAR\"},"
+                + "{\"modulo\":\"faret-usuarios\",\"nivel\":\"EDITAR\"}],\"errors\":null}");
+        MvcResult res = accion(sesion, "{\"action\":\"faret.usuarios.permisos.get\",\"_modulo\":\"faret-usuarios\",\"id\":20,\"rol\":\"consulta\",\"empresa\":\"INNPACK\"}")
+                .andExpect(status().isOk()).andReturn();
+        JsonNode data = json(res).get("data");
+        assertThat(data.propertyNames()).containsExactlyInAnyOrder("esAdminTi", "modulos");
+        assertThat(data.get("esAdminTi").asBoolean()).isFalse();
+        JsonNode modulos = data.get("modulos");
+        // Todos los módulos FARET menos Gestión de Usuarios (17), en el orden de Photino.
+        assertThat(modulos).hasSize(17);
+        assertThat(modulos.get(0).get("modulo").asString()).isEqualTo("faret");
+        assertThat(modulos.get(1).get("modulo").asString()).isEqualTo("faret-inspecciones");
+        java.util.Map<String, JsonNode> porModulo = new java.util.HashMap<>();
+        modulos.forEach(m -> porModulo.put(m.get("modulo").asString(), m));
+        assertThat(porModulo).doesNotContainKeys("faret-usuarios", "inexistente", "usuarios");
+        assertThat(modulos.get(0).propertyNames()).containsExactlyInAnyOrder("modulo", "porRol", "personalizado", "modificadoPor", "fechaModificacion", "minimoVer");
+        // CONSULTA: solo faret, talleres, nc, nc internas y despachos en EDITAR; data/importación SIN_ACCESO; Inicio (faret) con minimoVer.
+        assertThat(porModulo.get("faret").get("porRol").asString()).isEqualTo("EDITAR");
+        assertThat(porModulo.get("faret").get("minimoVer").asBoolean()).isTrue();
+        assertThat(porModulo.get("faret-inspecciones").get("porRol").asString()).isEqualTo("SIN_ACCESO");
+        assertThat(porModulo.get("faret-inspecciones").get("minimoVer").asBoolean()).isFalse();
+        assertThat(porModulo.get("faret-nc").get("porRol").asString()).isEqualTo("EDITAR");
+        assertThat(porModulo.get("faret-nc").get("personalizado").isNull()).isTrue();
+        assertThat(porModulo.get("faret-data").get("porRol").asString()).isEqualTo("SIN_ACCESO");
+        assertThat(porModulo.get("faret-data").get("personalizado").asString()).isEqualTo("VER");
+        assertThat(porModulo.get("faret-data").get("modificadoPor").asString()).isEqualTo("Tecnico TI");
+        assertThat(porModulo.get("faret-data").get("fechaModificacion").asString()).isEqualTo("2026-02-03T10:00:00");
+        String crudo = res.getResponse().getContentAsString(StandardCharsets.UTF_8);
+        assertThat(crudo).doesNotContain("zzz").doesNotContain("hash").doesNotContain("usuarioId");
+        assertThat(QC.lecturas()).containsExactly("GET /api/usuarios/20/permisos");
+        assertThat(QC.lecturasDeUsuario()).containsExactly(50);
+        // Otros roles: ADMIN ve data/importación; ADMIN_TI queda bloqueado en EDITAR; sin rol, la regla general.
+        for (String[] c : List.of(new String[] {"ADMIN", "EDITAR", "false"}, new String[] {"admin_ti", "EDITAR", "true"}, new String[] {"CALIDAD", "SIN_ACCESO", "false"},
+                new String[] {"", "SIN_ACCESO", "false"})) {
+            JsonNode d = json(accion(sesion, "{\"action\":\"faret.usuarios.permisos.get\",\"_modulo\":\"faret-usuarios\",\"id\":21,\"rol\":\"" + c[0] + "\"}").andReturn()).get("data");
+            assertThat(d.get("esAdminTi").asBoolean()).as(c[0]).isEqualTo(Boolean.parseBoolean(c[2]));
+            for (JsonNode m : d.get("modulos")) {
+                if (m.get("modulo").asString().equals("faret-data")) {
+                    assertThat(m.get("porRol").asString()).as(c[0]).isEqualTo(c[1]);
+                }
+            }
+        }
+    }
+
+    @Test
+    void permisosGetValidaIdYRolAntesDeLlamarALaApiYTraduceSusErrores() throws Exception {
+        MockHttpSession sesion = login("tecnico");
+        for (String id : List.of("", "\"id\":null,", "\"id\":0,", "\"id\":-2,", "\"id\":\"abc\",", "\"id\":1.5,", "\"id\":99999999999,", "\"id\":\"1/../x\",", "\"id\":\"1?x=1\",")) {
+            accion(sesion, "{\"action\":\"faret.usuarios.permisos.get\",\"_modulo\":\"faret-usuarios\"," + id + "\"rol\":\"ADMIN\"}").andExpect(jsonPath("$.ok").value(false))
+                    .andExpect(jsonPath("$.error").value("Falta el id del usuario"));
+        }
+        for (String valor : List.of("true", "{\"a\":1}", "[5]", "[]")) {
+            accion(sesion, "{\"action\":\"faret.usuarios.permisos.get\",\"_modulo\":\"faret-usuarios\",\"id\":" + valor + "}")
+                    .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+        }
+        for (String rol : List.of("true", "5", "{\"a\":1}", "[]", "\"root\"", "\"ADMIN;DROP\"", "\"<b>\"")) {
+            accion(sesion, "{\"action\":\"faret.usuarios.permisos.get\",\"_modulo\":\"faret-usuarios\",\"id\":5,\"rol\":" + rol + "}")
+                    .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+        }
+        assertThat(QC.lecturas()).isEmpty();
+        QC.respuestaLectura(USUARIOS + "/9/permisos", 404, "{\"success\":false,\"message\":\"Usuario no encontrado\",\"data\":null}");
+        accion(sesion, "{\"action\":\"faret.usuarios.permisos.get\",\"_modulo\":\"faret-usuarios\",\"id\":9}").andExpect(jsonPath("$.error").value("Usuario no encontrado"));
+        // Sin permisos personalizados (data nulo o vacío) la matriz se arma igual, solo con el nivel por rol.
+        QC.respuestaLectura(USUARIOS + "/10/permisos", 200, "{\"success\":true,\"data\":null,\"errors\":null}");
+        accion(sesion, "{\"action\":\"faret.usuarios.permisos.get\",\"_modulo\":\"faret-usuarios\",\"id\":10,\"rol\":\"ADMIN\"}")
+                .andExpect(jsonPath("$.ok").value(true)).andExpect(jsonPath("$.data.modulos.length()").value(17));
+    }
+
+    @Test
+    void faseFSoloAdminTiDeLaSesionFaretYLasEscriturasSiguenDenegadas() throws Exception {
+        for (String a : USUARIOS_LECTURAS) {
+            assertThat(policy.evaluar(a, usuario("FARET", "ADMIN_TI"))).as(a).isInstanceOf(ActionPolicy.Decision.Permitida.class);
+            for (String rol : List.of("ADMIN", "CALIDAD", "INSPECTOR", "CONSULTA", "operador")) {
+                assertThat(policy.evaluar(a, usuario("FARET", rol))).as(a + " " + rol).isEqualTo(new ActionPolicy.Decision.Denegada("ROL_NO_PERMITIDO"));
+            }
+            assertThat(policy.evaluar(a, usuario("INNPACK", "admin_ti"))).as(a).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
+            assertThat(PermisosModulo.esLectura(a)).as(a).isTrue();
+        }
+        // Rol cruzado por HTTP: ningún rol FARET que no sea admin_ti llega a la API, ni siquiera declarando faret-usuarios.
+        for (String u : List.of("admin", "ana", "clara")) {
+            for (String a : USUARIOS_LECTURAS) {
+                accion(login(u), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-usuarios\",\"id\":20,\"rol\":\"ADMIN\"}").andExpect(status().isForbidden())
+                        .andExpect(jsonPath("$.ok").value(false));
+            }
+        }
+        // Un admin_ti de INNPACK no alcanza las acciones FARET (ni con módulo FARET declarado).
+        for (String a : USUARIOS_LECTURAS) {
+            accion(loginInnpack("adminti1"), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-usuarios\",\"id\":20}").andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
+        }
+        assertThat(QC.lecturas()).isEmpty();
+        // Sin módulo de origen, o con uno desconocido, el admin_ti tampoco entra.
+        MockHttpSession tecnico = login("tecnico");
+        accion(tecnico, "{\"action\":\"faret.usuarios.list\"}").andExpect(status().isForbidden());
+        accion(tecnico, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"inventado\"}").andExpect(status().isForbidden());
+        assertThat(QC.lecturas()).isEmpty();
+        // Escrituras de usuarios siguen denegadas incluso para admin_ti.
+        for (String a : List.of("faret.usuarios.create", "faret.usuarios.cambiarRol", "faret.usuarios.toggleActivo", "faret.usuarios.eliminarDefinitivo",
+                "faret.usuarios.resetPassword", "faret.usuarios.permisos.guardar", "faret.usuarios.permisos.restablecer")) {
+            accion(tecnico, "{\"action\":\"" + a + "\",\"_modulo\":\"faret-usuarios\",\"id\":20}").andExpect(status().isForbidden());
+        }
+        assertThat(QC.lecturas()).isEmpty();
+        // Y un admin_ti con sesión FARET sí lee.
+        accion(tecnico, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"faret-usuarios\"}").andExpect(status().isOk());
+        assertThat(QC.lecturas()).hasSize(1);
     }
 
     // ----------------------------------------------------------------------------- helpers

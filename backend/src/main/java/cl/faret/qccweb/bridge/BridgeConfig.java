@@ -759,6 +759,12 @@ public class BridgeConfig {
         // Fase E - faret.nc.adjuntos.abrir (MejoraContinua, SIN Authorization): ids validados y adjunto validado como el de INNPACK.
         reglas.add(new ActionPolicy.Regla(
                 "faret.nc.adjuntos.abrir", Set.of("FARET"), ROLES_FARET, Map.of(), faret::ncAdjuntosAbrir));
+        // Fase F - Gestion de Usuarios FARET, SOLO LECTURA (QualityControlFaret.Api con el Bearer de la sesion). Solo admin_ti de la
+        // sesion FARET, como PermisosService/UsuariosController ([Authorize(Roles = admin_ti)]); el resto de faret.usuarios.* sigue denegado.
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.list", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosList));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.permisos.get", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosPermisosGet));
         return new ActionPolicy(reglas);
     }
 }

@@ -2,6 +2,7 @@ package cl.faret.qccweb.bridge.handlers;
 
 import cl.faret.qccweb.auth.SessionUser;
 import cl.faret.qccweb.bridge.BridgeResult;
+import cl.faret.qccweb.bridge.PermisosModulo;
 import cl.faret.qccweb.upstream.FaretApiClient;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.FaretRespuestas;
@@ -11,10 +12,13 @@ import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.springframework.web.util.HtmlUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ArrayNode;
 import tools.jackson.databind.node.ObjectNode;
 
 /**
@@ -40,6 +44,7 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * Fase E: faret.nc.adjuntos.abrir (MejoraContinua, sin Authorization) devuelve el adjunto validado igual que
  * noConformidades.adjuntos.abrir de INNPACK (misma API de adjuntos: PDF/JPEG/PNG, firma real, tamaño, nombre saneado).
+ * Fase F: faret.usuarios.list y faret.usuarios.permisos.get (QualityControlFaret.Api con el Bearer del admin_ti de la sesión).
  *
  * 6b-4: faret.dashboard.resumen = FaretDashboardService.ObtenerResumenAsync: GET api/no-conformidades y, SECUENCIALMENTE,
  * GET api/no-conformidades/{id}/acciones por cada NC (omitiendo las que fallan); el cálculo vive en FaretDashboardResumen.
@@ -57,6 +62,7 @@ public class FaretBridgeHandler {
     public static final String MENSAJE_DASHBOARD_LISTADO = "No se pudo obtener el listado de no conformidades";
     public static final String MENSAJE_DASHBOARD_INVALIDO = "Respuesta inválida de la API al listar no conformidades";
     public static final String MENSAJE_FALTA_ID_ADJUNTO = "Falta el id del adjunto";
+    public static final String MENSAJE_FALTA_ID_USUARIO = "Falta el id del usuario";
     public static final int MAX_FILTRO = FormulariosBridgeHandler.MAX_FILTRO;
     /** Tope de pageSize de api/importaciones/pnc (ImportacionesService: Math.Min(pageSize, 200)). */
     public static final int MAX_PAGE_SIZE_PNC = 200;
@@ -91,6 +97,10 @@ public class FaretBridgeHandler {
     private static final String RUTA_INDICADORES = "/api/importaciones/pnc/indicadores-calidad";
     private static final String RUTA_TALLERES_RESUMEN = "/api/talleres-externos/resumen";
     private static final String RUTA_NC = "/api/no-conformidades";
+    private static final String RUTA_USUARIOS = "/api/usuarios";
+    /** Roles de QualityControlFaret.Api (UsuariosService.RolesValidos); el rol que manda el navegador solo etiqueta la matriz. */
+    private static final Set<String> ROLES_FARET = Set.of("ADMIN_TI", "ADMIN", "CALIDAD", "INSPECTOR", "CONSULTA");
+    private static final Pattern MARCADO_ATRIBUTO = Pattern.compile("[<>\"']");
     private static final String RUTA_INSPECCIONES_RESUMEN = "/calidad-faret/resumen";
     private static final String RUTA_INSPECCIONES_REGISTROS = "/calidad-faret/registros";
     private static final String RUTA_PALLET_REGISTROS = "/calidad-faret-pallet/registros";
@@ -261,6 +271,106 @@ public class FaretBridgeHandler {
         }
         BridgeResult crudo = FaretRespuestas.crudoMc(mejoraContinua.get(usuario, RUTA_NC + "/" + id + "/adjuntos/" + adjuntoId), mapper);
         return crudo.ok() ? NoConformidadesBridgeHandler.adjuntoValidado(crudo.data(), adjuntoId, mapper) : crudo;
+    }
+
+    /**
+     * Fase F - faret.usuarios.list -> GET api/usuarios[?soloActivos=true|false] (solo admin_ti de la sesion FARET; ActionPolicy).
+     * soloActivos como Photino: bool o texto true/false; cualquier otro valor no viaja (objeto/array se rechazan). La respuesta se
+     * reproyecta a los campos de UsuarioDetalleDto que la vista de Photino lee (id, nombre, correo, username, rol, activo, roles,
+     * createdAt): jamas pasa un campo extra de la API (p. ej. un hash). Textos con marcado de atributo/etiqueta se escapan.
+     */
+    public BridgeResult usuariosList(ObjectNode payload, SessionUser usuario) {
+        JsonNode nodo = payload.get("soloActivos");
+        if (nodo != null && (nodo.isObject() || nodo.isArray())) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        String soloActivos = null;
+        if (nodo != null && nodo.isBoolean()) {
+            soloActivos = String.valueOf(nodo.asBoolean());
+        } else if (nodo != null && nodo.isString()) {
+            String t = nodo.asString().trim().toLowerCase(Locale.ROOT);
+            soloActivos = t.equals("true") || t.equals("false") ? t : null;
+        }
+        BridgeResult upstream = qc(usuario, RUTA_USUARIOS, new StringBuilder(soloActivos == null ? "" : "soloActivos=" + soloActivos));
+        if (!upstream.ok()) {
+            return upstream;
+        }
+        if (!(upstream.data() instanceof ArrayNode items)) {
+            return BridgeResult.error(FaretRespuestas.ERROR_FARET);
+        }
+        ArrayNode salida = mapper.createArrayNode();
+        for (JsonNode item : items) {
+            if (!item.isObject()) {
+                return BridgeResult.error(FaretRespuestas.ERROR_FARET);
+            }
+            ObjectNode u = salida.addObject();
+            JsonNode id = item.get("id");
+            if (id != null && id.isIntegralNumber() && id.canConvertToInt()) {
+                u.put("id", id.asInt());
+            }
+            for (String campo : List.of("nombre", "correo", "username", "rol")) {
+                JsonNode v = item.get(campo);
+                if (v != null && v.isString()) {
+                    u.put(campo, escapar(v.asString()));
+                } else if (v != null && v.isNull()) {
+                    u.putNull(campo);
+                }
+            }
+            JsonNode activo = item.get("activo");
+            if (activo != null && activo.isBoolean()) {
+                u.put("activo", activo.asBoolean());
+            }
+            JsonNode roles = item.get("roles");
+            if (roles != null && roles.isArray()) {
+                ArrayNode r = u.putArray("roles");
+                roles.forEach(x -> {
+                    if (x.isString()) {
+                        r.add(escapar(x.asString()));
+                    }
+                });
+            }
+            JsonNode creado = item.get("createdAt");
+            if (creado != null && creado.isString()) {
+                u.put("createdAt", creado.asString());
+            }
+        }
+        return BridgeResult.ok(salida);
+    }
+
+    /**
+     * Fase F - faret.usuarios.permisos.get -> GET api/usuarios/{id}/permisos y matriz de PermisosService.ArmarMatriz("FARET", rol,
+     * data): nivel por rol + permiso personalizado de cada modulo FARET. id = entero positivo (si no, "Falta el id del usuario");
+     * `rol` solo etiqueta la columna "por rol" (Photino lo toma del navegador): debe ser uno de los 5 roles FARET o ir vacio.
+     */
+    public BridgeResult usuariosPermisosGet(ObjectNode payload, SessionUser usuario) {
+        JsonNode nodoId = payload.get("id");
+        if (tipoInvalido(nodoId)) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        Integer id = enteroPositivo(nodoId);
+        if (id == null) {
+            return BridgeResult.error(MENSAJE_FALTA_ID_USUARIO);
+        }
+        JsonNode nodoRol = payload.get("rol");
+        String rol = "";
+        if (nodoRol != null && !nodoRol.isNull()) {
+            if (!nodoRol.isString()) {
+                return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+            }
+            rol = nodoRol.asString().trim().toUpperCase(Locale.ROOT);
+            if (!rol.isEmpty() && !ROLES_FARET.contains(rol)) {
+                return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+            }
+        }
+        BridgeResult upstream = qc(usuario, RUTA_USUARIOS + "/" + id + "/permisos", new StringBuilder());
+        if (!upstream.ok()) {
+            return upstream;
+        }
+        return BridgeResult.ok(PermisosModulo.armarMatriz("FARET", rol, upstream.data() instanceof JsonNode n ? n : null, mapper));
+    }
+
+    private static String escapar(String texto) {
+        return MARCADO_ATRIBUTO.matcher(texto).find() ? HtmlUtils.htmlEscape(texto, "UTF-8") : texto;
     }
 
     /**

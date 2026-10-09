@@ -6,6 +6,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
+import tools.jackson.databind.node.ObjectNode;
 
 /**
  * Permisos por módulo (Fase 3u) — port de PermisosService de Photino 1.8.15 (9e1b556, Fase 5a-1), la misma regla:
@@ -238,6 +241,74 @@ public final class PermisosModulo {
             }
         });
         return niveles;
+    }
+
+    /**
+     * Matriz de permisos de un usuario (PermisosService.ArmarMatriz de Photino): por cada modulo personalizable de la empresa
+     * (todos menos Gestion de Usuarios), el nivel que da el rol, el permiso personalizado (si hay) y quien/cuando lo modifico.
+     * {@code permisosApi} es el arreglo data de GET api/usuarios/{id}/permisos; de cada item solo se leen modulo, nivel,
+     * modificadoPor y fechaModificacion (strings), nada mas de la API llega al navegador.
+     */
+    public static ObjectNode armarMatriz(String empresa, String rol, JsonNode permisosApi, ObjectMapper mapper) {
+        String emp = empresa.toUpperCase(Locale.ROOT);
+        Map<String, JsonNode> personalizados = new java.util.HashMap<>();
+        if (permisosApi != null && permisosApi.isArray()) {
+            for (JsonNode p : permisosApi) {
+                JsonNode m = p.isObject() ? p.get("modulo") : null;
+                if (m != null && m.isString()) {
+                    personalizados.put(m.asString(), p);
+                }
+            }
+        }
+        ObjectNode salida = mapper.createObjectNode();
+        salida.put("esAdminTi", "ADMIN_TI".equalsIgnoreCase(rol));
+        var modulos = salida.putArray("modulos");
+        MODULOS.forEach((modulo, def) -> {
+            if (!def.empresa().equals(emp) || modulo.equals("usuarios") || modulo.equals("faret-usuarios")) {
+                return;
+            }
+            JsonNode p = personalizados.get(modulo);
+            ObjectNode fila = modulos.addObject();
+            fila.put("modulo", modulo);
+            fila.put("porRol", nivelPorRolDe(emp, rol, modulo));
+            String nivel = textoOpcional(p, "nivel");
+            if (nivel == null) {
+                fila.putNull("personalizado");
+            } else {
+                fila.put("personalizado", nivel.toUpperCase(Locale.ROOT));
+            }
+            for (String campo : List.of("modificadoPor", "fechaModificacion")) {
+                String v = textoOpcional(p, campo);
+                if (v == null) {
+                    fila.putNull(campo);
+                } else {
+                    fila.put(campo, v);
+                }
+            }
+            fila.put("minimoVer", MODULOS_INICIO.contains(modulo));
+        });
+        return salida;
+    }
+
+    private static String textoOpcional(JsonNode objeto, String campo) {
+        JsonNode v = objeto == null ? null : objeto.get(campo);
+        return v != null && v.isString() ? v.asString() : null;
+    }
+
+    /** Nivel que da el rol sin permisos personalizados (NivelPorRolDe de Photino): Inicio nunca baja de VER. */
+    static String nivelPorRolDe(String empresa, String rol, String modulo) {
+        ModuloDef def = MODULOS.get(modulo);
+        if (def == null || !def.empresa().equals(empresa)) {
+            return SIN_ACCESO;
+        }
+        if ("ADMIN_TI".equalsIgnoreCase(rol)) {
+            return EDITAR;
+        }
+        if (modulo.equals("usuarios") || modulo.equals("faret-usuarios")) {
+            return SIN_ACCESO;
+        }
+        String nivel = nivelPorRol(empresa, rol, modulo);
+        return SIN_ACCESO.equals(nivel) && MODULOS_INICIO.contains(modulo) ? VER : nivel;
     }
 
     /** Regla por rol previa a los permisos personalizados (la de refreshSidebarState en core/app.js). */
