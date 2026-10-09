@@ -747,6 +747,15 @@ public class BridgeConfig {
                 "faret.importacion.list", Set.of("FARET"), ROLES_FARET, Map.of(), faret::importacionList));
         reglas.add(new ActionPolicy.Regla(
                 "faret.data.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::dataResumen));
+        // Fase D — inspecciones y pallets de Calidad (backend Node, SIN Authorization como Photino), SOLO LECTURA, payload plano.
+        reglas.add(new ActionPolicy.Regla(
+                "faret.inspecciones.list", Set.of("FARET"), ROLES_FARET, Map.of(), faret::inspeccionesList));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.inspecciones.adjuntos", Set.of("FARET"), ROLES_FARET, Map.of(), faret::inspeccionesAdjuntos));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.inspeccionesPallet.list", Set.of("FARET"), ROLES_FARET, Map.of(), faret::inspeccionesPalletList));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.inspeccionesPallet.get", Set.of("FARET"), ROLES_FARET, Map.of(), faret::inspeccionesPalletGet));
         return new ActionPolicy(reglas);
     }
 }

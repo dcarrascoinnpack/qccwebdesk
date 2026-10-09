@@ -444,6 +444,138 @@ class BridgeFase6cTest {
         assertThat(QC.lecturas()).hasSize(1);
     }
 
+    // ----------------------------------------------------------------------------- D: Calidad (inspecciones y pallets)
+
+    private static final String INSP = "/calidad-faret/registros";
+    private static final String PALLET = "/calidad-faret-pallet/registros";
+
+    @Test
+    void inspeccionesListLlevaLosSieteFiltrosEnElOrdenDePhotinoYPaginacionSinAuthorization() throws Exception {
+        MC.limpiar();
+        CALIDAD.responder(INSP, 200, "{\"ok\":true,\"data\":{\"items\":[{\"id\":1}],\"total\":1}}");
+        MockHttpSession sesion = login("ana");
+        JsonNode json = json(accion(sesion, "{\"action\":\"faret.inspecciones.list\",\"_modulo\":\"faret-inspecciones\",\"page\":2,\"pageSize\":500}")
+                .andExpect(status().isOk()).andReturn());
+        assertThat(json.get("ok").asBoolean()).isTrue();
+        assertThat(json.at("/data/items/0/id").asInt()).isEqualTo(1);
+        accion(sesion, "{\"action\":\"faret.inspecciones.list\",\"_modulo\":\"faret-inspecciones\",\"pageSize\":50,\"page\":1,\"nvFaret\":\"NV 1/2\","
+                + "\"presentaDefectos\":\"true\",\"maquina\":\"M-1\",\"operador\":\" Ñuñoa \",\"areaControl\":\"Prensa\",\"fechaHasta\":\"2026-10-31\","
+                + "\"fechaDesde\":\"2026-10-01\",\"empresa\":\"INNPACK\",\"data\":{\"maquina\":\"otra\"}}").andExpect(status().isOk());
+        accion(sesion, "{\"action\":\"faret.inspecciones.list\",\"_modulo\":\"faret-inspecciones\"}").andExpect(status().isOk());
+        assertThat(CALIDAD.peticiones()).containsExactly(
+                "GET " + INSP + "?page=2&pageSize=200",
+                "GET " + INSP + "?fechaDesde=2026-10-01&fechaHasta=2026-10-31&areaControl=Prensa&operador=%C3%91u%C3%B1oa&maquina=M-1"
+                        + "&presentaDefectos=true&nvFaret=NV%201%2F2&page=1&pageSize=50",
+                "GET " + INSP);
+        assertThat(CALIDAD.authorizations()).hasSize(3).containsOnlyNulls();
+        assertThat(QC.lecturas()).isEmpty();
+        assertThat(MC.peticiones()).isEmpty();
+    }
+
+    @Test
+    void inspeccionesPalletListLlevaLosSeisFiltrosPropiosDelPallet() throws Exception {
+        CALIDAD.responder(PALLET, 200, "{\"ok\":true,\"data\":{\"items\":[],\"total\":0}}");
+        MockHttpSession sesion = login("ana");
+        accion(sesion, "{\"action\":\"faret.inspeccionesPallet.list\",\"_modulo\":\"faret-inspecciones-pallet\",\"page\":1,\"pageSize\":10,\"operador\":\"Ana\","
+                + "\"maquina\":\"M2\",\"numeroPallet\":4567,\"tipoMaterial\":\"Cartón\",\"fechaHasta\":\"2026-10-09\",\"fechaDesde\":\"2026-10-01\","
+                + "\"areaControl\":\"no va\",\"nvFaret\":\"no va\",\"presentaDefectos\":\"true\"}").andExpect(jsonPath("$.ok").value(true));
+        accion(sesion, "{\"action\":\"faret.inspeccionesPallet.list\",\"_modulo\":\"faret-inspecciones-pallet\",\"pageSize\":201}").andExpect(jsonPath("$.ok").value(true));
+        assertThat(CALIDAD.peticiones()).containsExactly(
+                "GET " + PALLET + "?fechaDesde=2026-10-01&fechaHasta=2026-10-09&tipoMaterial=Cart%C3%B3n&numeroPallet=4567&maquina=M2&operador=Ana&page=1&pageSize=10",
+                "GET " + PALLET + "?pageSize=200");
+        assertThat(CALIDAD.authorizations()).containsOnlyNulls();
+    }
+
+    @Test
+    void filtrosInvalidosDeCalidadSeRechazanSinLlamarALaApi() throws Exception {
+        MockHttpSession sesion = login("admin");
+        for (String accion : List.of("faret.inspecciones.list", "faret.inspeccionesPallet.list")) {
+            String modulo = accion.contains("Pallet") ? "faret-inspecciones-pallet" : "faret-inspecciones";
+            String base = "{\"action\":\"" + accion + "\",\"_modulo\":\"" + modulo + "\",";
+            for (String clave : List.of("fechaDesde", "operador", "maquina", "page", "pageSize")) {
+                for (String valor : List.of("true", "{\"a\":1}", "[1]")) {
+                    accion(sesion, base + "\"" + clave + "\":" + valor + "}").andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+                }
+            }
+            accion(sesion, base + "\"fechaHasta\":\"2026-13-40\"}").andExpect(jsonPath("$.error").value("La fecha fechaHasta no es válida (formato AAAA-MM-DD)."));
+            accion(sesion, base + "\"operador\":\"" + "a".repeat(201) + "\"}").andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_LARGO));
+            accion(sesion, base + "\"maquina\":\"a\\u0000b\"}").andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+            accion(sesion, base + "\"page\":1000001}").andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_PAGINACION));
+        }
+        accion(sesion, "{\"action\":\"faret.inspecciones.list\",\"_modulo\":\"faret-inspecciones\",\"presentaDefectos\":\"quizas\"}")
+                .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_PRESENTA_DEFECTOS));
+        assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
+    @Test
+    void adjuntosDeInspeccionYDetalleDePalletValidanElIdAntesDeIrALaRuta() throws Exception {
+        CALIDAD.responder(INSP + "/31/adjuntos", 200, "{\"ok\":true,\"data\":[{\"id\":9,\"nombre\":\"f.jpg\"}]}");
+        CALIDAD.responder(PALLET + "/32", 200, "{\"ok\":true,\"data\":{\"id\":32,\"numeroPallet\":\"P-1\"}}");
+        MockHttpSession sesion = login("admin");
+        accion(sesion, "{\"action\":\"faret.inspecciones.adjuntos\",\"_modulo\":\"faret-inspecciones\",\"id\":31,\"data\":{\"id\":99}}")
+                .andExpect(jsonPath("$.data[0].nombre").value("f.jpg"));
+        accion(sesion, "{\"action\":\"faret.inspeccionesPallet.get\",\"_modulo\":\"faret-inspecciones-pallet\",\"id\":\"32\"}")
+                .andExpect(jsonPath("$.data.numeroPallet").value("P-1"));
+        assertThat(CALIDAD.peticiones()).containsExactly("GET " + INSP + "/31/adjuntos", "GET " + PALLET + "/32");
+        assertThat(CALIDAD.authorizations()).containsOnlyNulls();
+        CALIDAD.limpiar();
+        for (String a : List.of("faret.inspecciones.adjuntos", "faret.inspeccionesPallet.get")) {
+            String modulo = a.contains("Pallet") ? "faret-inspecciones-pallet" : "faret-inspecciones";
+            for (String id : List.of("", "\"id\":null,", "\"id\":0,", "\"id\":-5,", "\"id\":\"abc\",", "\"id\":1.5,", "\"id\":99999999999,",
+                    "\"id\":\"1/../../x\",", "\"id\":\"1?a=b\",", "\"id\":\"\",")) {
+                accion(sesion, "{\"action\":\"" + a + "\",\"_modulo\":\"" + modulo + "\"," + id + "\"x\":1}").andExpect(jsonPath("$.ok").value(false))
+                        .andExpect(jsonPath("$.error").value("id es requerido"));
+            }
+            for (String valor : List.of("true", "{\"a\":1}", "[31]")) {
+                accion(sesion, "{\"action\":\"" + a + "\",\"_modulo\":\"" + modulo + "\",\"id\":" + valor + "}")
+                        .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+            }
+        }
+        assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
+    @Test
+    void erroresDeCalidadSeDesenvuelvenComoTryUnwrapApiResponseYUn401NoCierraLaSesion() throws Exception {
+        MockHttpSession sesion = login("admin");
+        CALIDAD.responder(INSP, 500, "{\"ok\":false,\"message\":\"Error al listar\"}");
+        accion(sesion, "{\"action\":\"faret.inspecciones.list\",\"_modulo\":\"faret-inspecciones\"}").andExpect(jsonPath("$.error").value("Error al listar"));
+        CALIDAD.responder(PALLET, 502, "<html>bad gateway</html>");
+        MvcResult r = accion(sesion, "{\"action\":\"faret.inspeccionesPallet.list\",\"_modulo\":\"faret-inspecciones-pallet\"}")
+                .andExpect(jsonPath("$.error").value("Error al comunicarse con la API Faret")).andReturn();
+        assertThat(r.getResponse().getContentAsString(StandardCharsets.UTF_8)).doesNotContain("bad gateway");
+        CALIDAD.responder(INSP + "/5/adjuntos", 401, "{\"ok\":false,\"message\":\"No autorizado\"}");
+        accion(sesion, "{\"action\":\"faret.inspecciones.adjuntos\",\"_modulo\":\"faret-inspecciones\",\"id\":5}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.error").value("No autorizado"));
+        assertThat(sesion.isInvalid()).isFalse();
+        // Sin respuesta configurada el fake devuelve 404 sin forma ApiResponse: genérico.
+        accion(sesion, "{\"action\":\"faret.inspeccionesPallet.get\",\"_modulo\":\"faret-inspecciones-pallet\",\"id\":404}")
+                .andExpect(jsonPath("$.error").value("Error al comunicarse con la API Faret"));
+    }
+
+    @Test
+    void faseDRolesEmpresaModuloYAccionesNoHabilitadas() throws Exception {
+        List<String> acciones = List.of("faret.inspecciones.list", "faret.inspecciones.adjuntos", "faret.inspeccionesPallet.list", "faret.inspeccionesPallet.get");
+        for (String a : acciones) {
+            for (String rol : List.of("ADMIN", "ADMIN_TI", "CALIDAD", "INSPECTOR", "CONSULTA")) {
+                assertThat(policy.evaluar(a, usuario("FARET", rol))).as(a + " " + rol).isInstanceOf(ActionPolicy.Decision.Permitida.class);
+            }
+            assertThat(policy.evaluar(a, usuario("FARET", "operador"))).isEqualTo(new ActionPolicy.Decision.Denegada("ROL_NO_PERMITIDO"));
+            assertThat(policy.evaluar(a, usuario("INNPACK", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
+            assertThat(PermisosModulo.esLectura(a)).as(a).isTrue();
+        }
+        accion(loginInnpack("operador1"), "{\"action\":\"faret.inspecciones.list\",\"_modulo\":\"faret-inspecciones\"}").andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
+        // Permisos por módulo: CONSULTA no tiene faret-inspecciones; sin módulo declarado nadie entra.
+        accion(login("clara"), "{\"action\":\"faret.inspecciones.list\",\"_modulo\":\"faret-inspecciones\"}").andExpect(status().isForbidden());
+        accion(login("clara"), "{\"action\":\"faret.inspeccionesPallet.list\",\"_modulo\":\"faret-inspecciones-pallet\"}").andExpect(status().isForbidden());
+        accion(login("ana"), "{\"action\":\"faret.inspecciones.list\"}").andExpect(status().isForbidden());
+        // Eliminar sigue denegada.
+        for (String a : List.of("faret.inspecciones.eliminar", "faret.inspeccionesPallet.eliminar")) {
+            accion(login("admin"), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-inspecciones\",\"id\":1}").andExpect(status().isForbidden());
+        }
+        assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
     // ----------------------------------------------------------------------------- helpers
 
     private static SessionUser usuario(String empresa, String rol) {

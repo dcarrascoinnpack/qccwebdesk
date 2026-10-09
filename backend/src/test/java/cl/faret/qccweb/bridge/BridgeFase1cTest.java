@@ -200,6 +200,7 @@ class BridgeFase1cTest {
                 "faret.pncCatalogos.niveles.list", "faret.pncCatalogos.impactos.list",
                 "faret.nc.get", "faret.nc.seguimiento.list", "faret.nc.analisis.get", "faret.nc.acciones.list", "faret.nc.adjuntos.list",
                 "faret.talleresExternos.list", "faret.talleresExternos.catalogos", "faret.importacion.list", "faret.data.resumen",
+                "faret.inspecciones.list", "faret.inspecciones.adjuntos", "faret.inspeccionesPallet.list", "faret.inspeccionesPallet.get",
                 "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
                 "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
                 "controlDocumental.eliminar", "controlDocumental.adjunto.subir",

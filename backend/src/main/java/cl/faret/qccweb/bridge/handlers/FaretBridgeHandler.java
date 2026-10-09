@@ -50,6 +50,7 @@ public class FaretBridgeHandler {
     public static final String MENSAJE_MC_NO_CONFIGURADA = "API de Mejora Continua no configurada. Revise la configuración del servidor.";
     public static final String MENSAJE_CALIDAD_NO_CONFIGURADA = "API de Calidad no configurada. Revise la configuración del servidor.";
     public static final String MENSAJE_FALTA_ID_NC = "Falta el id de la no conformidad";
+    public static final String MENSAJE_ID_REQUERIDO = "id es requerido";
     public static final String MENSAJE_DASHBOARD_LISTADO = "No se pudo obtener el listado de no conformidades";
     public static final String MENSAJE_DASHBOARD_INVALIDO = "Respuesta inválida de la API al listar no conformidades";
     public static final int MAX_FILTRO = FormulariosBridgeHandler.MAX_FILTRO;
@@ -57,6 +58,8 @@ public class FaretBridgeHandler {
     public static final int MAX_PAGE_SIZE_PNC = 200;
     /** Tope de pageSize de api/talleres-externos (TalleresExternosService: Math.Min(pageSize, 500)). */
     public static final int MAX_PAGE_SIZE_TALLERES = 500;
+    /** Tope de pageSize de calidad-faret(-pallet)/registros (controllers de Calidad: Math.min(200, ...)). */
+    public static final int MAX_PAGE_SIZE_CALIDAD = 200;
     /** Tope de page: una página mayor no tiene sentido y evita desbordes del offset de la API. */
     public static final int MAX_PAGE = 1_000_000;
 
@@ -70,6 +73,8 @@ public class FaretBridgeHandler {
     /** FaretHandler.BuildInspeccionesFiltros (Calidad). */
     static final List<String> FILTROS_INSPECCIONES = List.of("fechaDesde", "fechaHasta", "areaControl", "operador", "maquina",
             "presentaDefectos", "nvFaret");
+    /** FaretHandler.BuildInspeccionesPalletFiltros (Calidad). */
+    static final List<String> FILTROS_PALLET = List.of("fechaDesde", "fechaHasta", "tipoMaterial", "numeroPallet", "maquina", "operador");
     /** Claves de fecha (AAAA-MM-DD) entre todos los filtros anteriores. */
     static final Set<String> FECHAS = Set.of("fechaDesde", "fechaHasta", "fechaAsignacionDesde", "fechaAsignacionHasta",
             "fechaCompromisoDesde", "fechaCompromisoHasta");
@@ -83,6 +88,8 @@ public class FaretBridgeHandler {
     private static final String RUTA_TALLERES_RESUMEN = "/api/talleres-externos/resumen";
     private static final String RUTA_NC = "/api/no-conformidades";
     private static final String RUTA_INSPECCIONES_RESUMEN = "/calidad-faret/resumen";
+    private static final String RUTA_INSPECCIONES_REGISTROS = "/calidad-faret/registros";
+    private static final String RUTA_PALLET_REGISTROS = "/calidad-faret-pallet/registros";
     private static final String RUTA_MAQUINAS_RESUMEN = "/calidad-faret/maquinas/resumen";
     private static final Pattern FECHA_ISO = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
     private static final Pattern CONTROL = Pattern.compile("[\\p{Cntrl}]");
@@ -219,6 +226,60 @@ public class FaretBridgeHandler {
         }
         InnpackApiClient.Respuesta r = mejoraContinua.get(usuario, RUTA_NC + "/" + id + sufijo);
         return analisis ? FaretRespuestas.crudoMcAnalisis(r, mapper) : FaretRespuestas.crudoMc(r, mapper);
+    }
+
+    /**
+     * Fase D — Calidad (backend Node, sin Authorization, respuesta {ok,data} desenvuelta): faret.inspecciones.list →
+     * GET calidad-faret/registros?{BuildInspeccionesFiltros}&page&pageSize (pageSize acotado a 200, el tope real del controller de Calidad).
+     */
+    public BridgeResult inspeccionesList(ObjectNode payload, SessionUser usuario) {
+        return calidadLista(RUTA_INSPECCIONES_REGISTROS, FILTROS_INSPECCIONES, payload, usuario);
+    }
+
+    /** faret.inspeccionesPallet.list → GET calidad-faret-pallet/registros?{BuildInspeccionesPalletFiltros}&page&pageSize (tope 200). */
+    public BridgeResult inspeccionesPalletList(ObjectNode payload, SessionUser usuario) {
+        return calidadLista(RUTA_PALLET_REGISTROS, FILTROS_PALLET, payload, usuario);
+    }
+
+    /** faret.inspecciones.adjuntos → GET calidad-faret/registros/{id}/adjuntos (id entero positivo; si no, "id es requerido"). */
+    public BridgeResult inspeccionesAdjuntos(ObjectNode payload, SessionUser usuario) {
+        return calidadPorId(RUTA_INSPECCIONES_REGISTROS, "/adjuntos", payload, usuario);
+    }
+
+    /** faret.inspeccionesPallet.get → GET calidad-faret-pallet/registros/{id} (id entero positivo; si no, "id es requerido"). */
+    public BridgeResult inspeccionesPalletGet(ObjectNode payload, SessionUser usuario) {
+        return calidadPorId(RUTA_PALLET_REGISTROS, "", payload, usuario);
+    }
+
+    private BridgeResult calidadLista(String ruta, List<String> orden, ObjectNode payload, SessionUser usuario) {
+        if (!calidad.configurada()) {
+            return BridgeResult.error(MENSAJE_CALIDAD_NO_CONFIGURADA);
+        }
+        Query filtros = construirQuery(payload, orden);
+        if (filtros.error() != null) {
+            return BridgeResult.error(filtros.error());
+        }
+        StringBuilder query = new StringBuilder(filtros.texto());
+        String errorPaginacion = agregarPaginacion(payload, query, MAX_PAGE_SIZE_CALIDAD);
+        if (errorPaginacion != null) {
+            return BridgeResult.error(errorPaginacion);
+        }
+        return FaretRespuestas.desenvolver(calidad.get(usuario, ruta(ruta, query.toString())), mapper);
+    }
+
+    private BridgeResult calidadPorId(String ruta, String sufijo, ObjectNode payload, SessionUser usuario) {
+        if (!calidad.configurada()) {
+            return BridgeResult.error(MENSAJE_CALIDAD_NO_CONFIGURADA);
+        }
+        JsonNode nodo = payload.get("id");
+        if (tipoInvalido(nodo)) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        Integer id = enteroPositivo(nodo);
+        if (id == null) {
+            return BridgeResult.error(MENSAJE_ID_REQUERIDO);
+        }
+        return FaretRespuestas.desenvolver(calidad.get(usuario, ruta + "/" + id + sufijo), mapper);
     }
 
     /** faret.inspecciones.resumen → GET calidad-faret/resumen?fechaDesde&fechaHasta&areaControl&operador&maquina&presentaDefectos&nvFaret */
