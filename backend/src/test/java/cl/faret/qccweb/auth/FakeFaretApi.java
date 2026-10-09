@@ -36,6 +36,9 @@ public final class FakeFaretApi implements AutoCloseable {
     private final List<Integer> misPermisosConsultados = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final List<String> cuerposLogin = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final AtomicInteger llamadas = new AtomicInteger();
+    private final List<String> lecturas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final List<Integer> lecturasDeUsuario = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final Map<String, String[]> respuestasLectura = new ConcurrentHashMap<>();
     private volatile Supplier<Instant> expiracionToken;
     private volatile boolean caida;
 
@@ -48,6 +51,9 @@ public final class FakeFaretApi implements AutoCloseable {
         }
         server.createContext("/api/Auth/login", this::login);
         server.createContext("/api/auth/mis-permisos", this::misPermisos);
+        // 6b: lecturas de QualityControlFaret.Api que EXIGEN el Bearer del usuario (sin él o con firma mala: 401).
+        server.createContext("/api/importaciones/pnc", this::lectura);
+        server.createContext("/api/talleres-externos/resumen", this::lectura);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(4));
         server.start();
     }
@@ -95,6 +101,27 @@ public final class FakeFaretApi implements AutoCloseable {
     /** Cuerpos JSON recibidos en login (para verificar el contrato identificador/password). */
     public List<String> cuerposLogin() {
         return List.copyOf(cuerposLogin);
+    }
+
+    /** "GET /ruta?query" crudo de cada lectura 6b recibida (importaciones/pnc, talleres-externos/resumen). */
+    public List<String> lecturas() {
+        return List.copyOf(lecturas);
+    }
+
+    /** Usuario (sub del JWT) de cada lectura autenticada, en el mismo orden que {@link #lecturas()}. */
+    public List<Integer> lecturasDeUsuario() {
+        return List.copyOf(lecturasDeUsuario);
+    }
+
+    /** Respuesta fija para una ruta de lectura (sin query), p. ej. "/api/importaciones/pnc". */
+    public void respuestaLectura(String ruta, int status, String body) {
+        respuestasLectura.put(ruta, new String[] {String.valueOf(status), body});
+    }
+
+    public void limpiarLecturas() {
+        lecturas.clear();
+        lecturasDeUsuario.clear();
+        respuestasLectura.clear();
     }
 
     public static String firmaDeToken(int userId) {
@@ -145,6 +172,27 @@ public final class FakeFaretApi implements AutoCloseable {
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + permisosPorUsuario.getOrDefault(sub, "[]")
                 + ",\"errors\":null}");
+    }
+
+    private void lectura(HttpExchange ex) throws IOException {
+        Integer sub = subDeBearer(ex.getRequestHeaders().getFirst("Authorization"));
+        String ruta = ex.getRequestURI().getRawPath();
+        String uri = ruta + (ex.getRequestURI().getRawQuery() == null ? "" : "?" + ex.getRequestURI().getRawQuery());
+        lecturas.add(ex.getRequestMethod() + " " + uri);
+        if (sub == null) {
+            lecturasDeUsuario.add(-1);
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        lecturasDeUsuario.add(sub);
+        String[] fija = respuestasLectura.get(ruta);
+        if (fija != null) {
+            responder(ex, Integer.parseInt(fija[0]), fija[1]);
+            return;
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"ruta\":\"" + ruta + "\",\"usuario\":" + sub
+                + "},\"errors\":null}");
     }
 
     private String jwt(Usuario u) {

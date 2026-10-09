@@ -16,6 +16,8 @@ import cl.faret.qccweb.bridge.handlers.RegistrosControlBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.TalleresExternosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.UsuariosBridgeHandler;
+import cl.faret.qccweb.upstream.FaretApiClient;
+import cl.faret.qccweb.upstream.FaretProperties;
 import cl.faret.qccweb.upstream.FpsApiClient;
 import cl.faret.qccweb.upstream.FpsProperties;
 import cl.faret.qccweb.upstream.InnpackApiClient;
@@ -61,6 +63,24 @@ public class BridgeConfig {
     @Bean
     public InnpackApiClient innpackApiClient(AuthProperties properties) {
         return new InnpackApiClient(properties);
+    }
+
+    /** QualityControlFaret.Api (6b): lleva el Bearer del usuario FARET de la sesión (Photino: SetToken del cliente principal). */
+    @Bean
+    public FaretApiClient faretQualityControlApiClient(AuthProperties properties) {
+        return new FaretApiClient(properties.faretApiBaseUrl(), true, properties.connectTimeout(), properties.readTimeout());
+    }
+
+    /** MejoraContinua (6b): Photino nunca le hace SetToken, así que no lleva Authorization. */
+    @Bean
+    public FaretApiClient faretMejoraContinuaApiClient(AuthProperties properties, FaretProperties faret) {
+        return new FaretApiClient(faret.mejoraContinuaBaseUrl(), false, properties.connectTimeout(), properties.readTimeout());
+    }
+
+    /** Calidad, backend Node (6b): sin autenticación, igual que Photino. */
+    @Bean
+    public FaretApiClient faretCalidadApiClient(AuthProperties properties, FaretProperties faret) {
+        return new FaretApiClient(faret.calidadBaseUrl(), false, properties.connectTimeout(), properties.readTimeout());
     }
 
     /** apisapfaret (Fase 3y): API key del servidor; sin base URL responde como Photino sin SAP configurado. */

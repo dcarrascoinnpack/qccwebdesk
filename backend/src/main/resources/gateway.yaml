@@ -59,6 +59,12 @@ qcc:
         bloqueo-base: 30s
         bloqueo-maximo: 15m
 
+    faret:
+      # Otras APIs FARET que Photino consume aparte de QualityControlFaret.Api (6b, config.json → MejoraContinuaFaretApi /
+      # CalidadFaretApi). Photino NUNCA les manda token: el gateway tampoco. Vacío = "no configurada".
+      mejora-continua-base-url: ${QCC_FARET_MC_API_BASE_URL:https://api.faret.cl/mejora-continua}
+      calidad-base-url: ${QCC_FARET_CALIDAD_API_BASE_URL:https://api.faret.cl/calidad/api}
+
     fps:
       # fps-api (Fase 3v, columna "Liberación Calidad"): misma API que Photino (config.json → FpsApi). La API key
       # SOLO por variable de entorno (nunca en este archivo). Sin base URL = "fps-api no está configurada".
