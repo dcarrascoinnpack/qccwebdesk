@@ -1066,6 +1066,36 @@ Diseño aprobado de la primera escritura (referencia):
 | **Tests (MockMvc + FakeInnpackApi)** | autor falsificado en raíz/`data` → la API recibe el nombre de la sesión; rol `consulta` y empresa FARET → 403 sin POST; id/comentario inválidos, vacío, > 2000, con HTML → error sin POST; NC inexistente → sin POST; CSRF; 401 invalida solo esa sesión; 2 sesiones concurrentes → cada comentario con su autor; auditoría con `recurso=nc:<id>` y sin el comentario; body del POST exacto (`{comentario, autor}`). |
 | **E2E (CDP)** | login operador → No Conformidades → Gestión → escribir comentario → Agregar: POST con `autor` = nombre de sesión aunque `sessionStorage.nombreUsuario` se cambie a "Hacker" en DevTools; la lista se refresca con el comentario y el autor real; `PhotinoBridge.send` forzado con `autor:"X"` → la API recibe el de sesión; comentario con `<img onerror>` → rechazado; usuario `consulta` → "no disponible"; sin token en storage; auditoría presente en el log del gateway. |
 
+## FARET — catálogos `crear` (area/operador/máquina y catálogos PNC) — VALIDADAS (Fase F1, 2026-10-09)
+
+Primeras escrituras de la empresa FARET. API: QualityControlFaret.Api con el **Bearer del usuario de la sesión** (`FaretApiClient`
+con `postJson`, Fase F0: sin reintentos, 201 y 409 propagados, 401 invalida solo esa sesión). Photino 1.8.15 (`9e1b556`,
+`FaretHandler.cs`); contract check 189/254 (178 + 11).
+
+| Acción | Endpoint (`FaretApiClient`) | Roles web (= `[Authorize]` de la API) | Cuerpo que arma el gateway | Autor | Riesgo |
+|---|---|---|---|---|---|
+| `faret.catalogos.areas.crear` | POST `api/catalogos/areas` | admin, calidad, consulta | `{codigo, nombre}`; `codigo` = `GenerarCodigoArea` de Photino (mayúsculas, no A-Z/0-9 → `_`, sin `_` en extremos, ≤ 20) | la API no registra autor | BAJO |
+| `faret.catalogos.operadores.crear`, `faret.catalogos.maquinas.crear` | POST `api/catalogos/{operadores\|maquinas}` | admin, calidad, consulta | `{areaId, nombre}` (`areaId` entero > 0, "Falta el área") | la API no registra autor | BAJO |
+| `faret.pncCatalogos.{clientes,categoriasDefecto,tiposFalla,supervisores,revisores,familiasProducto,niveles,impactos}.crear` | POST `api/pnc-catalogos/{clientes,categorias-defecto,tipos-falla,supervisores,revisores,familias-producto,niveles,impactos}` | admin, admin_ti, calidad, consulta | `{nombre}` | `creado_por` = `sub` del JWT (lo pone la API) | BAJO (niveles: MEDIO, pilotan severidad) |
+
+- **Roles**: decisión del usuario = los de la API (inspector fuera de todas; admin_ti solo en PNC; una sesión INNPACK nunca llega).
+  Además rigen los permisos por módulo de Photino (`faret-nc` con EDITAR).
+- **Gateway**: lista cerrada `{action, nombre[, areaId]}` (cualquier otra clave, incluido un autor, → "Campo no permitido: x");
+  `nombre` string, trim + colapso de espacios, una línea sin controles ni sustitutos sueltos, sin marcado HTML (SEC-27), largo
+  en unidades UTF-16: PNC 150 (familias 50, niveles 30, impactos 100 = `PncCatalogosService`); area/operador/máquina 100
+  (la API y Photino no validan largo y no hay DDL a la vista: tope conservador, ver riesgos). Respuesta reproyectada a
+  `{id, nombre, activo}` (+ `codigo/createdAt` en área, `areaId/areaNombre/createdAt` en operador/máquina); es lo que lee
+  `CatalogCombo` en `faret-nc`.
+- **Duplicados**: PNC → la API devuelve el valor existente (y lo reactiva si estaba inactivo) con 201; área → si el código
+  generado ya existe devuelve esa área (otro nombre posible). El gateway no inventa otra política; un 409/400 de la API llega
+  con su mensaje (`ApiResponse.message`), el resto con el genérico "Error al comunicarse con la API Faret".
+- **No habilitadas** (el frontend de `9e1b556` no las usa; el contract check las marcaría SOLO_WEB):
+  `faret.pncCatalogos.*.desactivar`, `faret.talleresExternos.catalogos.crearTaller/crearProceso`, `faret.talleresExternos.lote`,
+  `faret.catalogos.{inspectores,defectos}`.
+- **Auditoría**: `evento=ESCRITURA ... recurso=faret:catalogo:<areas|operadores|maquinas|pnc-{catalogo}>[:id]` (sin el nombre) +
+  `EscrituraRateLimiter` por usuario.
+- **Tests**: `BridgeFaseF1Test` (18), `BridgeFaseF1LimiteTest` (1), `FaretApiClientTest` (+6, Fase F0).
+
 ## Hallazgos de seguridad para el backlog de hardening de Photino/APIs
 
 Referenciados contra `docs/SECURITY_HARDENING_BACKLOG.md` del repo Photino (rama `fase-1a-gateway`, commit `27f75fd`).

@@ -166,9 +166,9 @@ class BridgeFase6cTest {
         for (String a : List.of("faret.catalogos.inspectores", "faret.catalogos.defectos", "faret.health")) {
             accion(sesion, "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\"}").andExpect(status().isForbidden());
         }
-        // crear / desactivar siguen denegadas (son escrituras, fuera de esta fase).
-        for (String a : List.of("faret.pncCatalogos.clientes.crear", "faret.pncCatalogos.clientes.desactivar", "faret.catalogos.areas.crear",
-                "faret.catalogos.operadores.crear", "faret.catalogos.maquinas.crear")) {
+        // desactivar sigue denegada (el frontend de Photino 9e1b556 no la usa); crear se habilitó en la Fase F1 (BridgeFaseF1Test).
+        for (String a : List.of("faret.pncCatalogos.clientes.desactivar", "faret.pncCatalogos.niveles.desactivar", "faret.catalogos.areas.desactivar",
+                "faret.catalogos.areas.editar", "faret.catalogos.operadores.eliminar")) {
             accion(sesion, "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\"}").andExpect(status().isForbidden());
         }
         assertThat(QC.lecturas()).hasSize(PNC.size());

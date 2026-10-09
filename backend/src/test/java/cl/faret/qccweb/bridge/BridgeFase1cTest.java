@@ -239,7 +239,11 @@ class BridgeFase1cTest {
                 "noConformidades.acciones.actualizar", "recepcion.bobinas.muestrear", "recepcion.muestra.crear",
                 "recepcion.estado.actualizar", "recepcion.nc.crear", "recepcion.crear", "recepcion.plan.generar",
                 "noConformidades.eliminar", "noConformidades.adjuntos.eliminar",
-                "noConformidades.catalogos.nciAreas.list", "noConformidades.catalogos.nciTiposDesviacion.list");
+                "noConformidades.catalogos.nciAreas.list", "noConformidades.catalogos.nciTiposDesviacion.list",
+                "faret.catalogos.areas.crear", "faret.catalogos.operadores.crear", "faret.catalogos.maquinas.crear",
+                "faret.pncCatalogos.clientes.crear", "faret.pncCatalogos.categoriasDefecto.crear", "faret.pncCatalogos.tiposFalla.crear",
+                "faret.pncCatalogos.supervisores.crear", "faret.pncCatalogos.revisores.crear", "faret.pncCatalogos.familiasProducto.crear",
+                "faret.pncCatalogos.niveles.crear", "faret.pncCatalogos.impactos.crear");
     }
 
     // ------------------------------------------------------ manipulación desde DevTools

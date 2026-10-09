@@ -298,6 +298,11 @@ public final class FakeFaretApi implements AutoCloseable {
     }
 
     private static void responder(HttpExchange ex, int status, String json) throws IOException {
+        if (json == null) {
+            ex.sendResponseHeaders(status, -1);
+            ex.close();
+            return;
+        }
         byte[] bytes = json.getBytes(StandardCharsets.UTF_8);
         ex.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
         ex.sendResponseHeaders(status, bytes.length);

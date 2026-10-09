@@ -57,6 +57,27 @@ public class BridgeConfig {
      * estado PENDIENTE_VALIDACION_NEGOCIO hasta que el negocio confirme los permisos funcionales.
      */
     static final Set<String> ROLES_ESCRITURA_OPERATIVA_PENDIENTE_VALIDACION_NEGOCIO = Set.of("operador", "admin", "admin_ti");
+    /**
+     * Escrituras de catálogos FARET (Fase F1), roles = los de QualityControlFaret.Api (decisión del usuario): area/operador/máquina
+     * ADMIN, CALIDAD, CONSULTA ([Authorize] de CatalogosController); catálogos PNC ADMIN, ADMIN_TI, CALIDAD, CONSULTA. INSPECTOR queda fuera
+     * (y ADMIN_TI de los de planta): la API los rechazaría con 403.
+     */
+    static final Set<String> ROLES_FARET_CATALOGOS_PLANTA_CREAR = Set.of("admin", "calidad", "consulta");
+    static final Set<String> ROLES_FARET_CATALOGOS_PNC_CREAR = Set.of("admin", "admin_ti", "calidad", "consulta");
+    /** Catálogos PNC con `crear`: acción -> {segmento de ruta de api/pnc-catalogos, largo máximo de `nombre` (columna real)}. */
+    static final Map<String, Object[]> PNC_CATALOGOS_CREAR = new java.util.LinkedHashMap<>();
+
+    static {
+        PNC_CATALOGOS_CREAR.put("clientes", new Object[] {"clientes", 150});
+        PNC_CATALOGOS_CREAR.put("categoriasDefecto", new Object[] {"categorias-defecto", 150});
+        PNC_CATALOGOS_CREAR.put("tiposFalla", new Object[] {"tipos-falla", 150});
+        PNC_CATALOGOS_CREAR.put("supervisores", new Object[] {"supervisores", 150});
+        PNC_CATALOGOS_CREAR.put("revisores", new Object[] {"revisores", 150});
+        PNC_CATALOGOS_CREAR.put("familiasProducto", new Object[] {"familias-producto", 50});
+        PNC_CATALOGOS_CREAR.put("niveles", new Object[] {"niveles", 30});
+        PNC_CATALOGOS_CREAR.put("impactos", new Object[] {"impactos", 100});
+    }
+
     /** Catálogos de NC con `crear` habilitado en la web (por fase, cada uno auditado y validado). */
     static final List<String> CATALOGOS_CREAR_HABILITADOS = List.of(
             "clientes", "categoriasDefecto", "tiposFalla", "supervisores", "revisores", "areas", "familiasProducto",
@@ -765,6 +786,22 @@ public class BridgeConfig {
                 "faret.usuarios.list", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosList));
         reglas.add(new ActionPolicy.Regla(
                 "faret.usuarios.permisos.get", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosPermisosGet));
+        // Fase F1 - ESCRITURAS de catálogos FARET (QualityControlFaret.Api, Bearer del usuario; patrón oficial de escrituras): roles de la
+        // API, lista cerrada de claves, `nombre` validado, sin identidad del navegador (el autor lo pone la API desde el sub del JWT),
+        // recurso auditado "faret:catalogo:<clave>:<id>" y límite de escrituras por usuario. SOLO crear: desactivar (que el frontend de
+        // Photino 9e1b556 no usa) y el resto de las escrituras FARET siguen denegados.
+        reglas.add(new ActionPolicy.Regla(
+                "faret.catalogos.areas.crear", Set.of("FARET"), ROLES_FARET_CATALOGOS_PLANTA_CREAR, Map.of(), faret::areaCrear,
+                (p, data) -> FaretBridgeHandler.recursoCatalogo("areas", data)));
+        for (String catalogo : List.of("operadores", "maquinas")) {
+            reglas.add(new ActionPolicy.Regla(
+                    "faret.catalogos." + catalogo + ".crear", Set.of("FARET"), ROLES_FARET_CATALOGOS_PLANTA_CREAR, Map.of(),
+                    faret.catalogoPorAreaCrear(catalogo), (p, data) -> FaretBridgeHandler.recursoCatalogo(catalogo, data)));
+        }
+        PNC_CATALOGOS_CREAR.forEach((catalogo, def) -> reglas.add(new ActionPolicy.Regla(
+                "faret.pncCatalogos." + catalogo + ".crear", Set.of("FARET"), ROLES_FARET_CATALOGOS_PNC_CREAR, Map.of(),
+                faret.pncCatalogoCrear((String) def[0], (Integer) def[1]),
+                (p, data) -> FaretBridgeHandler.recursoCatalogo("pnc-" + catalogo, data))));
         return new ActionPolicy(reglas);
     }
 }

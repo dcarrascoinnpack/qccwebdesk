@@ -1493,29 +1493,56 @@ public class NoConformidadesBridgeHandler {
                     return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
                 }
             }
-            JsonNode n = payload.get("nombre");
-            if (n != null && !n.isNull() && !n.isString()) {
-                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+            NombreValidado validado = nombreCatalogo(payload.get("nombre"), max);
+            if (validado.error() != null) {
+                return BridgeResult.error(validado.error());
             }
-            String crudo = n == null || n.isNull() ? "" : n.asString();
-            if (CONTROL_UNA_LINEA.matcher(crudo).find() || tieneSustitutoSuelto(crudo)) {
-                return BridgeResult.error(MENSAJE_TEXTO_CARACTERES);
-            }
-            String nombre = ESPACIOS.matcher(crudo).replaceAll(" ").strip();
-            if (nombre.isEmpty()) {
-                return BridgeResult.error("Falta el nombre");
-            }
-            if (nombre.length() > max) {
-                return BridgeResult.error("El valor no puede superar los " + max + " caracteres.");
-            }
-            if (MARCADO_HTML.matcher(nombre).find()) {
-                return BridgeResult.error(MENSAJE_TEXTO_HTML);
-            }
+            String nombre = validado.nombre();
             ObjectNode cuerpo = mapper.createObjectNode();
             cuerpo.put("nombre", nombre);
             cuerpo.put("creadoPor", autorDeSesion(usuario));
             return InnpackRespuestas.reenviar(api.postJson(usuario, BASE_CATALOGOS + "/" + catalogo, cuerpo), mapper);
         };
+    }
+
+    /** Resultado de {@link #nombreCatalogo}: el nombre normalizado, o el error (exactamente uno de los dos). */
+    public record NombreValidado(String nombre, String error) {}
+
+    /**
+     * Validación común del `nombre` de un valor de catálogo (INNPACK y FARET): string (o ausente), una línea sin controles ni
+     * sustitutos UTF-16 sueltos, trim + espacios internos colapsados a uno (como la API), obligatorio ("Falta el nombre"),
+     * ≤ max unidades UTF-16 (como `string.Length` de la API) y sin marcado HTML (el valor termina en tablas que las vistas
+     * pintan con innerHTML, SEC-27).
+     */
+    public static NombreValidado nombreCatalogo(JsonNode n, int max) {
+        if (n != null && !n.isNull() && !n.isString()) {
+            return new NombreValidado(null, MENSAJE_PARAMETRO_INVALIDO);
+        }
+        String crudo = n == null || n.isNull() ? "" : n.asString();
+        if (CONTROL_UNA_LINEA.matcher(crudo).find() || tieneSustitutoSuelto(crudo)) {
+            return new NombreValidado(null, MENSAJE_TEXTO_CARACTERES);
+        }
+        String nombre = ESPACIOS.matcher(crudo).replaceAll(" ").strip();
+        if (nombre.isEmpty()) {
+            return new NombreValidado(null, "Falta el nombre");
+        }
+        if (nombre.length() > max) {
+            return new NombreValidado(null, "El valor no puede superar los " + max + " caracteres.");
+        }
+        if (MARCADO_HTML.matcher(nombre).find()) {
+            return new NombreValidado(null, MENSAJE_TEXTO_HTML);
+        }
+        return new NombreValidado(nombre, null);
+    }
+
+    /** Lista cerrada de claves de una escritura: null si todas están permitidas; si no, "Campo no permitido: x". */
+    public static String campoNoPermitido(ObjectNode payload, Set<String> permitidas) {
+        for (String clave : payload.propertyNames()) {
+            if (!permitidas.contains(clave)) {
+                return MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave);
+            }
+        }
+        return null;
     }
 
     /** Recurso auditado de catalogos.{catalogo}.crear: "catalogo:<catalogo>" y ":<id>" si la API devuelve el id. */

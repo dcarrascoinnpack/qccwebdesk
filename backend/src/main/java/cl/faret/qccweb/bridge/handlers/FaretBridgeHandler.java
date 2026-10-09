@@ -1,6 +1,7 @@
 package cl.faret.qccweb.bridge.handlers;
 
 import cl.faret.qccweb.auth.SessionUser;
+import cl.faret.qccweb.bridge.BridgeAction;
 import cl.faret.qccweb.bridge.BridgeResult;
 import cl.faret.qccweb.bridge.PermisosModulo;
 import cl.faret.qccweb.upstream.FaretApiClient;
@@ -45,6 +46,10 @@ import tools.jackson.databind.node.ObjectNode;
  * Fase E: faret.nc.adjuntos.abrir (MejoraContinua, sin Authorization) devuelve el adjunto validado igual que
  * noConformidades.adjuntos.abrir de INNPACK (misma API de adjuntos: PDF/JPEG/PNG, firma real, tamaño, nombre saneado).
  * Fase F: faret.usuarios.list y faret.usuarios.permisos.get (QualityControlFaret.Api con el Bearer del admin_ti de la sesión).
+ *
+ * Fase F1 (ESCRITURAS): faret.catalogos.{areas,operadores,maquinas}.crear y faret.pncCatalogos.{...}.crear (QualityControlFaret.Api
+ * con el Bearer del usuario; el autor de un valor PNC es el `sub` del JWT que pone la API, nunca algo del navegador). Lista
+ * cerrada de claves, `nombre` validado como el de los catálogos de INNPACK, respuesta reproyectada a los campos del DTO.
  *
  * 6b-4: faret.dashboard.resumen = FaretDashboardService.ObtenerResumenAsync: GET api/no-conformidades y, SECUENCIALMENTE,
  * GET api/no-conformidades/{id}/acciones por cada NC (omitiendo las que fallan); el cálculo vive en FaretDashboardResumen.
@@ -98,6 +103,20 @@ public class FaretBridgeHandler {
     private static final String RUTA_TALLERES_RESUMEN = "/api/talleres-externos/resumen";
     private static final String RUTA_NC = "/api/no-conformidades";
     private static final String RUTA_USUARIOS = "/api/usuarios";
+    private static final String RUTA_CATALOGOS = "/api/catalogos";
+    private static final String RUTA_PNC_CATALOGOS = "/api/pnc-catalogos";
+    /** Claves de las escrituras de catálogo (+ "action"); cualquier otra se rechaza. Photino manda {action, nombre[, areaId]}. */
+    private static final Set<String> CAMPOS_CATALOGO_NOMBRE = Set.of("action", "nombre");
+    private static final Set<String> CAMPOS_CATALOGO_POR_AREA = Set.of("action", "nombre", "areaId");
+    /**
+     * Largo máximo de `nombre` de area/operador/maquina. La API (CatalogosController) no valida largo ni normaliza; Photino
+     * tampoco. Sin DDL a la vista (cat_areas/cat_operadores/cat_maquinas), se acota a 100 unidades UTF-16, conservador.
+     */
+    static final int MAX_NOMBRE_CATALOGO_PLANTA = 100;
+    /** Largo de la columna cat_areas.codigo (GenerarCodigoArea de Photino recorta a 20). */
+    static final int MAX_CODIGO_AREA = 20;
+    public static final String MENSAJE_FALTA_AREA = "Falta el área";
+    public static final String MENSAJE_CODIGO_AREA_VACIO = "El nombre debe tener al menos una letra o número";
     /** Roles de QualityControlFaret.Api (UsuariosService.RolesValidos); el rol que manda el navegador solo etiqueta la matriz. */
     private static final Set<String> ROLES_FARET = Set.of("ADMIN_TI", "ADMIN", "CALIDAD", "INSPECTOR", "CONSULTA");
     private static final Pattern MARCADO_ATRIBUTO = Pattern.compile("[<>\"']");
@@ -172,6 +191,159 @@ public class FaretBridgeHandler {
         }
         Integer areaId = enteroPositivo(nodo);
         return qc(usuario, ruta, new StringBuilder(areaId == null ? "" : "areaId=" + areaId));
+    }
+
+    // --------------------------------------------------------------------------------------- F1: escrituras de catálogos
+
+    /**
+     * Fase F1 - faret.pncCatalogos.{catalogo}.crear -> POST api/pnc-catalogos/{ruta} con {nombre} (QualityControlFaret.Api, Bearer del
+     * usuario). Photino (HandlePncCatalogoCrear) manda {nombre}; el autor (`creado_por`) lo pone la API desde el `sub` del JWT.
+     * `nombre`: lista cerrada {action, nombre}, string, una línea, trim + colapso de espacios (como la API: Normalizar), ≤ max
+     * (150; familias 50, niveles 30, impactos 100 = la columna real), sin HTML. Duplicado: la API devuelve el valor existente
+     * (y lo reactiva si estaba inactivo) con 201; el gateway no inventa otra política. Salida: {id, nombre, activo}.
+     */
+    public BridgeAction pncCatalogoCrear(String ruta, int max) {
+        return (payload, usuario) -> {
+            String campo = NoConformidadesBridgeHandler.campoNoPermitido(payload, CAMPOS_CATALOGO_NOMBRE);
+            if (campo != null) {
+                return BridgeResult.error(campo);
+            }
+            NoConformidadesBridgeHandler.NombreValidado nombre = NoConformidadesBridgeHandler.nombreCatalogo(payload.get("nombre"), max);
+            if (nombre.error() != null) {
+                return BridgeResult.error(nombre.error());
+            }
+            ObjectNode cuerpo = mapper.createObjectNode();
+            cuerpo.put("nombre", nombre.nombre());
+            return itemCreado(FaretRespuestas.desenvolver(qualityControl.postJson(usuario, RUTA_PNC_CATALOGOS + "/" + ruta, cuerpo), mapper),
+                    List.of());
+        };
+    }
+
+    /**
+     * Fase F1 - faret.catalogos.areas.crear -> POST api/catalogos/areas con {codigo, nombre}. Como Photino (HandleCatalogoAreaCrear):
+     * el formulario solo pide el nombre y el código se genera con {@link #generarCodigoArea}; si no queda ningún carácter A-Z/0-9,
+     * "El nombre debe tener al menos una letra o número". Duplicado de código: la API devuelve el área existente (UNIQUE(codigo)).
+     */
+    public BridgeResult areaCrear(ObjectNode payload, SessionUser usuario) {
+        String campo = NoConformidadesBridgeHandler.campoNoPermitido(payload, CAMPOS_CATALOGO_NOMBRE);
+        if (campo != null) {
+            return BridgeResult.error(campo);
+        }
+        NoConformidadesBridgeHandler.NombreValidado nombre =
+                NoConformidadesBridgeHandler.nombreCatalogo(payload.get("nombre"), MAX_NOMBRE_CATALOGO_PLANTA);
+        if (nombre.error() != null) {
+            return BridgeResult.error(nombre.error());
+        }
+        String codigo = generarCodigoArea(nombre.nombre());
+        if (codigo.isEmpty()) {
+            return BridgeResult.error(MENSAJE_CODIGO_AREA_VACIO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("codigo", codigo);
+        cuerpo.put("nombre", nombre.nombre());
+        return itemCreado(FaretRespuestas.desenvolver(qualityControl.postJson(usuario, RUTA_CATALOGOS + "/areas", cuerpo), mapper),
+                List.of("codigo", "createdAt"));
+    }
+
+    /**
+     * Fase F1 - faret.catalogos.{operadores|maquinas}.crear -> POST api/catalogos/{ruta} con {areaId, nombre}. Como Photino: areaId
+     * entero int32 > 0 (si no, "Falta el área"; bool/objeto/array se rechazan) y luego el nombre. El área debe existir y estar
+     * activa: lo resuelve la API (404 con su mensaje).
+     */
+    public BridgeAction catalogoPorAreaCrear(String ruta) {
+        return (payload, usuario) -> {
+            String campo = NoConformidadesBridgeHandler.campoNoPermitido(payload, CAMPOS_CATALOGO_POR_AREA);
+            if (campo != null) {
+                return BridgeResult.error(campo);
+            }
+            JsonNode nodoArea = payload.get("areaId");
+            if (tipoInvalido(nodoArea)) {
+                return BridgeResult.error(NoConformidadesBridgeHandler.MENSAJE_PARAMETRO_INVALIDO);
+            }
+            Integer areaId = enteroPositivo(nodoArea);
+            if (areaId == null) {
+                return BridgeResult.error(MENSAJE_FALTA_AREA);
+            }
+            NoConformidadesBridgeHandler.NombreValidado nombre =
+                    NoConformidadesBridgeHandler.nombreCatalogo(payload.get("nombre"), MAX_NOMBRE_CATALOGO_PLANTA);
+            if (nombre.error() != null) {
+                return BridgeResult.error(nombre.error());
+            }
+            ObjectNode cuerpo = mapper.createObjectNode();
+            cuerpo.put("areaId", areaId);
+            cuerpo.put("nombre", nombre.nombre());
+            return itemCreado(FaretRespuestas.desenvolver(qualityControl.postJson(usuario, RUTA_CATALOGOS + "/" + ruta, cuerpo), mapper),
+                    List.of("areaId", "areaNombre", "createdAt"));
+        };
+    }
+
+    /**
+     * FaretHandler.GenerarCodigoArea de Photino: mayúsculas invariantes, cualquier corrida de caracteres fuera de A-Z/0-9 se
+     * colapsa a "_", se recortan "_" en los extremos y el resultado se corta a 20 caracteres (y se recorta "_" otra vez).
+     * La mayúscula es la de .NET ToUpperInvariant (carácter a carácter, sin expansiones como ß → SS de String.toUpperCase).
+     */
+    static String generarCodigoArea(String nombre) {
+        StringBuilder mayus = new StringBuilder();
+        String t = nombre.strip();
+        for (int i = 0; i < t.length(); i++) {
+            mayus.append(Character.toUpperCase(t.charAt(i)));
+        }
+        String codigo = recortarGuionBajo(mayus.toString().replaceAll("[^A-Z0-9]+", "_"));
+        return codigo.length() > MAX_CODIGO_AREA ? recortarGuionBajo(codigo.substring(0, MAX_CODIGO_AREA)) : codigo;
+    }
+
+    private static String recortarGuionBajo(String s) {
+        int ini = 0;
+        int fin = s.length();
+        while (ini < fin && s.charAt(ini) == '_') {
+            ini++;
+        }
+        while (fin > ini && s.charAt(fin - 1) == '_') {
+            fin--;
+        }
+        return s.substring(ini, fin);
+    }
+
+    /**
+     * Reproyecta el valor creado (ApiResponse ya desenvuelta) a {id, nombre, activo} + los extras del DTO de cada catálogo: nada más
+     * de la API llega al navegador. La creación ya ocurrió en la API: si `data` no es un objeto con id entero, error genérico.
+     */
+    private BridgeResult itemCreado(BridgeResult upstream, List<String> extras) {
+        if (!upstream.ok()) {
+            return upstream;
+        }
+        if (!(upstream.data() instanceof ObjectNode item) || item.get("id") == null || !item.get("id").isIntegralNumber()
+                || !item.get("id").canConvertToInt()) {
+            return BridgeResult.error(FaretRespuestas.ERROR_FARET);
+        }
+        ObjectNode salida = mapper.createObjectNode();
+        salida.put("id", item.get("id").asInt());
+        for (String campo : List.of("nombre", "codigo", "areaNombre", "createdAt")) {
+            if (campo.equals("nombre") || extras.contains(campo)) {
+                JsonNode v = item.get(campo);
+                if (v != null && v.isString()) {
+                    salida.put(campo, v.asString());
+                }
+            }
+        }
+        JsonNode area = item.get("areaId");
+        if (extras.contains("areaId") && area != null && area.isIntegralNumber() && area.canConvertToInt()) {
+            salida.put("areaId", area.asInt());
+        }
+        JsonNode activo = item.get("activo");
+        if (activo != null && activo.isBoolean()) {
+            salida.put("activo", activo.asBoolean());
+        }
+        return BridgeResult.ok(salida);
+    }
+
+    /** Recurso auditado de las escrituras de catálogo FARET: "faret:catalogo:<clave>:<id>" (nunca el nombre). */
+    public static String recursoCatalogo(String clave, Object dataRespuesta) {
+        String recurso = "faret:catalogo:" + clave;
+        if (dataRespuesta instanceof JsonNode d && d.isObject() && d.get("id") != null && d.get("id").canConvertToInt()) {
+            recurso += ":" + d.get("id").asInt();
+        }
+        return recurso;
     }
 
     /**

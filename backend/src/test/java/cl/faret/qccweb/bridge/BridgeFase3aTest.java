@@ -195,7 +195,12 @@ class BridgeFase3aTest {
                         "muestraLab.actualizarFechaEnsayo", "muestraLab.metodo.guardar", "muestraLab.metodo.activar",
                         "muestraLab.especificacion.guardar", "muestraLab.especificacion.activar",
                         "muestraLab.eliminar", "muestraLab.adjunto.eliminar",
-                        "inicio.frecuencias.actualizar", "productoTerminado.eliminar", "productoTerminado.actualizarFecha");
+                        "inicio.frecuencias.actualizar", "productoTerminado.eliminar", "productoTerminado.actualizarFecha",
+                        // Fase F1: escrituras de catálogos FARET (QualityControlFaret.Api).
+                        "faret.catalogos.areas.crear", "faret.catalogos.operadores.crear", "faret.catalogos.maquinas.crear",
+                        "faret.pncCatalogos.clientes.crear", "faret.pncCatalogos.categoriasDefecto.crear", "faret.pncCatalogos.tiposFalla.crear",
+                        "faret.pncCatalogos.supervisores.crear", "faret.pncCatalogos.revisores.crear", "faret.pncCatalogos.familiasProducto.crear",
+                        "faret.pncCatalogos.niveles.crear", "faret.pncCatalogos.impactos.crear");
         for (String otra : List.of("noConformidades.catalogos.clientes.desactivar",
                 "noConformidades.catalogos.nciAreas.crear")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);
