@@ -5,6 +5,7 @@ import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretTalleresExternosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FormulariosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
@@ -172,6 +173,13 @@ public class BridgeConfig {
         return new FaretTalleresExternosBridgeHandler(qualityControl, mapper);
     }
 
+    /** Escrituras aditivas de No Conformidades FARET (Fase F3): MejoraContinua, SIN Authorization (como Photino). */
+    @Bean
+    public FaretNoConformidadesBridgeHandler faretNoConformidadesBridgeHandler(
+            @Qualifier("faretMejoraContinuaApiClient") FaretApiClient mejoraContinua, ObjectMapper mapper) {
+        return new FaretNoConformidadesBridgeHandler(mejoraContinua, mapper);
+    }
+
     /**
      * Lecturas del inicio FARET (Fase 6b): QualityControlFaret.Api con el Bearer del usuario de la sesión; MejoraContinua
      * y Calidad sin Authorization (Photino no les manda token).
@@ -236,7 +244,8 @@ public class BridgeConfig {
             RecepcionCalidadBridgeHandler recepcionCalidad, UsuariosBridgeHandler usuarios,
             MuestraLaboratorioBridgeHandler laboratorio, TalleresExternosBridgeHandler talleres,
             LiberacionCalidadBridgeHandler liberacionCalidad, FormulariosBridgeHandler formularios,
-            FaretBridgeHandler faret, FaretTalleresExternosBridgeHandler faretTalleres) {
+            FaretBridgeHandler faret, FaretTalleresExternosBridgeHandler faretTalleres,
+            FaretNoConformidadesBridgeHandler faretNc) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -835,6 +844,24 @@ public class BridgeConfig {
         reglas.add(new ActionPolicy.Regla(
                 "faret.talleresExternos.catalogos.eliminarProceso", Set.of("FARET"), ROLES_FARET_TALLERES_CATALOGO_ELIMINAR, Map.of(),
                 faretTalleres::eliminarProceso, (p, data) -> FaretTalleresExternosBridgeHandler.recursoCatalogoEliminar("proceso", p, data)));
+        // Fase F3 - ESCRITURAS ADITIVAS de No Conformidades FARET (MejoraContinua, SIN Authorization: la API no tiene auth, el gateway es el
+        // único control de acceso y un 401 de ella es un error normal). Los 5 roles de Photino con EDITAR en faret-nc. El frontend manda el
+        // autor desde sessionStorage (autor / creadoPor / actualizadoPor / subidoPor): se acepta la clave pero se pisa con la sesión.
+        // analisis.guardar: POST/PUT lo decide el gateway (ignora existeAnalisis) con detección de lost update. adjuntos.subir va SOLO
+        // por /api/v1/bridge/archivo. NO se habilitan nc.create/update/eliminar/gestion/cerrar/acciones.actualizar/adjuntos.eliminar.
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.seguimiento.crear", Set.of("FARET"), ROLES_FARET, Map.of("autor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                faretNc::seguimientoCrear, FaretNoConformidadesBridgeHandler::recursoSeguimiento));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.acciones.crear", Set.of("FARET"), ROLES_FARET, Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                faretNc::accionesCrear, FaretNoConformidadesBridgeHandler::recursoAccion));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.analisis.guardar", Set.of("FARET"), ROLES_FARET,
+                Map.of("creadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO, "actualizadoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                faretNc::analisisGuardar, FaretNoConformidadesBridgeHandler::recursoAnalisis));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.adjuntos.subir", Set.of("FARET"), ROLES_FARET, Map.of("subidoPor", IdentityOverride.Fuente.NOMBRE_COMPLETO),
+                faretNc::adjuntosSubir, FaretNoConformidadesBridgeHandler::recursoAdjunto));
         return new ActionPolicy(reglas);
     }
 }

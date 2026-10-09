@@ -152,8 +152,11 @@ test("adjuntos.subir va por la ruta de archivos (con CSRF) y el resto por el bri
     await shim.ctx.PhotinoBridge.send({ action: "controlDocumental.create", codigoBase: "PRO-1" });
     await shim.ctx.PhotinoBridge.send({ action: "controlDocumental.version.crear", documentoId: 1 });
     await shim.ctx.PhotinoBridge.send({ action: "controlDocumental.adjunto.subir", documentoVersionId: 1 });
+    // Fase F3: subir adjunto de una NC FARET, misma ruta de archivos; las demás escrituras de NC FARET van por el bridge normal.
+    await shim.ctx.PhotinoBridge.send({ action: "faret.nc.adjuntos.subir", id: 7, tipo: "CAUSA_RAIZ_PDF" });
+    await shim.ctx.PhotinoBridge.send({ action: "faret.nc.seguimiento.crear", id: 7, comentario: "x" });
     assert.deepEqual(shim.registro.fetch.map(f => f.url), ["api/v1/bridge/archivo", "api/v1/bridge", "api/v1/bridge/archivo",
-        "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge/archivo"]);
+        "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge"]);
     assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
     assert.deepEqual(JSON.parse(shim.registro.fetch[0].opciones.body), { ...payload, _modulo: null });
 });

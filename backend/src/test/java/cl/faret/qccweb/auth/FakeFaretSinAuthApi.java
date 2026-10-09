@@ -51,6 +51,11 @@ public final class FakeFaretSinAuthApi implements AutoCloseable {
         respuestas.put(ruta, new Respuesta(status, body));
     }
 
+    /** Respuesta para un método y ruta exactos (tiene prioridad sobre {@link #responder(String, int, String)}), p. ej. ("PUT", "/api/no-conformidades/5/analisis"). */
+    public void responder(String metodo, String ruta, int status, String body) {
+        respuestas.put(metodo + " " + ruta, new Respuesta(status, body));
+    }
+
     public void limpiar() {
         respuestas.clear();
         peticiones.clear();
@@ -87,7 +92,10 @@ public final class FakeFaretSinAuthApi implements AutoCloseable {
         String relativa = uri.substring(prefijo.length());
         peticiones.add(ex.getRequestMethod() + " " + relativa);
         String ruta = ex.getRequestURI().getRawPath().substring(prefijo.length());
-        Respuesta r = respuestas.get(ruta);
+        Respuesta r = respuestas.get(ex.getRequestMethod() + " " + ruta);
+        if (r == null) {
+            r = respuestas.get(ruta);
+        }
         if (r == null) {
             enviar(ex, 404, "{\"title\":\"Not Found\",\"status\":404}");
             return;

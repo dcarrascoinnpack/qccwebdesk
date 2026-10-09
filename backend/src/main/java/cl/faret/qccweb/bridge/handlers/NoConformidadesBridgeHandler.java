@@ -1314,57 +1314,76 @@ public class NoConformidadesBridgeHandler {
      * Reemplazar el PDF lo hace la API (marca eliminado el anterior).
      */
     public BridgeResult adjuntosSubir(ObjectNode payload, SessionUser usuario) {
+        AdjuntoSubir adjunto = adjuntoSubir(payload, usuario, mapper);
+        if (adjunto.error() != null) {
+            return BridgeResult.error(adjunto.error());
+        }
+        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + adjunto.id() + "/adjuntos", adjunto.cuerpo()), mapper);
+    }
+
+    /** Resultado de {@link #adjuntoSubir}: id de la NC y cuerpo para la API, o el mensaje de error. */
+    record AdjuntoSubir(int id, ObjectNode cuerpo, String error) {
+        static AdjuntoSubir error(String mensaje) {
+            return new AdjuntoSubir(0, null, mensaje);
+        }
+    }
+
+    /**
+     * Validación común de adjuntos.subir (también la usa faret.nc.adjuntos.subir de FARET: misma API de adjuntos y mismos límites):
+     * lista blanca de claves, id, tipo/MIME, base64 estricto, tamaño decodificado, firma real, nombre saneado y `subidoPor` = sesión.
+     */
+    static AdjuntoSubir adjuntoSubir(ObjectNode payload, SessionUser usuario, ObjectMapper mapper) {
         for (String clave : payload.propertyNames()) {
             if (!CAMPOS_ADJUNTO_SUBIR.contains(clave)) {
-                return BridgeResult.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
+                return AdjuntoSubir.error(MENSAJE_CAMPO_NO_PERMITIDO + nombreCampoSeguro(clave));
             }
         }
         Integer id = entero(payload.get("id"));
         if (id == null || id <= 0) {
-            return BridgeResult.error(MENSAJE_ID_NC);
+            return AdjuntoSubir.error(MENSAJE_ID_NC);
         }
         for (String campo : new String[] {"tipo", "nombreArchivo", "tipoMime", "contenidoBase64"}) {
             JsonNode n = payload.get(campo);
             if (n != null && !n.isNull() && !n.isString()) {
-                return BridgeResult.error(MENSAJE_PARAMETRO_INVALIDO);
+                return AdjuntoSubir.error(MENSAJE_PARAMETRO_INVALIDO);
             }
         }
         String tipo = textoPlano(payload.get("tipo"));
         boolean esPdf = tipo.equals("CAUSA_RAIZ_PDF");
         if (!esPdf && !tipo.equals("EVIDENCIA_FOTO")) {
-            return BridgeResult.error("Tipo de adjunto inválido (CAUSA_RAIZ_PDF o EVIDENCIA_FOTO).");
+            return AdjuntoSubir.error("Tipo de adjunto inválido (CAUSA_RAIZ_PDF o EVIDENCIA_FOTO).");
         }
         String tipoMime = textoPlano(payload.get("tipoMime"));
         if (esPdf ? !tipoMime.equals("application/pdf") : !(tipoMime.equals("image/jpeg") || tipoMime.equals("image/png"))) {
-            return BridgeResult.error(esPdf ? "Solo se permite un archivo PDF" : "Solo se permiten fotografías JPG o PNG");
+            return AdjuntoSubir.error(esPdf ? "Solo se permite un archivo PDF" : "Solo se permiten fotografías JPG o PNG");
         }
         String nombreCrudo = textoPlano(payload.get("nombreArchivo"));
         if (nombreCrudo.isEmpty()) {
-            return BridgeResult.error("Falta el nombre del archivo");
+            return AdjuntoSubir.error("Falta el nombre del archivo");
         }
         String base64 = payload.get("contenidoBase64") == null || payload.get("contenidoBase64").isNull()
                 ? "" : payload.get("contenidoBase64").asString();
         if (base64.isEmpty()) {
-            return BridgeResult.error("Falta el contenido del archivo");
+            return AdjuntoSubir.error("Falta el contenido del archivo");
         }
         int maxBytes = esPdf ? MAX_ADJUNTO_BYTES : MAX_FOTO_BYTES;
         if (base64.length() > ((maxBytes + 2) / 3) * 4) {
-            return BridgeResult.error(esPdf ? "El PDF excede el tamaño máximo de 10 MB" : "La fotografía excede el tamaño máximo de 5 MB");
+            return AdjuntoSubir.error(esPdf ? "El PDF excede el tamaño máximo de 10 MB" : "La fotografía excede el tamaño máximo de 5 MB");
         }
         byte[] contenido;
         try {
             contenido = java.util.Base64.getDecoder().decode(base64);
         } catch (IllegalArgumentException e) {
-            return BridgeResult.error(MENSAJE_ADJUNTO_INVALIDO);
+            return AdjuntoSubir.error(MENSAJE_ADJUNTO_INVALIDO);
         }
         if (contenido.length == 0) {
-            return BridgeResult.error("El archivo está vacío");
+            return AdjuntoSubir.error("El archivo está vacío");
         }
         if (contenido.length > maxBytes) {
-            return BridgeResult.error(esPdf ? "El PDF excede el tamaño máximo de 10 MB" : "La fotografía excede el tamaño máximo de 5 MB");
+            return AdjuntoSubir.error(esPdf ? "El PDF excede el tamaño máximo de 10 MB" : "La fotografía excede el tamaño máximo de 5 MB");
         }
         if (!ControlDocumentalBridgeHandler.firmaCoincide(tipoMime, contenido)) {
-            return BridgeResult.error("El contenido del archivo no corresponde a un " + (esPdf ? "PDF" : "JPG/PNG") + " válido.");
+            return AdjuntoSubir.error("El contenido del archivo no corresponde a un " + (esPdf ? "PDF" : "JPG/PNG") + " válido.");
         }
         String nombre = nombreAdjuntoSeguro(nombreCrudo, esPdf ? "adjunto.pdf" : ("image/png".equals(tipoMime) ? "foto.png" : "foto.jpg"));
         ObjectNode cuerpo = mapper.createObjectNode();
@@ -1373,7 +1392,7 @@ public class NoConformidadesBridgeHandler {
         cuerpo.put("tipoMime", tipoMime);
         cuerpo.put("contenidoBase64", base64);
         cuerpo.put("subidoPor", autorDeSesion(usuario));
-        return InnpackRespuestas.reenviar(api.postJson(usuario, BASE + "/" + id + "/adjuntos", cuerpo), mapper);
+        return new AdjuntoSubir(id, cuerpo, null);
     }
 
     /** nombreArchivoSeguro de Control Documental + comillas simples, backtick, & y sustitutos sueltos → "_" (innerHTML/atributos). */

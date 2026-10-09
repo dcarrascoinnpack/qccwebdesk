@@ -1133,6 +1133,61 @@ contract check 194/254 (189 + 5). Handler nuevo `FaretTalleresExternosBridgeHand
   `faret:talleres:catalogo:<taller|proceso>:<id>:eliminar` (sin contenido) + `EscrituraRateLimiter` por usuario.
 - **Tests**: `BridgeFaseF2Test` (19).
 
+## FARET — No Conformidades `seguimiento.crear` / `acciones.crear` / `analisis.guardar` / `adjuntos.subir` — VALIDADAS (Fase F3, 2026-10-09)
+
+Escrituras ADITIVAS de No Conformidades de la empresa FARET. API: MejoraContinua (`NoConformidadesController`,
+`AccionesCorrectivasController`, `AnalisisNoConformidadController`, `NcAdjuntosController`), **sin Authorization** (la API no tiene
+autenticación y Photino nunca le hace `SetToken`: el gateway es el único control de acceso; un 401 de ella es un error normal que NO
+invalida la sesión). Photino 1.8.15 (`9e1b556`, `FaretHandler.cs`: `HandleNcSeguimientoCrear/AnalisisGuardar/AccionesCrear/AdjuntosSubir` +
+`TryBuild*Request`, `FaretNoConformidadesApiService`); contract check 198/254 (194 + 4). Handler nuevo `FaretNoConformidadesBridgeHandler`
+(payload PLANO). Roles: los 5 de Photino (EDITAR en `faret-nc`, CONSULTA incluida); una sesión INNPACK nunca llega.
+
+| Acción | Endpoint | Cuerpo que arma el gateway (orden de Photino) | Autor | Riesgo |
+|---|---|---|---|---|
+| `faret.nc.seguimiento.crear` | GET `api/no-conformidades/{id}` (existencia) + POST `.../{id}/seguimiento` | `{comentario, autor}` | `autor` = nombre de la SESIÓN | BAJO (aditiva) |
+| `faret.nc.acciones.crear` | [GET `.../{id}/analisis` si hay `analisisId`] + POST `.../{id}/acciones` | `{analisisId, descripcion, responsable, fechaLimite, prioridad, creadoPor}` | `creadoPor` = SESIÓN | BAJO (aditiva) |
+| `faret.nc.analisis.guardar` | GET `.../{id}/analisis` + POST (no existe) o PUT (existe) `.../{id}/analisis` | `{metodologia, problemaDetectado, porque1..5, causaRaiz, conclusion, creadoPor, actualizadoPor}` | POST: `creadoPor` = SESIÓN; PUT: `actualizadoPor` = SESIÓN (el otro, null) | MEDIO (el PUT sobrescribe) |
+| `faret.nc.adjuntos.subir` | POST `.../{id}/adjuntos` por `/api/v1/bridge/archivo` | `{tipo, nombreArchivo, tipoMime, contenidoBase64, subidoPor}` | `subidoPor` = SESIÓN | MEDIO (archivos) |
+
+- **Identidad**: el frontend de Photino manda el autor desde `sessionStorage` (`autor`, `creadoPor`, `actualizadoPor`, `subidoPor`). Esas
+  claves se ACEPTAN (son las que manda la vista; `ActionPolicy` las pisa con la sesión) pero su valor nunca se usa: el cuerpo se arma
+  con el nombre de la sesión (o el código si no hay nombre), acotado al largo de la columna (seguimiento 120, acciones/análisis 200,
+  adjuntos 150). Cualquier otra clave → "Campo no permitido: x" sin llamar a la API. Ids (`id`, `analisisId`) enteros positivos,
+  bool/objeto/array/decimal rechazados antes de la ruta; "Falta el id de la no conformidad" como Photino.
+- **seguimiento.crear**: `comentario` obligatorio, string, trim, ≤ 65.535 bytes (NVARCHAR(MAX), tope anti-abuso), sin controles (salvo
+  `	
+`) ni marcado HTML (la vista lo pinta con `innerHTML`). La API NO valida que la NC exista (la FK daría un 500): GET previo, 404 →
+  "No conformidad no encontrada".
+- **acciones.crear**: `descripcion` (≤ 1000, columna `NVARCHAR(1000)`), `responsable` (≤ 200), `fechaLimite` AAAA-MM-DD real, obligatorios con
+  los mensajes de Photino; `prioridad` ALTA/MEDIA/BAJA o vacía (null). `analisisId` (opcional) debe ser el análisis de ESA NC (la API solo
+  comprueba la FK; "El análisis indicado no corresponde a la no conformidad."). Una NC cerrada admite acciones, igual que en Photino.
+- **analisis.guardar — decisión del usuario**: Photino decide POST/PUT con el flag `existeAnalisis` del navegador; aquí el flag se valida como
+  booleano y se IGNORA: el gateway lee el análisis vigente (GET) y elige POST (crear) o PUT (actualizar). `metodologia` CINCO_PORQUES/ISHIKAWA/MIXTA,
+  `problemaDetectado` obligatorio; `problemaDetectado`, `porque1..5` y `causaRaiz` ≤ 500 (columnas `NVARCHAR(500)`), `conclusion` ≤ 65.535 bytes
+  (`NVARCHAR(MAX)`); una línea en los porqués, multilínea en los textarea; sin controles ni HTML; "" se conserva, ausente/null → null.
+  La API exige `causaRaiz` en el PUT (400 con su mensaje) y responde 409 si el POST llega con análisis ya creado (carrera mínima).
+- **Lost update (analisis.guardar)**: el PUT sobrescribe sin versión ni historial. VIABLE con el frontend de Photino: la vista llama
+  `faret.nc.analisis.get` al abrir el modal y tras cada guardado, así que `faret.nc.analisis.get` registra en la sesión (`LecturasDeSesion`) la huella
+  SHA-256 del análisis (o "sin análisis"); al guardar se relee el análisis y, si la sesión no lo leyó ("Abre el análisis de la no conformidad
+  antes de guardarlo.") o cambió desde entonces (mismo mensaje de conflicto que INNPACK), no se escribe nada. Tras un guardado correcto se
+  descarta la huella (la vista relee). Límites: ventana mínima entre la relectura y el PUT (la API no ofrece operación atómica), pestañas de la
+  MISMA sesión comparten huella, y Photino escritorio no tiene esta protección.
+- **adjuntos.subir**: SOLO por `/api/v1/bridge/archivo` (tope de cuerpo propio y subidas simultáneas acotadas; `faret.nc.adjuntos.subir` se suma
+  a `ACCIONES_ARCHIVO` del bridge y de `web-shim/web-bridge.js`). Validación común con `noConformidades.adjuntos.subir` (`adjuntoSubir`): `tipo`
+  CAUSA_RAIZ_PDF (application/pdf) o EVIDENCIA_FOTO (image/jpeg, image/png), base64 estricto, tamaño decodificado (PDF 10 MB, foto 5 MB), FIRMA
+  REAL (%PDF-, PNG, JPEG; HTML disfrazado rechazado) y nombre saneado (sin rutas, `< > " ' ` & : | ? *`, controles ni bidi, ≤ 150). La API
+  confía en el MIME declarado: aquí el MIME es el que coincide con la firma. 404/409 (NC cerrada, 10 fotos) y el reemplazo del PDF los resuelve la API.
+- **Respuestas**: solo `{id}` (seguimiento, acción, adjunto, POST de análisis) o `{mensaje}` (PUT de análisis); nada más de MejoraContinua llega al
+  navegador. Errores con `ExtractMcErrorMessage` (mensaje, error, title, detail) o el genérico de Mejora Continua. Sin reintentos (F0).
+- **Hallazgo previo cerrado**: `faret.nc.adjuntos.list` devolvía `nombreArchivo` crudo y la vista lo inserta en `innerHTML` y en `title="..."`:
+  ahora se sanea como `noConformidades.adjuntos.list` (mismo contrato: solo cambia el texto del nombre).
+- **No habilitadas**: `faret.nc.create/crearRegistro/actualizarRegistro/update/eliminarFila/gestion.actualizar/cerrar`, `acciones.actualizar`
+  y `adjuntos.eliminar` (siguen denegadas).
+- **Auditoría**: `evento=ESCRITURA ... recurso=faret:nc:<id>:seguimiento[:<id>]`, `:accion[:<id>]`, `:adjunto[:<id>]` y
+  `:analisis[:<analisisId>]:NUEVO|REEMPLAZO` (sin contenido) + `EscrituraRateLimiter` por usuario.
+- **Esquema usado para los largos**: `migration/sqlserver/mejora_continua_sqlserver_schema.sql` de MejoraContinua.Api (no se consultó la BD).
+- **Tests**: `BridgeFaseF3Test` (21), `web-bridge.test.mjs` (ruta de archivos).
+
 ## Hallazgos de seguridad para el backlog de hardening de Photino/APIs
 
 Referenciados contra `docs/SECURITY_HARDENING_BACKLOG.md` del repo Photino (rama `fase-1a-gateway`, commit `27f75fd`).

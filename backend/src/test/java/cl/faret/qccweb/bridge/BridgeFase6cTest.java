@@ -320,10 +320,10 @@ class BridgeFase6cTest {
         MockHttpSession ana = login("ana");
         accion(ana, "{\"action\":\"faret.nc.get\",\"id\":1}").andExpect(status().isForbidden());
         accion(ana, "{\"action\":\"faret.nc.get\",\"_modulo\":\"inventado\",\"id\":1}").andExpect(status().isForbidden());
-        // Todas las escrituras de NC siguen denegadas.
+        // Las escrituras de NC no aditivas siguen denegadas (seguimiento.crear, analisis.guardar, acciones.crear y adjuntos.subir: Fase F3).
         for (String a : List.of("faret.nc.create", "faret.nc.crearRegistro", "faret.nc.actualizarRegistro", "faret.nc.update",
-                "faret.nc.eliminarFila", "faret.nc.gestion.actualizar", "faret.nc.cerrar", "faret.nc.seguimiento.crear", "faret.nc.analisis.guardar",
-                "faret.nc.acciones.crear", "faret.nc.acciones.actualizar", "faret.nc.adjuntos.subir", "faret.nc.adjuntos.eliminar")) {
+                "faret.nc.eliminarFila", "faret.nc.gestion.actualizar", "faret.nc.cerrar",
+                "faret.nc.acciones.actualizar", "faret.nc.adjuntos.eliminar")) {
             accion(ana, "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\",\"id\":1}").andExpect(status().isForbidden());
         }
         assertThat(MC.peticiones()).isEmpty();
@@ -681,7 +681,7 @@ class BridgeFase6cTest {
                 .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
         accion(login("ana"), "{\"action\":\"faret.nc.adjuntos.abrir\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
         accion(login("ana"), "{\"action\":\"faret.nc.adjuntos.abrir\",\"_modulo\":\"faret-data\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
-        for (String a : List.of("faret.nc.adjuntos.subir", "faret.nc.adjuntos.eliminar")) {
+        for (String a : List.of("faret.nc.adjuntos.eliminar")) {
             accion(login("admin"), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
         }
         assertThat(MC.peticiones()).isEmpty();

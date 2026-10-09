@@ -390,12 +390,32 @@ public class FaretBridgeHandler {
      * antes de ir a la ruta; "Falta el id de la no conformidad" como Photino cuando no lo es.
      */
     public BridgeResult ncDetalle(String sufijo, ObjectNode payload, SessionUser usuario) {
-        return ncPorId(sufijo, payload, usuario, false);
+        BridgeResult upstream = ncPorId(sufijo, payload, usuario, false);
+        if ("/adjuntos".equals(sufijo) && upstream.ok() && upstream.data() instanceof ArrayNode items) {
+            // Fase F3: la vista inserta nombreArchivo en innerHTML y en title="..."; se sanea igual que noConformidades.adjuntos.list.
+            for (JsonNode item : items) {
+                if (item instanceof ObjectNode adjunto && adjunto.has("nombreArchivo")) {
+                    JsonNode id = adjunto.get("id");
+                    adjunto.put("nombreArchivo", ControlDocumentalBridgeHandler.nombreArchivoSeguro(
+                            adjunto.get("nombreArchivo").isString() ? adjunto.get("nombreArchivo").asString() : "",
+                            "adjunto_" + (id != null && id.isIntegralNumber() ? id.asLong() : "")));
+                }
+            }
+        }
+        return upstream;
     }
 
-    /** faret.nc.analisis.get → GET api/no-conformidades/{id}/analisis; "aún no tiene un análisis" → Ok(null). */
+    /**
+     * faret.nc.analisis.get → GET api/no-conformidades/{id}/analisis; "aún no tiene un análisis" → Ok(null). Fase F3: además
+     * registra en la sesión la huella del análisis que el usuario queda viendo (lost update en faret.nc.analisis.guardar).
+     */
     public BridgeResult ncAnalisisGet(ObjectNode payload, SessionUser usuario) {
-        return ncPorId("/analisis", payload, usuario, true);
+        BridgeResult upstream = ncPorId("/analisis", payload, usuario, true);
+        Integer id = enteroPositivo(payload.get("id"));
+        if (upstream.ok() && id != null) {
+            FaretNoConformidadesBridgeHandler.registrarLectura(id, upstream.data());
+        }
+        return upstream;
     }
 
     private BridgeResult ncPorId(String sufijo, ObjectNode payload, SessionUser usuario, boolean analisis) {
