@@ -506,6 +506,21 @@ public class NoConformidadesBridgeHandler {
         return upstream;
     }
 
+    /** true si todo el texto es alfabeto base64 estándar con hasta dos "=" de relleno al final. */
+    private static boolean alfabetoBase64(String texto) {
+        int fin = texto.length();
+        while (fin > 0 && texto.length() - fin < 2 && texto.charAt(fin - 1) == '=') {
+            fin--;
+        }
+        for (int i = 0; i < fin; i++) {
+            char c = texto.charAt(i);
+            if (!(c >= 'A' && c <= 'Z' || c >= 'a' && c <= 'z' || c >= '0' && c <= '9' || c == '+' || c == '/')) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** noConformidades.adjuntos.abrir → GET api/no-conformidades/{id}/adjuntos/{adjuntoId}, validado. */
     public BridgeResult adjuntosAbrir(ObjectNode payload, SessionUser usuario) {
         Integer id = entero(payload.get("id"));
@@ -520,13 +535,26 @@ public class NoConformidadesBridgeHandler {
         if (!upstream.ok()) {
             return upstream;
         }
-        JsonNode adjunto = upstream.data() instanceof JsonNode n && n.isObject() ? n : null;
+        return adjuntoValidado(upstream.data(), adjuntoId, mapper);
+    }
+
+    /**
+     * Validación común de adjuntos.abrir (también la usa faret.nc.adjuntos.abrir de FARET, misma API y mismos límites):
+     * contenido no vacío, tamaño acotado, tipo REAL por firma (solo PDF/imagen segura) y nombre saneado; nada más de lo que
+     * devuelve la API llega al navegador.
+     */
+    static BridgeResult adjuntoValidado(Object data, int adjuntoId, ObjectMapper mapper) {
+        JsonNode adjunto = data instanceof JsonNode n && n.isObject() ? n : null;
         String base64 = textoDe(adjunto, "contenidoBase64").trim();
         if (base64.isEmpty()) {
             return BridgeResult.error(MENSAJE_SIN_CONTENIDO);
         }
         if (base64.length() > MAX_BASE64_CHARS) {
             return BridgeResult.error(MENSAJE_TAMANO);
+        }
+        // El base64 termina dentro de un data: URI en la vista (src="data:...;base64,..."): solo alfabeto base64 (+ relleno final).
+        if (!alfabetoBase64(base64)) {
+            return BridgeResult.error(MENSAJE_ADJUNTO_INVALIDO);
         }
         byte[] inicio = ControlDocumentalBridgeHandler.inicioDecodificado(base64);
         // Paridad (Fase 3o): Photino muestra el adjunto aunque la extensión/MIME no coincida con el contenido (p. ej. PNG

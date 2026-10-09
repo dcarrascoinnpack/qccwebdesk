@@ -729,7 +729,7 @@ public class BridgeConfig {
                     (p, u) -> faret.catalogo("/api/pnc-catalogos/" + catalogo.getValue(), u)));
         }
         // Fase B — lecturas de una NC en MejoraContinua (SIN Authorization, como Photino). El sufijo de la ruta lo fija esta tabla;
-        // el id (payload.id) se valida en el handler. adjuntos.abrir NO está aquí (fase E).
+        // el id (payload.id) se valida en el handler. adjuntos.abrir es la fase E (más abajo).
         for (String sufijo : List.of("", "/seguimiento", "/acciones", "/adjuntos")) {
             String accion = sufijo.isEmpty() ? "faret.nc.get" : "faret.nc." + sufijo.substring(1) + ".list";
             reglas.add(new ActionPolicy.Regla(
@@ -756,6 +756,9 @@ public class BridgeConfig {
                 "faret.inspeccionesPallet.list", Set.of("FARET"), ROLES_FARET, Map.of(), faret::inspeccionesPalletList));
         reglas.add(new ActionPolicy.Regla(
                 "faret.inspeccionesPallet.get", Set.of("FARET"), ROLES_FARET, Map.of(), faret::inspeccionesPalletGet));
+        // Fase E - faret.nc.adjuntos.abrir (MejoraContinua, SIN Authorization): ids validados y adjunto validado como el de INNPACK.
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.adjuntos.abrir", Set.of("FARET"), ROLES_FARET, Map.of(), faret::ncAdjuntosAbrir));
         return new ActionPolicy(reglas);
     }
 }

@@ -38,6 +38,9 @@ import tools.jackson.databind.node.ObjectNode;
  * (backend Node, respuesta {ok,data}). Photino NUNCA les manda token (no hace SetToken en esos clientes): el gateway
  * tampoco, aunque haya sesión.
  *
+ * Fase E: faret.nc.adjuntos.abrir (MejoraContinua, sin Authorization) devuelve el adjunto validado igual que
+ * noConformidades.adjuntos.abrir de INNPACK (misma API de adjuntos: PDF/JPEG/PNG, firma real, tamaño, nombre saneado).
+ *
  * 6b-4: faret.dashboard.resumen = FaretDashboardService.ObtenerResumenAsync: GET api/no-conformidades y, SECUENCIALMENTE,
  * GET api/no-conformidades/{id}/acciones por cada NC (omitiendo las que fallan); el cálculo vive en FaretDashboardResumen.
  */
@@ -53,6 +56,7 @@ public class FaretBridgeHandler {
     public static final String MENSAJE_ID_REQUERIDO = "id es requerido";
     public static final String MENSAJE_DASHBOARD_LISTADO = "No se pudo obtener el listado de no conformidades";
     public static final String MENSAJE_DASHBOARD_INVALIDO = "Respuesta inválida de la API al listar no conformidades";
+    public static final String MENSAJE_FALTA_ID_ADJUNTO = "Falta el id del adjunto";
     public static final int MAX_FILTRO = FormulariosBridgeHandler.MAX_FILTRO;
     /** Tope de pageSize de api/importaciones/pnc (ImportacionesService: Math.Min(pageSize, 200)). */
     public static final int MAX_PAGE_SIZE_PNC = 200;
@@ -226,6 +230,37 @@ public class FaretBridgeHandler {
         }
         InnpackApiClient.Respuesta r = mejoraContinua.get(usuario, RUTA_NC + "/" + id + sufijo);
         return analisis ? FaretRespuestas.crudoMcAnalisis(r, mapper) : FaretRespuestas.crudoMc(r, mapper);
+    }
+
+    /**
+     * Fase E - faret.nc.adjuntos.abrir -> GET api/no-conformidades/{id}/adjuntos/{adjuntoId} (MejoraContinua, sin Authorization).
+     * Los ids (enteros int32 positivos, payload.id y payload.adjuntoId) se validan antes de ir a la ruta: "Falta el id de la no
+     * conformidad" / "Falta el id del adjunto" como Photino. La respuesta cruda se valida como noConformidades.adjuntos.abrir
+     * (contenido base64 acotado, tipo REAL por firma PDF/PNG/JPEG, nombre saneado): del upstream solo salen id, nombreArchivo,
+     * tipoMime y contenidoBase64 (la vista los inserta en un data: URI / innerHTML).
+     */
+    public BridgeResult ncAdjuntosAbrir(ObjectNode payload, SessionUser usuario) {
+        if (!mejoraContinua.configurada()) {
+            return BridgeResult.error(MENSAJE_MC_NO_CONFIGURADA);
+        }
+        JsonNode nodoId = payload.get("id");
+        if (tipoInvalido(nodoId)) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        Integer id = enteroPositivo(nodoId);
+        if (id == null) {
+            return BridgeResult.error(MENSAJE_FALTA_ID_NC);
+        }
+        JsonNode nodoAdjunto = payload.get("adjuntoId");
+        if (tipoInvalido(nodoAdjunto)) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        Integer adjuntoId = enteroPositivo(nodoAdjunto);
+        if (adjuntoId == null) {
+            return BridgeResult.error(MENSAJE_FALTA_ID_ADJUNTO);
+        }
+        BridgeResult crudo = FaretRespuestas.crudoMc(mejoraContinua.get(usuario, RUTA_NC + "/" + id + "/adjuntos/" + adjuntoId), mapper);
+        return crudo.ok() ? NoConformidadesBridgeHandler.adjuntoValidado(crudo.data(), adjuntoId, mapper) : crudo;
     }
 
     /**

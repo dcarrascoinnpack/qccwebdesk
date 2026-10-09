@@ -40,8 +40,8 @@ import tools.jackson.databind.ObjectMapper;
 /**
  * Fase 6c — lecturas FARET restantes (Photino 1.8.15, 9e1b556, FaretHandler.cs), solo GET, payload PLANO. A: catálogos
  * (areas, operadores, maquinas) y catálogos PNC (QualityControlFaret.Api con Bearer). B: no conformidades (MejoraContinua, sin Authorization).
- * C: talleres externos / registros / importación / data.resumen (Bearer). D: Calidad (sin Authorization). TODAS las APIs son
- * fakes en localhost.
+ * C: talleres externos / registros / importación / data.resumen (Bearer). D: Calidad (sin Authorization). E: faret.nc.adjuntos.abrir
+ * (MejoraContinua). TODAS las APIs son fakes en localhost.
  */
 @SpringBootTest(properties = {
     "spring.config.name=" + QccWebGatewayApplication.CONFIG_NAME,
@@ -318,8 +318,8 @@ class BridgeFase6cTest {
         MockHttpSession ana = login("ana");
         accion(ana, "{\"action\":\"faret.nc.get\",\"id\":1}").andExpect(status().isForbidden());
         accion(ana, "{\"action\":\"faret.nc.get\",\"_modulo\":\"inventado\",\"id\":1}").andExpect(status().isForbidden());
-        // adjuntos.abrir (fase E) y todas las escrituras de NC siguen denegadas.
-        for (String a : List.of("faret.nc.adjuntos.abrir", "faret.nc.create", "faret.nc.crearRegistro", "faret.nc.actualizarRegistro", "faret.nc.update",
+        // Todas las escrituras de NC siguen denegadas.
+        for (String a : List.of("faret.nc.create", "faret.nc.crearRegistro", "faret.nc.actualizarRegistro", "faret.nc.update",
                 "faret.nc.eliminarFila", "faret.nc.gestion.actualizar", "faret.nc.cerrar", "faret.nc.seguimiento.crear", "faret.nc.analisis.guardar",
                 "faret.nc.acciones.crear", "faret.nc.acciones.actualizar", "faret.nc.adjuntos.subir", "faret.nc.adjuntos.eliminar")) {
             accion(ana, "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\",\"id\":1}").andExpect(status().isForbidden());
@@ -574,6 +574,115 @@ class BridgeFase6cTest {
             accion(login("admin"), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-inspecciones\",\"id\":1}").andExpect(status().isForbidden());
         }
         assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
+    // ----------------------------------------------------------------------------- E: faret.nc.adjuntos.abrir
+
+    private static final String PNG_B64 = java.util.Base64.getEncoder().encodeToString(
+            new byte[] {(byte) 0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0x0D, 0x49, 0x48, 0x44, 0x52});
+    private static final String PDF_B64 = java.util.Base64.getEncoder().encodeToString("%PDF-1.4\n%fake\n".getBytes(StandardCharsets.US_ASCII));
+    private static final String HTML_B64 = java.util.Base64.getEncoder().encodeToString("<html><script>x()</script></html>".getBytes(StandardCharsets.US_ASCII));
+    private static final String ABRIR = "{\"action\":\"faret.nc.adjuntos.abrir\",\"_modulo\":\"faret-nc\"";
+
+    @Test
+    void adjuntosAbrirDevuelveSoloLosCuatroCamposValidadosConElTipoRealPorFirmaYSinAuthorization() throws Exception {
+        MockHttpSession sesion = login("ana");
+        // La API declara un MIME peligroso y un nombre con ruta/etiquetas: sale el tipo real y el nombre saneado; nada más pasa.
+        MC.responder(NC + "/12/adjuntos/3", 200, "{\"id\":3,\"tipo\":\"FOTO\",\"nombreArchivo\":\"..\\\\x\\\\<img onerror=1>foto.png\","
+                + "\"tipoMime\":\"text/html\",\"contenidoBase64\":\"" + PNG_B64 + "\",\"subidoPor\":\"Ana\",\"rutaInterna\":\"C:\\\\secreto\"}");
+        JsonNode json = json(accion(sesion, ABRIR + ",\"id\":12,\"adjuntoId\":3,\"data\":{\"id\":99},\"ruta\":\"/x\"}").andExpect(status().isOk()).andReturn());
+        assertThat(json.get("ok").asBoolean()).isTrue();
+        JsonNode data = json.get("data");
+        assertThat(data.propertyNames()).containsExactlyInAnyOrder("id", "nombreArchivo", "tipoMime", "contenidoBase64");
+        assertThat(data.get("id").asInt()).isEqualTo(3);
+        assertThat(data.get("tipoMime").asString()).isEqualTo("image/png");
+        assertThat(data.get("contenidoBase64").asString()).isEqualTo(PNG_B64);
+        assertThat(data.get("nombreArchivo").asString()).doesNotContain("<").doesNotContain(">").doesNotContain("\\").doesNotContain("/").endsWith("foto.png");
+        // Un PDF con id como texto.
+        MC.responder(NC + "/12/adjuntos/4", 200, "{\"id\":4,\"nombreArchivo\":\"analisis.pdf\",\"tipoMime\":\"application/pdf\",\"contenidoBase64\":\"" + PDF_B64 + "\"}");
+        JsonNode pdf = json(accion(sesion, ABRIR + ",\"id\":\" 12 \",\"adjuntoId\":\"4\"}").andExpect(status().isOk()).andReturn());
+        assertThat(pdf.at("/data/tipoMime").asString()).isEqualTo("application/pdf");
+        assertThat(pdf.at("/data/nombreArchivo").asString()).isEqualTo("analisis.pdf");
+        assertThat(MC.peticiones()).containsExactly("GET " + NC + "/12/adjuntos/3", "GET " + NC + "/12/adjuntos/4");
+        assertThat(MC.authorizations()).hasSize(2).containsOnlyNulls();
+        assertThat(QC.lecturas()).isEmpty();
+        assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
+    @Test
+    void adjuntosAbrirRechazaContenidoNoSeguroVacioOGrandeSinReflejarLaRespuesta() throws Exception {
+        MockHttpSession sesion = login("admin");
+        String grande = "A".repeat(NC_MAX_BASE64 + 4);
+        List<String[]> casos = List.of(
+                new String[] {"1", "{\"nombreArchivo\":\"a.png\",\"tipoMime\":\"image/png\",\"contenidoBase64\":\"" + HTML_B64 + "\"}", "El adjunto no es válido."},
+                new String[] {"2", "{\"nombreArchivo\":\"a.png\",\"tipoMime\":\"image/png\",\"contenidoBase64\":\"" + PNG_B64 + "\\\"onerror=\\\"x()\"}", "El adjunto no es válido."},
+                new String[] {"3", "{\"nombreArchivo\":\"a.png\",\"tipoMime\":\"image/png\",\"contenidoBase64\":\"" + PNG_B64 + "=\\u0020x\"}", "El adjunto no es válido."},
+                new String[] {"4", "{\"nombreArchivo\":\"a.png\",\"contenidoBase64\":\"\"}", "El adjunto no trae contenido"},
+                new String[] {"5", "{\"nombreArchivo\":\"a.png\"}", "El adjunto no trae contenido"},
+                new String[] {"6", "{\"contenidoBase64\":123}", "El adjunto no es válido."},
+                new String[] {"7", "{\"nombreArchivo\":\"a.png\",\"contenidoBase64\":\"" + grande + "\"}", "El adjunto excede el tamaño máximo permitido."},
+                new String[] {"8", "[1,2]", "El adjunto no trae contenido"},
+                new String[] {"9", "\"texto\"", "El adjunto no trae contenido"});
+        for (String[] c : casos) {
+            MC.responder(NC + "/12/adjuntos/" + c[0], 200, c[1]);
+            MvcResult r = accion(sesion, ABRIR + ",\"id\":12,\"adjuntoId\":" + c[0] + "}").andExpect(jsonPath("$.ok").value(false))
+                    .andExpect(jsonPath("$.error").value(c[2])).andReturn();
+            assertThat(r.getResponse().getContentAsString(StandardCharsets.UTF_8)).doesNotContain("onerror").doesNotContain("script");
+        }
+    }
+
+    private static final int NC_MAX_BASE64 = ((10 * 1024 * 1024 + 2) / 3) * 4;
+
+    @Test
+    void adjuntosAbrirValidaAmbosIdsAntesDeIrALaRuta() throws Exception {
+        MockHttpSession sesion = login("admin");
+        for (String id : List.of("", "\"id\":null,", "\"id\":0,", "\"id\":-1,", "\"id\":\"abc\",", "\"id\":1.5,", "\"id\":99999999999,", "\"id\":\"1/../x\",", "\"id\":\"1?x\",")) {
+            accion(sesion, "{\"action\":\"faret.nc.adjuntos.abrir\",\"_modulo\":\"faret-nc\"," + id + "\"adjuntoId\":3}").andExpect(jsonPath("$.ok").value(false))
+                    .andExpect(jsonPath("$.error").value("Falta el id de la no conformidad"));
+        }
+        for (String adj : List.of("", "\"adjuntoId\":null,", "\"adjuntoId\":0,", "\"adjuntoId\":-5,", "\"adjuntoId\":\"x\",", "\"adjuntoId\":2.5,",
+                "\"adjuntoId\":99999999999,", "\"adjuntoId\":\"3/../../x\",", "\"adjuntoId\":\"3#\",")) {
+            accion(sesion, "{\"action\":\"faret.nc.adjuntos.abrir\",\"_modulo\":\"faret-nc\",\"id\":12," + adj + "\"x\":1}").andExpect(jsonPath("$.ok").value(false))
+                    .andExpect(jsonPath("$.error").value("Falta el id del adjunto"));
+        }
+        for (String valor : List.of("true", "{\"a\":1}", "[3]", "[]")) {
+            accion(sesion, ABRIR + ",\"id\":" + valor + ",\"adjuntoId\":3}").andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+            accion(sesion, ABRIR + ",\"id\":12,\"adjuntoId\":" + valor + "}").andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+        }
+        assertThat(MC.peticiones()).isEmpty();
+    }
+
+    @Test
+    void adjuntosAbrirErroresDeLaApiSeLeenComoMcYUn401NoCierraLaSesion() throws Exception {
+        MockHttpSession sesion = login("admin");
+        MC.responder(NC + "/7/adjuntos/1", 404, "{\"mensaje\":\"Adjunto no encontrado\",\"stack\":\"SqlException x\"}");
+        MvcResult r = accion(sesion, ABRIR + ",\"id\":7,\"adjuntoId\":1}").andExpect(jsonPath("$.error").value("Adjunto no encontrado")).andReturn();
+        assertThat(r.getResponse().getContentAsString(StandardCharsets.UTF_8)).doesNotContain("SqlException");
+        MC.responder(NC + "/7/adjuntos/2", 502, "<html>gateway</html>");
+        accion(sesion, ABRIR + ",\"id\":7,\"adjuntoId\":2}").andExpect(jsonPath("$.error").value("Error al comunicarse con la API de Mejora Continua"));
+        MC.responder(NC + "/7/adjuntos/3", 401, "{\"title\":\"Unauthorized\"}");
+        accion(sesion, ABRIR + ",\"id\":7,\"adjuntoId\":3}").andExpect(status().isOk()).andExpect(jsonPath("$.error").value("Unauthorized"));
+        assertThat(sesion.isInvalid()).isFalse();
+        MC.responder(NC + "/7/adjuntos/4", 200, null);
+        accion(sesion, ABRIR + ",\"id\":7,\"adjuntoId\":4}").andExpect(jsonPath("$.ok").value(false));
+    }
+
+    @Test
+    void faseERolesEmpresaModuloYEscriturasDeAdjuntosSiguenDenegadas() throws Exception {
+        for (String rol : List.of("ADMIN", "ADMIN_TI", "CALIDAD", "INSPECTOR", "CONSULTA")) {
+            assertThat(policy.evaluar("faret.nc.adjuntos.abrir", usuario("FARET", rol))).as(rol).isInstanceOf(ActionPolicy.Decision.Permitida.class);
+        }
+        assertThat(policy.evaluar("faret.nc.adjuntos.abrir", usuario("FARET", "operador"))).isEqualTo(new ActionPolicy.Decision.Denegada("ROL_NO_PERMITIDO"));
+        assertThat(policy.evaluar("faret.nc.adjuntos.abrir", usuario("INNPACK", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
+        assertThat(PermisosModulo.esLectura("faret.nc.adjuntos.abrir")).isTrue();
+        accion(loginInnpack("operador1"), ABRIR + ",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
+        accion(login("ana"), "{\"action\":\"faret.nc.adjuntos.abrir\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
+        accion(login("ana"), "{\"action\":\"faret.nc.adjuntos.abrir\",\"_modulo\":\"faret-data\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
+        for (String a : List.of("faret.nc.adjuntos.subir", "faret.nc.adjuntos.eliminar")) {
+            accion(login("admin"), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\",\"id\":1,\"adjuntoId\":1}").andExpect(status().isForbidden());
+        }
+        assertThat(MC.peticiones()).isEmpty();
     }
 
     // ----------------------------------------------------------------------------- helpers
