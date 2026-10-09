@@ -1338,6 +1338,38 @@
       "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
       "photinoVersion": "1.8.15",
       "aprobado": "2026-10-09T15:21:42Z"
+    },
+    "faret.talleresExternos.list": {
+      "huella": "c08c982848aab1702a8516ce31bca613b054d156a80539c91ff0ea0ef845b16c",
+      "huellaFrontend": "4acd26cda33543839692ac7f47522ef4cf2dd94c2d8a9574e6a3d0368bdcecd2",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:25:50Z"
+    },
+    "faret.talleresExternos.catalogos": {
+      "huella": "090368a5fd610dafb4d272b05ec154d4bbc485095f89eb7e9f01872be417eef7",
+      "huellaFrontend": "937bad25af9c3f75539d6dce618c7e304f490a3409bf9a34da69526e05a522b0",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:25:50Z"
+    },
+    "faret.importacion.list": {
+      "huella": "3bbbb8b5701cb1403ee67b8e652b2571763c3d8707ebbbdcdab89129d29b66d0",
+      "huellaFrontend": "78bf75308839ba7f447cb34ef185ccb754f6691f7f8fe77708d25ab0e19ccd4e",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:25:50Z"
+    },
+    "faret.data.resumen": {
+      "huella": "0232840a7df2cf4a5fa197d03c2c4f387544ed04249b3dd33947d5ea930fc3cb",
+      "huellaFrontend": "62ee6b2016880f63ebc09039c4a9b896139135df2babd7dbccea3022917473e6",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:25:50Z"
     }
   }
 }

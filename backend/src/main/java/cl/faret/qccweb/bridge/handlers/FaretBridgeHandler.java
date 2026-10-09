@@ -55,6 +55,8 @@ public class FaretBridgeHandler {
     public static final int MAX_FILTRO = FormulariosBridgeHandler.MAX_FILTRO;
     /** Tope de pageSize de api/importaciones/pnc (ImportacionesService: Math.Min(pageSize, 200)). */
     public static final int MAX_PAGE_SIZE_PNC = 200;
+    /** Tope de pageSize de api/talleres-externos (TalleresExternosService: Math.Min(pageSize, 500)). */
+    public static final int MAX_PAGE_SIZE_TALLERES = 500;
     /** Tope de page: una página mayor no tiene sentido y evita desbordes del offset de la API. */
     public static final int MAX_PAGE = 1_000_000;
 
@@ -74,6 +76,8 @@ public class FaretBridgeHandler {
     /** Valores que entiende Calidad para presentaDefectos (el select de la vista manda "true"/"false"; vacío = todos). */
     static final Set<String> PRESENTA_DEFECTOS = Set.of("true", "false", "1", "0");
 
+    private static final String RUTA_IMPORTACIONES = "/api/importaciones";
+    private static final String RUTA_TALLERES = "/api/talleres-externos";
     private static final String RUTA_PNC = "/api/importaciones/pnc";
     private static final String RUTA_INDICADORES = "/api/importaciones/pnc/indicadores-calidad";
     private static final String RUTA_TALLERES_RESUMEN = "/api/talleres-externos/resumen";
@@ -147,6 +151,36 @@ public class FaretBridgeHandler {
         }
         Integer areaId = enteroPositivo(nodo);
         return qc(usuario, ruta, new StringBuilder(areaId == null ? "" : "areaId=" + areaId));
+    }
+
+    /**
+     * Fase C — faret.talleresExternos.list → GET api/talleres-externos?{12 filtros}&page&pageSize (mismos filtros y orden que
+     * resumen; pageSize acotado a 500, el tope real de TalleresExternosService: misma página efectiva).
+     */
+    public BridgeResult talleresExternosList(ObjectNode payload, SessionUser usuario) {
+        Query filtros = construirQuery(payload, FILTROS_TALLERES);
+        if (filtros.error() != null) {
+            return BridgeResult.error(filtros.error());
+        }
+        StringBuilder query = new StringBuilder(filtros.texto());
+        String errorPaginacion = agregarPaginacion(payload, query, MAX_PAGE_SIZE_TALLERES);
+        return errorPaginacion != null ? BridgeResult.error(errorPaginacion) : qc(usuario, RUTA_TALLERES, query);
+    }
+
+    /** faret.talleresExternos.catalogos → GET api/talleres-externos/catalogos (sin payload). */
+    public BridgeResult talleresExternosCatalogos(ObjectNode payload, SessionUser usuario) {
+        return qc(usuario, RUTA_TALLERES + "/catalogos", new StringBuilder());
+    }
+
+    /** faret.importacion.list → GET api/importaciones (historial de cargas; sin payload). */
+    public BridgeResult importacionList(ObjectNode payload, SessionUser usuario) {
+        return qc(usuario, RUTA_IMPORTACIONES, new StringBuilder());
+    }
+
+    /** faret.data.resumen → GET api/importaciones/pnc/resumen?cliente&tipoPnc&nivel&fechaDesde&fechaHasta (BuildDataFiltros, sin page). */
+    public BridgeResult dataResumen(ObjectNode payload, SessionUser usuario) {
+        Query filtros = construirQuery(payload, FILTROS_DATA);
+        return filtros.error() != null ? BridgeResult.error(filtros.error()) : qc(usuario, RUTA_PNC + "/resumen", new StringBuilder(filtros.texto()));
     }
 
     /** faret.nc.list → GET api/no-conformidades (MejoraContinua, respuesta cruda: arreglo de NC). */

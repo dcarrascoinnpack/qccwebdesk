@@ -737,6 +737,16 @@ public class BridgeConfig {
         }
         reglas.add(new ActionPolicy.Regla(
                 "faret.nc.analisis.get", Set.of("FARET"), ROLES_FARET, Map.of(), faret::ncAnalisisGet));
+        // Fase C — talleres externos / importación / data.resumen de QualityControlFaret.Api (Bearer del usuario), SOLO LECTURA, payload plano.
+        // faret.registros.* y faret.talleresExternos.get NO se habilitan: el frontend de Photino 9e1b556 no los usa (SOLO_WEB bloquearía el release).
+        reglas.add(new ActionPolicy.Regla(
+                "faret.talleresExternos.list", Set.of("FARET"), ROLES_FARET, Map.of(), faret::talleresExternosList));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.talleresExternos.catalogos", Set.of("FARET"), ROLES_FARET, Map.of(), faret::talleresExternosCatalogos));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.importacion.list", Set.of("FARET"), ROLES_FARET, Map.of(), faret::importacionList));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.data.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::dataResumen));
         return new ActionPolicy(reglas);
     }
 }

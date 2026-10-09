@@ -58,6 +58,9 @@ public final class FakeFaretApi implements AutoCloseable {
         // Fase 6c-A: catálogos y catálogos PNC (también con Bearer).
         server.createContext("/api/catalogos", this::lectura);
         server.createContext("/api/pnc-catalogos", this::lectura);
+        // Fase 6c-C: talleres externos (list/catalogos) e importaciones (historial); pnc y resumen ya tienen contexto propio.
+        server.createContext("/api/talleres-externos", this::lectura);
+        server.createContext("/api/importaciones", this::lectura);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(4));
         server.start();
     }
