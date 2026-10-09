@@ -214,6 +214,119 @@ class BridgeFase6cTest {
         assertThat(QC.lecturas()).isEmpty();
     }
 
+    // ----------------------------------------------------------------------------- B: no conformidades (MejoraContinua)
+
+    private static final String NC = "/api/no-conformidades";
+    private static final List<String[]> NC_LECTURAS = List.of(
+            new String[] {"faret.nc.get", ""}, new String[] {"faret.nc.seguimiento.list", "/seguimiento"},
+            new String[] {"faret.nc.analisis.get", "/analisis"}, new String[] {"faret.nc.acciones.list", "/acciones"},
+            new String[] {"faret.nc.adjuntos.list", "/adjuntos"});
+
+    @Test
+    void lasCincoLecturasDeUnaNcVanAMejoraContinuaConElIdSinAuthorizationYDevuelvenElJsonCrudo() throws Exception {
+        MockHttpSession sesion = login("ana");
+        for (String[] a : NC_LECTURAS) {
+            MC.responder(NC + "/12" + a[1], 200, "{\"ruta\":\"" + a[1] + "\",\"id\":12}");
+            // Todo lo demás del payload (incluido un data anidado con otro id) se ignora.
+            JsonNode json = json(accion(sesion, "{\"action\":\"" + a[0] + "\",\"_modulo\":\"faret-nc\",\"id\":12,\"empresa\":\"INNPACK\",\"ruta\":\"/x\","
+                    + "\"data\":{\"id\":99}}").andExpect(status().isOk()).andReturn());
+            assertThat(json.get("ok").asBoolean()).isTrue();
+            assertThat(json.get("data").toString()).isEqualTo("{\"ruta\":\"" + a[1] + "\",\"id\":12}");
+        }
+        // El id también puede venir como texto (TryGetInt de Photino).
+        accion(sesion, "{\"action\":\"faret.nc.get\",\"_modulo\":\"faret-nc\",\"id\":\" 12 \"}").andExpect(jsonPath("$.ok").value(true));
+        assertThat(MC.peticiones()).containsExactly("GET " + NC + "/12", "GET " + NC + "/12/seguimiento", "GET " + NC + "/12/analisis",
+                "GET " + NC + "/12/acciones", "GET " + NC + "/12/adjuntos", "GET " + NC + "/12");
+        // Photino nunca les manda Authorization; el gateway tampoco, aunque haya sesión FARET.
+        assertThat(MC.authorizations()).hasSize(6).containsOnlyNulls();
+        assertThat(QC.lecturas()).isEmpty();
+        assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
+    @Test
+    void elIdDeLaNcSeValidaAntesDeIrALaRuta() throws Exception {
+        MockHttpSession sesion = login("admin");
+        for (String[] a : NC_LECTURAS) {
+            for (String id : List.of("", "\"id\":null,", "\"id\":0,", "\"id\":-1,", "\"id\":\"abc\",", "\"id\":\"\",", "\"id\":1.5,", "\"id\":99999999999,",
+                    "\"id\":\"1/../../x\",", "\"id\":\"1?x=1\",", "\"id\":\"../1\",", "\"id\":\"12abc\",")) {
+                accion(sesion, "{\"action\":\"" + a[0] + "\",\"_modulo\":\"faret-nc\"," + id + "\"x\":1}").andExpect(jsonPath("$.ok").value(false))
+                        .andExpect(jsonPath("$.error").value("Falta el id de la no conformidad"));
+            }
+            // Regla 2e: bool / objeto / array.
+            for (String valor : List.of("true", "false", "{\"a\":1}", "[12]", "[]")) {
+                accion(sesion, "{\"action\":\"" + a[0] + "\",\"_modulo\":\"faret-nc\",\"id\":" + valor + "}").andExpect(jsonPath("$.ok").value(false))
+                        .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+            }
+        }
+        assertThat(MC.peticiones()).isEmpty();
+    }
+
+    @Test
+    void erroresDeMejoraContinuaSeLeenComoExtractMcErrorMessageYUn401NoCierraLaSesion() throws Exception {
+        MockHttpSession sesion = login("admin");
+        MC.responder(NC + "/7", 404, "{\"mensaje\":\"No existe la no conformidad\",\"title\":\"Not Found\"}");
+        accion(sesion, "{\"action\":\"faret.nc.get\",\"_modulo\":\"faret-nc\",\"id\":7}").andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("No existe la no conformidad"));
+        MC.responder(NC + "/7/acciones", 500, "{\"type\":\"about:blank\",\"title\":\"Internal Server Error\",\"stack\":\"SqlException x\"}");
+        MvcResult r = accion(sesion, "{\"action\":\"faret.nc.acciones.list\",\"_modulo\":\"faret-nc\",\"id\":7}").andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("Internal Server Error")).andReturn();
+        assertThat(r.getResponse().getContentAsString(StandardCharsets.UTF_8)).doesNotContain("SqlException");
+        MC.responder(NC + "/7/seguimiento", 502, "<html>gateway</html>");
+        accion(sesion, "{\"action\":\"faret.nc.seguimiento.list\",\"_modulo\":\"faret-nc\",\"id\":7}")
+                .andExpect(jsonPath("$.error").value("Error al comunicarse con la API de Mejora Continua"));
+        MC.responder(NC + "/7/adjuntos", 500, null);
+        accion(sesion, "{\"action\":\"faret.nc.adjuntos.list\",\"_modulo\":\"faret-nc\",\"id\":7}")
+                .andExpect(jsonPath("$.error").value("HTTP 500: Internal Server Error"));
+        // Un 401 de MejoraContinua es un error normal: no invalida la sesión FARET del usuario.
+        MC.responder(NC + "/8", 401, "{\"title\":\"Unauthorized\"}");
+        accion(sesion, "{\"action\":\"faret.nc.get\",\"_modulo\":\"faret-nc\",\"id\":8}").andExpect(status().isOk())
+                .andExpect(jsonPath("$.error").value("Unauthorized"));
+        assertThat(sesion.isInvalid()).isFalse();
+        // Sin respuesta configurada el fake devuelve 404 ProblemDetails: título.
+        accion(sesion, "{\"action\":\"faret.nc.get\",\"_modulo\":\"faret-nc\",\"id\":404}").andExpect(jsonPath("$.error").value("Not Found"));
+    }
+
+    @Test
+    void analisisSinAnalisisTodaviaEsOkNuloYCualquierOtroErrorSigueSiendoError() throws Exception {
+        MockHttpSession sesion = login("admin");
+        MC.responder(NC + "/5/analisis", 404, "{\"mensaje\":\"La no conformidad aún no tiene un análisis registrado.\"}");
+        accion(sesion, "{\"action\":\"faret.nc.analisis.get\",\"_modulo\":\"faret-nc\",\"id\":5}").andExpect(jsonPath("$.ok").value(true))
+                .andExpect(jsonPath("$.data").doesNotExist());
+        MC.responder(NC + "/6/analisis", 404, "{\"mensaje\":\"LA NC AÚN NO TIENE UN ANÁLISIS\"}");
+        accion(sesion, "{\"action\":\"faret.nc.analisis.get\",\"_modulo\":\"faret-nc\",\"id\":6}").andExpect(jsonPath("$.ok").value(true));
+        MC.responder(NC + "/9/analisis", 404, "{\"mensaje\":\"No conformidad inexistente\"}");
+        accion(sesion, "{\"action\":\"faret.nc.analisis.get\",\"_modulo\":\"faret-nc\",\"id\":9}").andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("No conformidad inexistente"));
+        MC.responder(NC + "/10/analisis", 200, "{\"id\":3,\"causaRaiz\":\"x\"}");
+        accion(sesion, "{\"action\":\"faret.nc.analisis.get\",\"_modulo\":\"faret-nc\",\"id\":10}").andExpect(jsonPath("$.data.causaRaiz").value("x"));
+    }
+
+    @Test
+    void faseBRolesEmpresaModuloYEscriturasSiguenDenegadas() throws Exception {
+        for (String[] a : NC_LECTURAS) {
+            for (String rol : List.of("ADMIN", "ADMIN_TI", "CALIDAD", "INSPECTOR", "CONSULTA")) {
+                assertThat(policy.evaluar(a[0], usuario("FARET", rol))).as(a[0] + " " + rol).isInstanceOf(ActionPolicy.Decision.Permitida.class);
+            }
+            assertThat(policy.evaluar(a[0], usuario("FARET", "operador"))).isEqualTo(new ActionPolicy.Decision.Denegada("ROL_NO_PERMITIDO"));
+            assertThat(policy.evaluar(a[0], usuario("INNPACK", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
+            assertThat(PermisosModulo.esLectura(a[0])).as(a[0]).isTrue();
+        }
+        MockHttpSession innpack = loginInnpack("operador1");
+        accion(innpack, "{\"action\":\"faret.nc.get\",\"_modulo\":\"faret-nc\",\"id\":1}").andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
+        // Permisos por módulo: sin módulo declarado, o con uno inexistente, no entra.
+        MockHttpSession ana = login("ana");
+        accion(ana, "{\"action\":\"faret.nc.get\",\"id\":1}").andExpect(status().isForbidden());
+        accion(ana, "{\"action\":\"faret.nc.get\",\"_modulo\":\"inventado\",\"id\":1}").andExpect(status().isForbidden());
+        // adjuntos.abrir (fase E) y todas las escrituras de NC siguen denegadas.
+        for (String a : List.of("faret.nc.adjuntos.abrir", "faret.nc.create", "faret.nc.crearRegistro", "faret.nc.actualizarRegistro", "faret.nc.update",
+                "faret.nc.eliminarFila", "faret.nc.gestion.actualizar", "faret.nc.cerrar", "faret.nc.seguimiento.crear", "faret.nc.analisis.guardar",
+                "faret.nc.acciones.crear", "faret.nc.acciones.actualizar", "faret.nc.adjuntos.subir", "faret.nc.adjuntos.eliminar")) {
+            accion(ana, "{\"action\":\"" + a + "\",\"_modulo\":\"faret-nc\",\"id\":1}").andExpect(status().isForbidden());
+        }
+        assertThat(MC.peticiones()).isEmpty();
+    }
+
     // ----------------------------------------------------------------------------- helpers
 
     private static SessionUser usuario(String empresa, String rol) {

@@ -49,6 +49,7 @@ public class FaretBridgeHandler {
     public static final String MENSAJE_PRESENTA_DEFECTOS = "Filtro presentaDefectos inválido.";
     public static final String MENSAJE_MC_NO_CONFIGURADA = "API de Mejora Continua no configurada. Revise la configuración del servidor.";
     public static final String MENSAJE_CALIDAD_NO_CONFIGURADA = "API de Calidad no configurada. Revise la configuración del servidor.";
+    public static final String MENSAJE_FALTA_ID_NC = "Falta el id de la no conformidad";
     public static final String MENSAJE_DASHBOARD_LISTADO = "No se pudo obtener el listado de no conformidades";
     public static final String MENSAJE_DASHBOARD_INVALIDO = "Respuesta inválida de la API al listar no conformidades";
     public static final int MAX_FILTRO = FormulariosBridgeHandler.MAX_FILTRO;
@@ -154,6 +155,36 @@ public class FaretBridgeHandler {
             return BridgeResult.error(MENSAJE_MC_NO_CONFIGURADA);
         }
         return FaretRespuestas.crudoMc(mejoraContinua.get(usuario, RUTA_NC), mapper);
+    }
+
+    /**
+     * Fase B — lecturas de una NC en MejoraContinua (sin Authorization, respuesta cruda): faret.nc.get →
+     * GET api/no-conformidades/{id}, y {id}/seguimiento, {id}/acciones, {id}/adjuntos. El id (payload.id, entero positivo) se valida
+     * antes de ir a la ruta; "Falta el id de la no conformidad" como Photino cuando no lo es.
+     */
+    public BridgeResult ncDetalle(String sufijo, ObjectNode payload, SessionUser usuario) {
+        return ncPorId(sufijo, payload, usuario, false);
+    }
+
+    /** faret.nc.analisis.get → GET api/no-conformidades/{id}/analisis; "aún no tiene un análisis" → Ok(null). */
+    public BridgeResult ncAnalisisGet(ObjectNode payload, SessionUser usuario) {
+        return ncPorId("/analisis", payload, usuario, true);
+    }
+
+    private BridgeResult ncPorId(String sufijo, ObjectNode payload, SessionUser usuario, boolean analisis) {
+        if (!mejoraContinua.configurada()) {
+            return BridgeResult.error(MENSAJE_MC_NO_CONFIGURADA);
+        }
+        JsonNode nodo = payload.get("id");
+        if (tipoInvalido(nodo)) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        Integer id = enteroPositivo(nodo);
+        if (id == null) {
+            return BridgeResult.error(MENSAJE_FALTA_ID_NC);
+        }
+        InnpackApiClient.Respuesta r = mejoraContinua.get(usuario, RUTA_NC + "/" + id + sufijo);
+        return analisis ? FaretRespuestas.crudoMcAnalisis(r, mapper) : FaretRespuestas.crudoMc(r, mapper);
     }
 
     /** faret.inspecciones.resumen → GET calidad-faret/resumen?fechaDesde&fechaHasta&areaControl&operador&maquina&presentaDefectos&nvFaret */

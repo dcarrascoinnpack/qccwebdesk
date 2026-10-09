@@ -68,6 +68,24 @@ public final class FaretRespuestas {
         return BridgeResult.error(mensajeMc(raiz));
     }
 
+    /** Texto con el que MejoraContinua dice que la NC aún no tiene análisis (estado inicial normal, no un error). */
+    public static final String SIN_ANALISIS = "aún no tiene un análisis";
+
+    /**
+     * faret.nc.analisis.get: como {@link #crudoMc}, salvo que un error cuyo mensaje contiene "aún no tiene un análisis"
+     * (sin distinguir mayúsculas) es el estado inicial normal de una NC y se responde Ok(null), igual que Photino.
+     */
+    public static BridgeResult crudoMcAnalisis(InnpackApiClient.Respuesta respuesta, ObjectMapper mapper) {
+        if (!httpOk(respuesta)) {
+            String mensaje = mensajeMc(leer(respuesta.body(), mapper));
+            if (mensaje.toLowerCase(java.util.Locale.ROOT).contains(SIN_ANALISIS)) {
+                return BridgeResult.ok(null);
+            }
+            return BridgeResult.error(mensaje);
+        }
+        return crudoMc(respuesta, mapper);
+    }
+
     /** ExtractMcErrorMessage: mensaje, error, title, detail (solo strings); si no, el genérico. */
     static String mensajeMc(JsonNode raiz) {
         if (raiz != null && raiz.isObject()) {

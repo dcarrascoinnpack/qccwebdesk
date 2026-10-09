@@ -728,6 +728,15 @@ public class BridgeConfig {
                     "faret.pncCatalogos." + catalogo.getKey() + ".list", Set.of("FARET"), ROLES_FARET, Map.of(),
                     (p, u) -> faret.catalogo("/api/pnc-catalogos/" + catalogo.getValue(), u)));
         }
+        // Fase B — lecturas de una NC en MejoraContinua (SIN Authorization, como Photino). El sufijo de la ruta lo fija esta tabla;
+        // el id (payload.id) se valida en el handler. adjuntos.abrir NO está aquí (fase E).
+        for (String sufijo : List.of("", "/seguimiento", "/acciones", "/adjuntos")) {
+            String accion = sufijo.isEmpty() ? "faret.nc.get" : "faret.nc." + sufijo.substring(1) + ".list";
+            reglas.add(new ActionPolicy.Regla(
+                    accion, Set.of("FARET"), ROLES_FARET, Map.of(), (p, u) -> faret.ncDetalle(sufijo, p, u)));
+        }
+        reglas.add(new ActionPolicy.Regla(
+                "faret.nc.analisis.get", Set.of("FARET"), ROLES_FARET, Map.of(), faret::ncAnalisisGet));
         return new ActionPolicy(reglas);
     }
 }
