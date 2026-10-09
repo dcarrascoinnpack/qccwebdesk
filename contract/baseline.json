@@ -1210,6 +1210,94 @@
       "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
       "photinoVersion": "1.8.15",
       "aprobado": "2026-10-09T13:24:21Z"
+    },
+    "faret.catalogos.areas": {
+      "huella": "dd593403b529816a8b4c972beb2b0e2bde076e28d11dc7b371dd14f755928120",
+      "huellaFrontend": "0547390d6515f27b73a3eac84a25cca61507f16d62cf75704d84cf781e907656",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.catalogos.operadores": {
+      "huella": "98101d052f129b8a30ed427ede37b0b814210c9f46f9cb6bafcaf916497c62fd",
+      "huellaFrontend": "1c0bf607f8276a26180d62773b83356c364308594c1ea2feff263a54e0aa16c8",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.catalogos.maquinas": {
+      "huella": "9b7b83e76118b529ad2b62356f6815729556c208c96314b8e2c8a0861c25b3bd",
+      "huellaFrontend": "11b71e967f86b895355150e36424d708070616566a9c485af7616c73175bedd7",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.pncCatalogos.clientes.list": {
+      "huella": "2e635f4e9d0cf6f91daf3b1037ff26416127fa628e9fbb611678f9697c92c7f4",
+      "huellaFrontend": "0478504d262e31de5c79698c36502072991242fe92e9250d26027aeaa8733cf7",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.pncCatalogos.categoriasDefecto.list": {
+      "huella": "9e79f0699c6337ac1acd01f4b42aa6ada345941dc94426cfe6162c5b93807cf9",
+      "huellaFrontend": "91ed54260c563ecc66c91dfe4a7718ffa2af7fc2d829749470eb096a5d091fee",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.pncCatalogos.tiposFalla.list": {
+      "huella": "43873789b7e2536990eccb59c2699da160a4f5eaa92e143f40875ae65f675df1",
+      "huellaFrontend": "6add76c6af670e64308f72ce33e97670997c93d2a3fa7f52cee17afa0fdfe167",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.pncCatalogos.supervisores.list": {
+      "huella": "f613b860ca773e685208caa6e558e051810776775effe59365346d48f8c88389",
+      "huellaFrontend": "4d564aecea090912fbe0f6795dd71b0e64b0283dee221a5f101bca996b28b8b9",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.pncCatalogos.revisores.list": {
+      "huella": "9800dd43b23e1af4040f9396a9bc0a0876fc5d066ef48362bd9c99c9d537557a",
+      "huellaFrontend": "18a34b96ccc9a92dd2a7bfdb4a328a0256899c439dc1ccd75aaa9623e11a615e",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.pncCatalogos.familiasProducto.list": {
+      "huella": "730cf3bc947b0d0874f94588cefe924b7634c0a08d5f249c3f6ebddf32501dc0",
+      "huellaFrontend": "68ebe99c2dc3e4df77ef48a7bb723b8474a174794f53e62ce19099a43971afab",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.pncCatalogos.niveles.list": {
+      "huella": "2b0c90c7d48876a33ee3ff51a58bbd6966ec8a20451958807f7ad73f83848573",
+      "huellaFrontend": "9557e051fdf9cc2222a3a074c404c991c0cb143272e5d6a07ffcb57c740c571b",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
+    },
+    "faret.pncCatalogos.impactos.list": {
+      "huella": "c1da13985d4f18f3e54bbd521e3202e298bcd38159410f6d62f9a40ad56b6d02",
+      "huellaFrontend": "9eb9de88475be8c9e708dbdaf3c52e74bcfb7c917e162d12d6c7db2def3d5058",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T15:16:33Z"
     }
   }
 }

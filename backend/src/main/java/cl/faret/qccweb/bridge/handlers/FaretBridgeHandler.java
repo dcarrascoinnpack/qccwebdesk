@@ -110,22 +110,9 @@ public class FaretBridgeHandler {
             return BridgeResult.error(filtros.error());
         }
         StringBuilder query = new StringBuilder(filtros.texto());
-        for (String clave : List.of("page", "pageSize")) {
-            JsonNode nodo = payload.get(clave);
-            if (nodo != null && !nodo.isNull() && !nodo.isString() && !nodo.isNumber()) {
-                return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
-            }
-            Integer valor = enteroPositivo(nodo);
-            if (valor == null) {
-                continue;
-            }
-            if (clave.equals("page") && valor > MAX_PAGE) {
-                return BridgeResult.error(MENSAJE_PAGINACION);
-            }
-            if (clave.equals("pageSize")) {
-                valor = Math.min(valor, MAX_PAGE_SIZE_PNC);
-            }
-            query.append(query.isEmpty() ? "" : "&").append(clave).append('=').append(valor);
+        String errorPaginacion = agregarPaginacion(payload, query, MAX_PAGE_SIZE_PNC);
+        if (errorPaginacion != null) {
+            return BridgeResult.error(errorPaginacion);
         }
         return qc(usuario, RUTA_PNC, query);
     }
@@ -140,6 +127,25 @@ public class FaretBridgeHandler {
     public BridgeResult talleresExternosResumen(ObjectNode payload, SessionUser usuario) {
         Query filtros = construirQuery(payload, FILTROS_TALLERES);
         return filtros.error() != null ? BridgeResult.error(filtros.error()) : qc(usuario, RUTA_TALLERES_RESUMEN, new StringBuilder(filtros.texto()));
+    }
+
+    /**
+     * Fase A — faret.catalogos.areas → GET api/catalogos/areas y
+     * faret.pncCatalogos.*.list → GET api/pnc-catalogos/*: sin payload (ApiResponse desenvuelta, como HandleCatalogo y
+     * HandlePncCatalogoList). La ruta la fija la regla del bridge, jamás el navegador.
+     */
+    public BridgeResult catalogo(String ruta, SessionUser usuario) {
+        return qc(usuario, ruta, new StringBuilder());
+    }
+
+    /** faret.catalogos.operadores / maquinas → GET api/catalogos/{operadores|maquinas}[?areaId=n] (areaId > 0; si no, no viaja). */
+    public BridgeResult catalogoPorArea(String ruta, ObjectNode payload, SessionUser usuario) {
+        JsonNode nodo = payload.get("areaId");
+        if (tipoInvalido(nodo)) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        Integer areaId = enteroPositivo(nodo);
+        return qc(usuario, ruta, new StringBuilder(areaId == null ? "" : "areaId=" + areaId));
     }
 
     /** faret.nc.list → GET api/no-conformidades (MejoraContinua, respuesta cruda: arreglo de NC). */
@@ -206,6 +212,36 @@ public class FaretBridgeHandler {
         }
         LocalDate hoy = LocalDate.now(clock.withZone(FaretDashboardResumen.ZONA));
         return BridgeResult.ok(FaretDashboardResumen.calcular(ncs, acciones, hoy, mapper));
+    }
+
+    /**
+     * page / pageSize de Photino (TryGetInt + {@code > 0}, al final de la query): un valor no entero o ≤ 0 no viaja;
+     * bool/objeto/array se rechazan; page > MAX_PAGE se rechaza; pageSize se acota al tope real de la API (misma página efectiva).
+     */
+    private static String agregarPaginacion(ObjectNode payload, StringBuilder query, int topePageSize) {
+        for (String clave : List.of("page", "pageSize")) {
+            JsonNode nodo = payload.get(clave);
+            if (tipoInvalido(nodo)) {
+                return MENSAJE_FILTRO_INVALIDO;
+            }
+            Integer valor = enteroPositivo(nodo);
+            if (valor == null) {
+                continue;
+            }
+            if (clave.equals("page") && valor > MAX_PAGE) {
+                return MENSAJE_PAGINACION;
+            }
+            if (clave.equals("pageSize")) {
+                valor = Math.min(valor, topePageSize);
+            }
+            query.append(query.isEmpty() ? "" : "&").append(clave).append('=').append(valor);
+        }
+        return null;
+    }
+
+    /** Un valor que no sea null, texto ni número (bool, objeto, array) nunca es un filtro ni un id válido (regla 2e). */
+    private static boolean tipoInvalido(JsonNode nodo) {
+        return nodo != null && !nodo.isNull() && !nodo.isString() && !nodo.isNumber();
     }
 
     private static String ruta(String ruta, String query) {

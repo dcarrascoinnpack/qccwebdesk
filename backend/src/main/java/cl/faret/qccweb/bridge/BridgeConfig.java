@@ -710,6 +710,24 @@ public class BridgeConfig {
                     "noConformidades.catalogos." + catalogo + ".list", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
                     noConformidades.catalogoList(catalogo)));
         }
+        // Fase A — catálogos de QualityControlFaret.Api (Bearer del usuario de la sesión), SOLO LECTURA. La ruta la fija
+        // esta tabla (no el navegador); catalogos.inspectores/defectos y health NO se habilitan: el frontend de Photino 9e1b556 ya no los usa
+        // (el contract check los marcaría SOLO_WEB y bloquearía el release). Sesión FARET obligatoria con los 5 roles; los permisos por módulo siguen siendo los de Photino.
+        reglas.add(new ActionPolicy.Regla(
+                "faret.catalogos.areas", Set.of("FARET"), ROLES_FARET, Map.of(), (p, u) -> faret.catalogo("/api/catalogos/areas", u)));
+        for (String catalogo : List.of("operadores", "maquinas")) {
+            reglas.add(new ActionPolicy.Regla(
+                    "faret.catalogos." + catalogo, Set.of("FARET"), ROLES_FARET, Map.of(),
+                    (p, u) -> faret.catalogoPorArea("/api/catalogos/" + catalogo, p, u)));
+        }
+        for (Map.Entry<String, String> catalogo : Map.of(
+                "clientes", "clientes", "categoriasDefecto", "categorias-defecto", "tiposFalla", "tipos-falla",
+                "supervisores", "supervisores", "revisores", "revisores", "familiasProducto", "familias-producto",
+                "niveles", "niveles", "impactos", "impactos").entrySet()) {
+            reglas.add(new ActionPolicy.Regla(
+                    "faret.pncCatalogos." + catalogo.getKey() + ".list", Set.of("FARET"), ROLES_FARET, Map.of(),
+                    (p, u) -> faret.catalogo("/api/pnc-catalogos/" + catalogo.getValue(), u)));
+        }
         return new ActionPolicy(reglas);
     }
 }

@@ -55,6 +55,9 @@ public final class FakeFaretApi implements AutoCloseable {
         // 6b: lecturas de QualityControlFaret.Api que EXIGEN el Bearer del usuario (sin él o con firma mala: 401).
         server.createContext("/api/importaciones/pnc", this::lectura);
         server.createContext("/api/talleres-externos/resumen", this::lectura);
+        // Fase 6c-A: catálogos y catálogos PNC (también con Bearer).
+        server.createContext("/api/catalogos", this::lectura);
+        server.createContext("/api/pnc-catalogos", this::lectura);
         server.setExecutor(java.util.concurrent.Executors.newFixedThreadPool(4));
         server.start();
     }
