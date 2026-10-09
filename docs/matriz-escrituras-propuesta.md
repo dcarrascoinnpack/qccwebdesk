@@ -1096,6 +1096,43 @@ con `postJson`, Fase F0: sin reintentos, 201 y 409 propagados, 401 invalida solo
   `EscrituraRateLimiter` por usuario.
 - **Tests**: `BridgeFaseF1Test` (18), `BridgeFaseF1LimiteTest` (1), `FaretApiClientTest` (+6, Fase F0).
 
+## FARET — Talleres Externos `create` / `update` / `eliminar` / `catalogos.eliminarTaller|eliminarProceso` — VALIDADAS (Fase F2, 2026-10-09)
+
+Escrituras de Talleres Externos de la empresa FARET. API: QualityControlFaret.Api (`TalleresExternosController`) con el **Bearer
+del usuario de la sesión** (`FaretApiClient`, Fase F0: sin reintentos, 401 invalida solo esa sesión). Photino 1.8.15 (`9e1b556`,
+`FaretHandler.cs`: `HandleTalleresExternosCreate/Update/Eliminar/EliminarTaller/EliminarProceso` + `TryBuildTrabajoRequest`);
+contract check 194/254 (189 + 5). Handler nuevo `FaretTalleresExternosBridgeHandler` (el payload es PLANO, sin `data`).
+
+| Acción | Endpoint | Roles web | Cuerpo / query que arma el gateway | Autor | Riesgo |
+|---|---|---|---|---|---|
+| `faret.talleresExternos.create` | POST `api/talleres-externos` | los 5 (admin, admin_ti, calidad, consulta, inspector) | los 23 campos de `TryBuildTrabajoRequest` en el orden de Photino (no se envía `version`) | la API (`sub` del JWT) | MEDIO |
+| `faret.talleresExternos.update` | PUT `api/talleres-externos/{id}` | los 5 | igual + `version` (entero > 0, obligatoria); id a la ruta | la API | MEDIO |
+| `faret.talleresExternos.eliminar` | DELETE `api/talleres-externos/{id}?version=&motivo=` | los 5 | solo query (anulación lógica); `motivo` opcional escapado | la API | MEDIO |
+| `faret.talleresExternos.catalogos.eliminarTaller` / `.eliminarProceso` | DELETE `api/talleres-externos/catalogos/talleres\|procesos/{id}` | admin, admin_ti, calidad (= `[Authorize(Roles)]` de la API) | sin cuerpo (desactiva el valor) | no aplica | BAJO |
+
+- **Roles**: create/update/eliminar = Photino (EDITAR en `faret-talleres-externos` para los 5 roles, CONSULTA incluida; la API solo
+  exige `[Authorize]`). Eliminar del catálogo: decisión del usuario = los roles de la API (consulta e inspector quedan fuera).
+  Una sesión INNPACK nunca llega; rigen además los permisos por módulo de Photino.
+- **Gateway**: lista cerrada (`action` + los 23 campos; `id`/`version` solo en update, `id`/`version`/`motivo` en eliminar, `id` en
+  los de catálogo); cualquier otra clave (`usuarioId`, `creadoPor`, `autor`...) → "Campo no permitido: x" sin llamar a la API.
+  Textos solo string (bool/número/objeto/array → "Parámetro inválido."), trim, sin controles ni sustitutos sueltos (una línea;
+  justificación y observaciones admiten salto de línea), sin marcado HTML y con el largo de la columna (`nv` 50, `producto` 255,
+  `codigoProducto` 50, `item` 20, `cliente`/taller/proceso/responsable 150, precios 200, justificación 500, observaciones 2000,
+  `motivo` 1000; `talleres_externos_historial.detalle`). Fechas AAAA-MM-DD reales o vacías (null). `prioridad`/`estado` solo los
+  valores de la API (vacío = MEDIA / PENDIENTE_ASIGNACION como Photino). Cantidades DECIMAL(18,2): número o texto numérico ≥ 0.
+  Ids opcionales (taller/proceso/responsable) y `id`/`version`: entero int32 (Photino manda un id solo si es > 0); `id` y `version`
+  se validan ANTES de ir a la ruta. Orden de errores como Photino: id, NV, Producto, Ítem, version.
+- **Concurrencia**: `version` optimista real en la API (UPDLOCK/ROWLOCK): 404 si no existe, 409 "El registro fue modificado por otro
+  usuario." Llegan tal cual (`ApiResponse.message`), sin reintento. Photino arma `{ok:false,error,conflict}` pero su `NormalizeResponse`
+  descarta `conflict`: el frontend recibe solo `error`, igual que aquí. Sin huella de lista ("visto en sesión") como en INNPACK: la
+  `version` obligatoria es el piso y la API arbitra.
+- **Respuesta**: create/update reproyectan el `TrabajoDto` a su lista cerrada de campos escalares; eliminar/catálogo devuelven `data` null.
+- **No habilitadas** (el frontend de `9e1b556` no las usa; SOLO_WEB bloquearía el release): `faret.talleresExternos.catalogos.crearTaller`,
+  `.crearProceso`, `faret.talleresExternos.lote`.
+- **Auditoría**: `evento=ESCRITURA ... recurso=faret:talleres:<id>:crear|actualizar|eliminar` y
+  `faret:talleres:catalogo:<taller|proceso>:<id>:eliminar` (sin contenido) + `EscrituraRateLimiter` por usuario.
+- **Tests**: `BridgeFaseF2Test` (19).
+
 ## Hallazgos de seguridad para el backlog de hardening de Photino/APIs
 
 Referenciados contra `docs/SECURITY_HARDENING_BACKLOG.md` del repo Photino (rama `fase-1a-gateway`, commit `27f75fd`).

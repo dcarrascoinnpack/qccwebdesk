@@ -5,6 +5,7 @@ import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.FaretTalleresExternosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FormulariosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.LiberacionCalidadBridgeHandler;
@@ -64,6 +65,12 @@ public class BridgeConfig {
      */
     static final Set<String> ROLES_FARET_CATALOGOS_PLANTA_CREAR = Set.of("admin", "calidad", "consulta");
     static final Set<String> ROLES_FARET_CATALOGOS_PNC_CREAR = Set.of("admin", "admin_ti", "calidad", "consulta");
+    /**
+     * Escrituras de Talleres Externos FARET (Fase F2). create/update/eliminar: la API solo exige [Authorize] (cualquier usuario FARET)
+     * y Photino da EDITAR en talleres a los 5 roles (CONSULTA incluida): ROLES_FARET. Eliminar taller/proceso del catálogo:
+     * [Authorize(Roles = "ADMIN,ADMIN_TI,CALIDAD")] de la API (decisión del usuario: los de la API).
+     */
+    static final Set<String> ROLES_FARET_TALLERES_CATALOGO_ELIMINAR = Set.of("admin", "admin_ti", "calidad");
     /** Catálogos PNC con `crear`: acción -> {segmento de ruta de api/pnc-catalogos, largo máximo de `nombre` (columna real)}. */
     static final Map<String, Object[]> PNC_CATALOGOS_CREAR = new java.util.LinkedHashMap<>();
 
@@ -158,6 +165,13 @@ public class BridgeConfig {
         return new CertificadosLiberacionBridgeHandler(api, mapper);
     }
 
+    /** Escrituras de Talleres Externos FARET (Fase F2): QualityControlFaret.Api con el Bearer del usuario de la sesión. */
+    @Bean
+    public FaretTalleresExternosBridgeHandler faretTalleresExternosBridgeHandler(
+            @Qualifier("faretQualityControlApiClient") FaretApiClient qualityControl, ObjectMapper mapper) {
+        return new FaretTalleresExternosBridgeHandler(qualityControl, mapper);
+    }
+
     /**
      * Lecturas del inicio FARET (Fase 6b): QualityControlFaret.Api con el Bearer del usuario de la sesión; MejoraContinua
      * y Calidad sin Authorization (Photino no les manda token).
@@ -222,7 +236,7 @@ public class BridgeConfig {
             RecepcionCalidadBridgeHandler recepcionCalidad, UsuariosBridgeHandler usuarios,
             MuestraLaboratorioBridgeHandler laboratorio, TalleresExternosBridgeHandler talleres,
             LiberacionCalidadBridgeHandler liberacionCalidad, FormulariosBridgeHandler formularios,
-            FaretBridgeHandler faret) {
+            FaretBridgeHandler faret, FaretTalleresExternosBridgeHandler faretTalleres) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -802,6 +816,25 @@ public class BridgeConfig {
                 "faret.pncCatalogos." + catalogo + ".crear", Set.of("FARET"), ROLES_FARET_CATALOGOS_PNC_CREAR, Map.of(),
                 faret.pncCatalogoCrear((String) def[0], (Integer) def[1]),
                 (p, data) -> FaretBridgeHandler.recursoCatalogo("pnc-" + catalogo, data))));
+        // Fase F2 - ESCRITURAS de Talleres Externos FARET (QualityControlFaret.Api, Bearer del usuario). Lista cerrada de claves, sin
+        // identidad del navegador (el autor lo pone la API desde el sub del JWT), concurrencia optimista por `version` arbitrada por la
+        // API (404/409 propagados), recurso auditado y límite de escrituras. NO se habilitan crearTaller/crearProceso ni lote (el
+        // frontend de Photino 9e1b556 no los usa).
+        reglas.add(new ActionPolicy.Regla(
+                "faret.talleresExternos.create", Set.of("FARET"), ROLES_FARET, Map.of(), faretTalleres::crear,
+                FaretTalleresExternosBridgeHandler::recursoCrear));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.talleresExternos.update", Set.of("FARET"), ROLES_FARET, Map.of(), faretTalleres::actualizar,
+                (p, data) -> FaretTalleresExternosBridgeHandler.recursoTrabajo("actualizar", p, data)));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.talleresExternos.eliminar", Set.of("FARET"), ROLES_FARET, Map.of(), faretTalleres::eliminar,
+                (p, data) -> FaretTalleresExternosBridgeHandler.recursoTrabajo("eliminar", p, data)));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.talleresExternos.catalogos.eliminarTaller", Set.of("FARET"), ROLES_FARET_TALLERES_CATALOGO_ELIMINAR, Map.of(),
+                faretTalleres::eliminarTaller, (p, data) -> FaretTalleresExternosBridgeHandler.recursoCatalogoEliminar("taller", p, data)));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.talleresExternos.catalogos.eliminarProceso", Set.of("FARET"), ROLES_FARET_TALLERES_CATALOGO_ELIMINAR, Map.of(),
+                faretTalleres::eliminarProceso, (p, data) -> FaretTalleresExternosBridgeHandler.recursoCatalogoEliminar("proceso", p, data)));
         return new ActionPolicy(reglas);
     }
 }

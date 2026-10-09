@@ -379,7 +379,7 @@ class BridgeFaseF1Test {
         List<String> noHabilitadas = new ArrayList<>(List.of("faret.catalogos.areas.desactivar", "faret.catalogos.areas.editar", "faret.catalogos.defectos.crear",
                 "faret.catalogos.inspectores.crear", "faret.catalogos.procesos.crear", "faret.catalogos.operadores.desactivar", "faret.catalogos.maquinas.eliminar",
                 "faret.talleresExternos.catalogos.crearTaller", "faret.talleresExternos.catalogos.crearProceso", "faret.talleresExternos.lote",
-                "faret.talleresExternos.create", "faret.pncCatalogos.inexistente.crear", "faret.pncCatalogos.clientes.editar"));
+                "faret.pncCatalogos.inexistente.crear", "faret.pncCatalogos.clientes.editar"));
         PNC.forEach(c -> noHabilitadas.add("faret.pncCatalogos." + c[0] + ".desactivar"));
         for (String a : noHabilitadas) {
             assertThat(policy.accionesRegistradas()).as(a).doesNotContain(a);

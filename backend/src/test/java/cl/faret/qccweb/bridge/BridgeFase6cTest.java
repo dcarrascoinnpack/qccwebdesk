@@ -438,8 +438,8 @@ class BridgeFase6cTest {
         accion(login("clara"), "{\"action\":\"faret.talleresExternos.catalogos\"}").andExpect(status().isForbidden());
         assertThat(QC.lecturas()).containsExactly("GET " + TALLERES + "/catalogos");
         // No habilitadas: el frontend de Photino 9e1b556 no las usa (registros.*, talleresExternos.get) o son escrituras.
-        for (String a : List.of("faret.registros.list", "faret.registros.get", "faret.talleresExternos.get", "faret.talleresExternos.create",
-                "faret.talleresExternos.update", "faret.talleresExternos.lote", "faret.talleresExternos.eliminar", "faret.importacion.validar",
+        for (String a : List.of("faret.registros.list", "faret.registros.get", "faret.talleresExternos.get",
+                "faret.talleresExternos.lote", "faret.importacion.validar",
                 "faret.importacion.confirmar", "faret.talleresExternos.catalogos.crearTaller")) {
             accion(login("admin"), "{\"action\":\"" + a + "\",\"_modulo\":\"faret-talleres-externos\",\"id\":1}").andExpect(status().isForbidden());
         }
