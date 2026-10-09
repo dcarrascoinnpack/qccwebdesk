@@ -145,8 +145,8 @@ public class BridgeConfig {
     public FaretBridgeHandler faretBridgeHandler(
             @Qualifier("faretQualityControlApiClient") FaretApiClient qualityControl,
             @Qualifier("faretMejoraContinuaApiClient") FaretApiClient mejoraContinua,
-            @Qualifier("faretCalidadApiClient") FaretApiClient calidad, ObjectMapper mapper) {
-        return new FaretBridgeHandler(qualityControl, mejoraContinua, calidad, mapper);
+            @Qualifier("faretCalidadApiClient") FaretApiClient calidad, ObjectMapper mapper, Clock clock) {
+        return new FaretBridgeHandler(qualityControl, mejoraContinua, calidad, mapper, clock);
     }
 
     @Bean
@@ -354,6 +354,9 @@ public class BridgeConfig {
                         "faret.inspecciones.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::inspeccionesResumen),
                 new ActionPolicy.Regla(
                         "faret.maquinas.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::maquinasResumen),
+                // Fase 6b-4 — dashboard FARET: calculado en el gateway desde MejoraContinua (como FaretDashboardService), sin Authorization.
+                new ActionPolicy.Regla(
+                        "faret.dashboard.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::dashboardResumen),
                 // Fase 2h — Control Documental, SOLO LECTURA (payload plano). "alcanceEmpresa" es filtro
                 // de negocio validado en el handler. adjunto.abrir: previsualiza o descarga en el
                 // navegador, sin archivos temporales.

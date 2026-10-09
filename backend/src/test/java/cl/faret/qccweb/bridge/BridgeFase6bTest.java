@@ -446,11 +446,12 @@ class BridgeFase6bTest {
     void siMejoraContinuaOCalidadNoEstanConfiguradasResponderComoPhotino() {
         java.time.Duration t = java.time.Duration.ofSeconds(1);
         FaretBridgeHandler sinUrls = new FaretBridgeHandler(new cl.faret.qccweb.upstream.FaretApiClient(QC.baseUrl(), true, t, t),
-                new cl.faret.qccweb.upstream.FaretApiClient("", false, t, t), new cl.faret.qccweb.upstream.FaretApiClient(null, false, t, t), mapper);
+                new cl.faret.qccweb.upstream.FaretApiClient("", false, t, t), new cl.faret.qccweb.upstream.FaretApiClient(null, false, t, t), mapper, Clock.systemUTC());
         SessionUser u = usuario("FARET", "ADMIN");
         assertThat(sinUrls.ncList(mapper.createObjectNode(), u).error()).isEqualTo(FaretBridgeHandler.MENSAJE_MC_NO_CONFIGURADA);
         assertThat(sinUrls.inspeccionesResumen(mapper.createObjectNode(), u).error()).isEqualTo(FaretBridgeHandler.MENSAJE_CALIDAD_NO_CONFIGURADA);
         assertThat(sinUrls.maquinasResumen(mapper.createObjectNode(), u).error()).isEqualTo(FaretBridgeHandler.MENSAJE_CALIDAD_NO_CONFIGURADA);
+        assertThat(sinUrls.dashboardResumen(mapper.createObjectNode(), u).error()).isEqualTo(FaretBridgeHandler.MENSAJE_MC_NO_CONFIGURADA);
         assertThat(FaretBridgeHandler.MENSAJE_MC_NO_CONFIGURADA).startsWith("API de Mejora Continua no configurada");
     }
 
@@ -476,6 +477,109 @@ class BridgeFase6bTest {
                 .content("{\"action\":\"" + NC_LIST + "\",\"_modulo\":\"faret\"}")).andExpect(status().isUnauthorized());
         assertThat(MC.peticiones()).isEmpty();
         assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
+    // ----------------------------------------------------------------------------- 6b-4: dashboard
+
+    private static final String DASHBOARD = "faret.dashboard.resumen";
+
+    private static String hoySantiago() {
+        return java.time.LocalDate.now(java.time.ZoneId.of("America/Santiago")).toString();
+    }
+
+    @Test
+    void dashboardCalculaDesdeMejoraContinuaConLlamadasSecuencialesYSinAuthorization() throws Exception {
+        String hoy = hoySantiago();
+        MC.responder("/api/no-conformidades", 200, "[{\"id\":11,\"codigo\":\"NC-11\",\"titulo\":\"T\",\"severidad\":\"ALTA\","
+                + "\"estado\":\"ABIERTA\",\"proceso\":\"Corte\",\"fechaCreacion\":\"" + hoy + "T08:00:00\"},"
+                + "{\"id\":12,\"severidad\":\"BAJA\",\"estado\":\"CERRADA\",\"proceso\":\"Corte\",\"fechaCreacion\":\"" + hoy + "T09:00:00\"},"
+                + "{\"id\":13,\"estado\":\"ABIERTA\"},{\"id\":0,\"estado\":\"ABIERTA\"},{\"id\":-5,\"estado\":\"ABIERTA\"}]");
+        MC.responder("/api/no-conformidades/11/acciones", 200, "[{\"id\":1,\"noConformidadId\":11,\"estado\":\"PENDIENTE\",\"fechaLimite\":\"2020-01-01T00:00:00\"}]");
+        MC.responder("/api/no-conformidades/12/acciones", 500, "{\"title\":\"boom\"}");   // se omite, no rompe el dashboard
+        MC.responder("/api/no-conformidades/13/acciones", 200, "esto no es json");           // se omite
+        JsonNode json = json(accion(login("ana"), "{\"action\":\"" + DASHBOARD + "\",\"_modulo\":\"faret\",\"id\":3,\"data\":{\"x\":1}}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(true)).andReturn());
+        JsonNode d = json.get("data");
+        List<String> claves = new ArrayList<>();
+        d.propertyNames().forEach(claves::add);
+        assertThat(claves).containsExactly("kpis", "ncPorProceso", "ncPorSeveridad", "tendenciaNc30Dias", "accionesPorProceso", "estadoAcciones",
+                "ultimasNc", "alertas");
+        assertThat(d.at("/kpis/ncRegistradasHoy").asInt()).isEqualTo(2);
+        assertThat(d.at("/kpis/ncAbiertas").asInt()).isEqualTo(4);
+        assertThat(d.at("/kpis/accionesPendientes").asInt()).isEqualTo(1);
+        assertThat(d.at("/kpis/accionesVencidas").asInt()).isEqualTo(1);
+        assertThat(d.at("/alertas/0/mensaje").asString()).isEqualTo("Hay 1 acción(es) correctiva(s) vencida(s)");
+        // Secuencial, en el orden del listado; las NC con id 0 o negativo nunca llegan a la ruta; jamás Authorization.
+        assertThat(MC.peticiones()).containsExactly("GET /api/no-conformidades", "GET /api/no-conformidades/11/acciones",
+                "GET /api/no-conformidades/12/acciones", "GET /api/no-conformidades/13/acciones");
+        assertThat(MC.authorizations()).containsOnlyNulls();
+        assertThat(QC.lecturas()).isEmpty();
+        assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
+    @Test
+    void dashboardErroresDelListadoYRespuestasInvalidas() throws Exception {
+        MockHttpSession sesion = login("admin");
+        MC.responder("/api/no-conformidades", 500, "{\"title\":\"Internal Server Error\"}");
+        accion(sesion, "{\"action\":\"" + DASHBOARD + "\",\"_modulo\":\"faret\"}").andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_DASHBOARD_LISTADO));
+        MC.responder("/api/no-conformidades", 404, null);
+        accion(sesion, "{\"action\":\"" + DASHBOARD + "\",\"_modulo\":\"faret\"}").andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_DASHBOARD_LISTADO));
+        // 401 de MejoraContinua: error del listado, la sesión del usuario no se toca.
+        MC.responder("/api/no-conformidades", 401, "{}");
+        accion(sesion, "{\"action\":\"" + DASHBOARD + "\",\"_modulo\":\"faret\"}").andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_DASHBOARD_LISTADO));
+        assertThat(sesion.isInvalid()).isFalse();
+        for (String malo : List.of("esto no es json", "", "{\"a\":1}", "[1]", "[{\"id\":\"1/../../x\"}]", "[{\"id\":\"7\"}]", "[{\"id\":null}]",
+                "[{\"id\":9007199254740993}]", "[{\"fechaCreacion\":\"cualquiera\"}]")) {
+            MC.limpiar();
+            MC.responder("/api/no-conformidades", 200, malo);
+            accion(sesion, "{\"action\":\"" + DASHBOARD + "\",\"_modulo\":\"faret\"}").andExpect(jsonPath("$.ok").value(false))
+                    .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_DASHBOARD_INVALIDO));
+            // El id raro nunca llegó a una ruta: solo se pidió el listado.
+            assertThat(MC.peticiones()).as(malo).containsExactly("GET /api/no-conformidades");
+        }
+        // Listado `null` o vacío: dashboard en ceros, sin pedir acciones.
+        for (String vacio : List.of("null", "[]")) {
+            MC.limpiar();
+            MC.responder("/api/no-conformidades", 200, vacio);
+            accion(sesion, "{\"action\":\"" + DASHBOARD + "\",\"_modulo\":\"faret\"}").andExpect(jsonPath("$.ok").value(true))
+                    .andExpect(jsonPath("$.data.kpis.ncAbiertas").value(0)).andExpect(jsonPath("$.data.tendenciaNc30Dias.length()").value(30));
+            assertThat(MC.peticiones()).containsExactly("GET /api/no-conformidades");
+        }
+    }
+
+    @Test
+    void dashboardUsaElRelojInyectadoEnLaZonaDeSantiago() throws Exception {
+        // 2026-10-10T01:30Z = 2026-10-09 22:30 en Santiago (UTC-3): "hoy" es el 9, no el 10.
+        MC.responder("/api/no-conformidades", 200, "[{\"id\":1,\"estado\":\"ABIERTA\",\"fechaCreacion\":\"2026-10-09T10:00:00\"},"
+                + "{\"id\":2,\"estado\":\"ABIERTA\",\"fechaCreacion\":\"2026-10-10T10:00:00\"}]");
+        java.time.Duration t = java.time.Duration.ofSeconds(2);
+        FaretBridgeHandler handler = new FaretBridgeHandler(new cl.faret.qccweb.upstream.FaretApiClient(QC.baseUrl(), true, t, t),
+                new cl.faret.qccweb.upstream.FaretApiClient(MC.baseUrl(), false, t, t),
+                new cl.faret.qccweb.upstream.FaretApiClient(CALIDAD.baseUrl(), false, t, t), mapper,
+                Clock.fixed(Instant.parse("2026-10-10T01:30:00Z"), java.time.ZoneOffset.UTC));
+        BridgeResult r = handler.dashboardResumen(mapper.createObjectNode(), usuario("FARET", "ADMIN"));
+        assertThat(r.ok()).isTrue();
+        JsonNode d = (JsonNode) r.data();
+        assertThat(d.at("/kpis/ncRegistradasHoy").asInt()).isEqualTo(1);
+        assertThat(d.at("/tendenciaNc30Dias/29/fecha").asString()).isEqualTo("09 oct.");
+        assertThat(d.at("/tendenciaNc30Dias/29/total").asInt()).isEqualTo(1);
+        assertThat(d.at("/ultimasNc/0/id").asInt()).isEqualTo(2);
+    }
+
+    @Test
+    void dashboardRolesEmpresaYModulo() throws Exception {
+        for (String rol : List.of("ADMIN", "ADMIN_TI", "CALIDAD", "INSPECTOR", "CONSULTA")) {
+            assertThat(policy.evaluar(DASHBOARD, usuario("FARET", rol))).as(rol).isInstanceOf(ActionPolicy.Decision.Permitida.class);
+        }
+        assertThat(policy.evaluar(DASHBOARD, usuario("FARET", "operador"))).isEqualTo(new ActionPolicy.Decision.Denegada("ROL_NO_PERMITIDO"));
+        assertThat(policy.evaluar(DASHBOARD, usuario("INNPACK", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
+        assertThat(PermisosModulo.esLectura(DASHBOARD)).isTrue();
+        accion(loginInnpack("operador1"), "{\"action\":\"" + DASHBOARD + "\",\"_modulo\":\"faret\"}").andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
+        // Sin módulo declarado no pasa los permisos por módulo.
+        accion(login("clara"), "{\"action\":\"" + DASHBOARD + "\"}").andExpect(status().isForbidden());
+        assertThat(MC.peticiones()).isEmpty();
     }
 
     // ----------------------------------------------------------------------------- helpers

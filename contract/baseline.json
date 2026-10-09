@@ -1202,6 +1202,14 @@
       "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
       "photinoVersion": "1.8.15",
       "aprobado": "2026-10-09T13:19:19Z"
+    },
+    "faret.dashboard.resumen": {
+      "huella": "2cf4ffb686a2809b06186cad346b240992336fc1bdf53636a974dd8084736d7a",
+      "huellaFrontend": "a2d5de1570d77853c57d60f24877879c78848760348bdd03835f8be96062e299",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T13:24:21Z"
     }
   }
 }

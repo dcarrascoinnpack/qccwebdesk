@@ -3,10 +3,13 @@ package cl.faret.qccweb.bridge.handlers;
 import cl.faret.qccweb.auth.SessionUser;
 import cl.faret.qccweb.bridge.BridgeResult;
 import cl.faret.qccweb.upstream.FaretApiClient;
+import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.FaretRespuestas;
 import cl.faret.qccweb.upstream.UriEscape;
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
@@ -34,6 +37,9 @@ import tools.jackson.databind.node.ObjectNode;
  * mensaje/error/title/detail como ExtractMcErrorMessage) y faret.inspecciones.resumen / faret.maquinas.resumen a Calidad
  * (backend Node, respuesta {ok,data}). Photino NUNCA les manda token (no hace SetToken en esos clientes): el gateway
  * tampoco, aunque haya sesión.
+ *
+ * 6b-4: faret.dashboard.resumen = FaretDashboardService.ObtenerResumenAsync: GET api/no-conformidades y, SECUENCIALMENTE,
+ * GET api/no-conformidades/{id}/acciones por cada NC (omitiendo las que fallan); el cálculo vive en FaretDashboardResumen.
  */
 public class FaretBridgeHandler {
 
@@ -43,6 +49,8 @@ public class FaretBridgeHandler {
     public static final String MENSAJE_PRESENTA_DEFECTOS = "Filtro presentaDefectos inválido.";
     public static final String MENSAJE_MC_NO_CONFIGURADA = "API de Mejora Continua no configurada. Revise la configuración del servidor.";
     public static final String MENSAJE_CALIDAD_NO_CONFIGURADA = "API de Calidad no configurada. Revise la configuración del servidor.";
+    public static final String MENSAJE_DASHBOARD_LISTADO = "No se pudo obtener el listado de no conformidades";
+    public static final String MENSAJE_DASHBOARD_INVALIDO = "Respuesta inválida de la API al listar no conformidades";
     public static final int MAX_FILTRO = FormulariosBridgeHandler.MAX_FILTRO;
     /** Tope de pageSize de api/importaciones/pnc (ImportacionesService: Math.Min(pageSize, 200)). */
     public static final int MAX_PAGE_SIZE_PNC = 200;
@@ -78,18 +86,21 @@ public class FaretBridgeHandler {
     private final FaretApiClient mejoraContinua;
     private final FaretApiClient calidad;
     private final ObjectMapper mapper;
+    private final Clock clock;
 
     /**
      * @param qualityControl QualityControlFaret.Api (con el Bearer del usuario)
      * @param mejoraContinua MejoraContinua (sin Authorization)
      * @param calidad        Calidad, backend Node (sin Authorization)
+     * @param clock          reloj para "hoy" del dashboard (se interpreta en America/Santiago)
      */
     public FaretBridgeHandler(FaretApiClient qualityControl, FaretApiClient mejoraContinua, FaretApiClient calidad,
-            ObjectMapper mapper) {
+            ObjectMapper mapper, Clock clock) {
         this.qualityControl = qualityControl;
         this.mejoraContinua = mejoraContinua;
         this.calidad = calidad;
         this.mapper = mapper;
+        this.clock = clock;
     }
 
     /** faret.data.list → GET api/importaciones/pnc?cliente&tipoPnc&nivel&fechaDesde&fechaHasta&page&pageSize */
@@ -157,6 +168,44 @@ public class FaretBridgeHandler {
         Query filtros = construirQuery(payload, List.of("maquina"));
         return filtros.error() != null ? BridgeResult.error(filtros.error())
                 : FaretRespuestas.desenvolver(calidad.get(usuario, ruta(RUTA_MAQUINAS_RESUMEN, filtros.texto())), mapper);
+    }
+
+    /**
+     * faret.dashboard.resumen: listado de NC y luego las acciones de cada NC, una a una (igual que Photino; las NC cuyas
+     * acciones fallan o vienen mal formadas se omiten sin romper el dashboard). El id va a la ruta solo si es un entero
+     * positivo ya leído como int de la propia respuesta de la API.
+     */
+    public BridgeResult dashboardResumen(ObjectNode payload, SessionUser usuario) {
+        if (!mejoraContinua.configurada()) {
+            return BridgeResult.error(MENSAJE_MC_NO_CONFIGURADA);
+        }
+        InnpackApiClient.Respuesta listado = mejoraContinua.get(usuario, RUTA_NC);
+        if (!FaretRespuestas.httpOk(listado)) {
+            return BridgeResult.error(MENSAJE_DASHBOARD_LISTADO);
+        }
+        List<FaretDashboardResumen.Nc> ncs;
+        try {
+            ncs = FaretDashboardResumen.leerNcs(mapper.readTree(listado.body()), FaretDashboardResumen.ZONA);
+        } catch (RuntimeException e) {
+            return BridgeResult.error(MENSAJE_DASHBOARD_INVALIDO);
+        }
+        List<FaretDashboardResumen.Accion> acciones = new ArrayList<>();
+        for (FaretDashboardResumen.Nc nc : ncs) {
+            if (nc.id() <= 0) {
+                continue;
+            }
+            InnpackApiClient.Respuesta r = mejoraContinua.get(usuario, RUTA_NC + "/" + nc.id() + "/acciones");
+            if (!FaretRespuestas.httpOk(r)) {
+                continue;
+            }
+            try {
+                acciones.addAll(FaretDashboardResumen.leerAcciones(mapper.readTree(r.body()), FaretDashboardResumen.ZONA));
+            } catch (RuntimeException e) {
+                // se omite esa NC puntual; el resto del dashboard sigue funcionando
+            }
+        }
+        LocalDate hoy = LocalDate.now(clock.withZone(FaretDashboardResumen.ZONA));
+        return BridgeResult.ok(FaretDashboardResumen.calcular(ncs, acciones, hoy, mapper));
     }
 
     private static String ruta(String ruta, String query) {
