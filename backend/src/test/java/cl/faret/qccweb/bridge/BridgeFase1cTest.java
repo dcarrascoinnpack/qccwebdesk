@@ -192,6 +192,7 @@ class BridgeFase1cTest {
                 "productoTerminado.eliminar", "productoTerminado.actualizarFecha",
                 "certificadosLiberacion.buscar", "certificadosLiberacion.calidadPdf.descargar",
                 "formularios.list", "formularios.detalle", "formularios.abrirPdf",
+                "faret.data.list", "faret.indicadoresCalidad.resumen", "faret.talleresExternos.resumen",
                 "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
                 "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
                 "controlDocumental.eliminar", "controlDocumental.adjunto.subir",

@@ -4,6 +4,7 @@ import cl.faret.qccweb.auth.AuthProperties;
 import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.FaretBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FormulariosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.LiberacionCalidadBridgeHandler;
@@ -29,6 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -135,6 +137,13 @@ public class BridgeConfig {
         return new CertificadosLiberacionBridgeHandler(api, mapper);
     }
 
+    /** Lecturas del inicio FARET (Fase 6b): QualityControlFaret.Api con el Bearer del usuario de la sesión. */
+    @Bean
+    public FaretBridgeHandler faretBridgeHandler(
+            @Qualifier("faretQualityControlApiClient") FaretApiClient qualityControl, ObjectMapper mapper) {
+        return new FaretBridgeHandler(qualityControl, mapper);
+    }
+
     @Bean
     public FormulariosBridgeHandler formulariosBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
         return new FormulariosBridgeHandler(api, mapper);
@@ -186,7 +195,8 @@ public class BridgeConfig {
             ControlDocumentalBridgeHandler controlDocumental, NoConformidadesBridgeHandler noConformidades,
             RecepcionCalidadBridgeHandler recepcionCalidad, UsuariosBridgeHandler usuarios,
             MuestraLaboratorioBridgeHandler laboratorio, TalleresExternosBridgeHandler talleres,
-            LiberacionCalidadBridgeHandler liberacionCalidad, FormulariosBridgeHandler formularios) {
+            LiberacionCalidadBridgeHandler liberacionCalidad, FormulariosBridgeHandler formularios,
+            FaretBridgeHandler faret) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -324,6 +334,14 @@ public class BridgeConfig {
                         "formularios.detalle", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), formularios::detalle),
                 new ActionPolicy.Regla(
                         "formularios.abrirPdf", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), formularios::abrirPdf),
+                // Fase 6b-2 — lecturas del inicio FARET a QualityControlFaret.Api (payload PLANO, como Photino). Sesión FARET
+                // obligatoria; sin empresa/identidad en el payload (los handlers solo leen su lista cerrada de filtros).
+                new ActionPolicy.Regla(
+                        "faret.data.list", Set.of("FARET"), ROLES_FARET, Map.of(), faret::dataList),
+                new ActionPolicy.Regla(
+                        "faret.indicadoresCalidad.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::indicadoresCalidad),
+                new ActionPolicy.Regla(
+                        "faret.talleresExternos.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::talleresExternosResumen),
                 // Fase 2h — Control Documental, SOLO LECTURA (payload plano). "alcanceEmpresa" es filtro
                 // de negocio validado en el handler. adjunto.abrir: previsualiza o descarga en el
                 // navegador, sin archivos temporales.

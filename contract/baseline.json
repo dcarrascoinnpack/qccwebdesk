@@ -1154,6 +1154,30 @@
       "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
       "photinoVersion": "1.8.15",
       "aprobado": "2026-10-08T16:56:56Z"
+    },
+    "faret.data.list": {
+      "huella": "8d3e219942439793a4cc6dcc176df5357cf31fbae88e64b55dbf4b1c80fd5105",
+      "huellaFrontend": "6de3e67fadb87e914b6dea19a10ef24edb3c9eea1048e8eb8bb2da72f8082872",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T13:16:28Z"
+    },
+    "faret.indicadoresCalidad.resumen": {
+      "huella": "e0c5c17aae727202bbfc38b2c36a6e36a9dbe42257d72915fa576fd755ed3cfc",
+      "huellaFrontend": "5a5d6e658e9ca668775bb0f3e9ac3d622655bc1bd3887201a1a4863777b28fe8",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T13:16:28Z"
+    },
+    "faret.talleresExternos.resumen": {
+      "huella": "a1b92e7899085a6d967a5577101647db5202d95288bae849683323b6bc8c7063",
+      "huellaFrontend": "e3c043a05c18739b765247d8eaca698f04f6907dc8bc976792e7e34908e97954",
+      "handler": "FaretHandler",
+      "photinoCommit": "9e1b55643bdb70bc57764b11f3e33daedba70243",
+      "photinoVersion": "1.8.15",
+      "aprobado": "2026-10-09T13:16:28Z"
     }
   }
 }

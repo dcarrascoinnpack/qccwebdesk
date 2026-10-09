@@ -41,6 +41,7 @@ public final class FakeFaretApi implements AutoCloseable {
     private final Map<String, String[]> respuestasLectura = new ConcurrentHashMap<>();
     private volatile Supplier<Instant> expiracionToken;
     private volatile boolean caida;
+    private volatile boolean lecturasRechazadas;
 
     public FakeFaretApi(Clock clock) {
         this.expiracionToken = () -> clock.instant().plusSeconds(8 * 3600);
@@ -118,7 +119,13 @@ public final class FakeFaretApi implements AutoCloseable {
         respuestasLectura.put(ruta, new String[] {String.valueOf(status), body});
     }
 
+    /** Simula un token revocado/vencido en la API: toda lectura 6b responde 401 aunque el Bearer sea válido. */
+    public void rechazarLecturas(boolean valor) {
+        this.lecturasRechazadas = valor;
+    }
+
     public void limpiarLecturas() {
+        lecturasRechazadas = false;
         lecturas.clear();
         lecturasDeUsuario.clear();
         respuestasLectura.clear();
@@ -179,7 +186,7 @@ public final class FakeFaretApi implements AutoCloseable {
         String ruta = ex.getRequestURI().getRawPath();
         String uri = ruta + (ex.getRequestURI().getRawQuery() == null ? "" : "?" + ex.getRequestURI().getRawQuery());
         lecturas.add(ex.getRequestMethod() + " " + uri);
-        if (sub == null) {
+        if (sub == null || lecturasRechazadas) {
             lecturasDeUsuario.add(-1);
             ex.sendResponseHeaders(401, -1);
             ex.close();
