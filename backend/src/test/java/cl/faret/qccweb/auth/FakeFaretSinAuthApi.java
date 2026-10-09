@@ -25,6 +25,7 @@ public final class FakeFaretSinAuthApi implements AutoCloseable {
     private final String prefijo;
     private final Map<String, Respuesta> respuestas = new ConcurrentHashMap<>();
     private final List<String> peticiones = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final List<String> cuerpos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final List<String> authorizations = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
     /** @param prefijo parte fija de la ruta que el gateway recibe en su base URL (p. ej. "/mejora-continua" o "/calidad/api") */
@@ -53,12 +54,18 @@ public final class FakeFaretSinAuthApi implements AutoCloseable {
     public void limpiar() {
         respuestas.clear();
         peticiones.clear();
+        cuerpos.clear();
         authorizations.clear();
     }
 
     /** "GET /ruta?query" de cada petición recibida, sin el prefijo. */
     public List<String> peticiones() {
         return List.copyOf(peticiones);
+    }
+
+    /** Cuerpo de cada petición (vacío en los GET), en el mismo orden que {@link #peticiones()}. */
+    public List<String> cuerpos() {
+        return List.copyOf(cuerpos);
     }
 
     /** Header Authorization de cada petición (null = no llegó). */
@@ -71,6 +78,7 @@ public final class FakeFaretSinAuthApi implements AutoCloseable {
     private void atender(HttpExchange ex) throws IOException {
         String uri = ex.getRequestURI().getRawPath() + (ex.getRequestURI().getRawQuery() == null ? "" : "?" + ex.getRequestURI().getRawQuery());
         authorizations.add(ex.getRequestHeaders().getFirst("Authorization"));
+        cuerpos.add(new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
         if (!ex.getRequestURI().getRawPath().startsWith(prefijo + "/")) {
             peticiones.add(ex.getRequestMethod() + " " + uri);
             enviar(ex, 404, "{\"title\":\"Not Found\"}");

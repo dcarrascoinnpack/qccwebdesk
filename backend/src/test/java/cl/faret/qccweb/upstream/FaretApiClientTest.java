@@ -10,6 +10,7 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import tools.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -105,5 +106,93 @@ class FaretApiClientTest {
         assertThat(conBarras.configurada()).isTrue();
         assertThat(conBarras.get(null, "/api/no-conformidades").status()).isEqualTo(200);
         assertThat(List.of(MC.peticiones().get(0))).containsExactly("GET /api/no-conformidades");
+    }
+
+    // ------------------------------------------------------------------------------------------- F0: escrituras
+
+    private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    @Test
+    void escrituraConBearerLlevaElTokenDelUsuarioElCuerpoJsonYPropaga201() throws Exception {
+        FaretApiClient cliente = new FaretApiClient(QC.baseUrl(), true, CONEXION, LECTURA);
+        InnpackApiClient.Respuesta r = cliente.postJson(usuario(7), "/api/pnc-catalogos/clientes",
+                MAPPER.readTree("{\"nombre\":\"Viña Ñandú\"}"));
+        assertThat(r.status()).isEqualTo(201);
+        assertThat(QC.escrituras()).hasSize(1);
+        FakeFaretApi.Escritura e = QC.escrituras().get(0);
+        assertThat(e.metodo()).isEqualTo("POST");
+        assertThat(e.uri()).isEqualTo("/api/pnc-catalogos/clientes");
+        assertThat(e.sub()).isEqualTo(7);
+        assertThat(e.contentType()).startsWith("application/json");
+        assertThat(MAPPER.readTree(e.cuerpo()).get("nombre").asString()).isEqualTo("Viña Ñandú");
+        assertThat(QC.lecturas()).isEmpty();
+    }
+
+    @Test
+    void putPatchYDeleteUsanSuMetodoSinCuerpoEnDelete() throws Exception {
+        FaretApiClient cliente = new FaretApiClient(QC.baseUrl(), true, CONEXION, LECTURA);
+        assertThat(cliente.putJson(usuario(7), "/api/catalogos/areas/3", MAPPER.readTree("{\"x\":1}")).status()).isEqualTo(201);
+        assertThat(cliente.patchJson(usuario(7), "/api/catalogos/areas/3", MAPPER.readTree("{\"y\":2}")).status()).isEqualTo(201);
+        assertThat(cliente.delete(usuario(9), "/api/pnc-catalogos/clientes/3").status()).isEqualTo(201);
+        assertThat(QC.escrituras()).extracting(FakeFaretApi.Escritura::metodo).containsExactly("PUT", "PATCH", "DELETE");
+        assertThat(QC.escrituras()).extracting(FakeFaretApi.Escritura::sub).containsExactly(7, 7, 9);
+        assertThat(QC.escrituras().get(2).cuerpo()).isEmpty();
+    }
+
+    @Test
+    void escrituraConBearerPropagaElConflicto409SinReintentarYUn401InvalidaLaSesion() throws Exception {
+        FaretApiClient cliente = new FaretApiClient(QC.baseUrl(), true, CONEXION, LECTURA);
+        QC.respuestaEscritura("POST /api/catalogos/areas", 409, "{\"success\":false,\"message\":\"Ya existe\",\"data\":null}");
+        InnpackApiClient.Respuesta r = cliente.postJson(usuario(7), "/api/catalogos/areas", MAPPER.readTree("{}"));
+        assertThat(r.status()).isEqualTo(409);
+        assertThat(r.body()).contains("Ya existe");
+        assertThat(QC.escrituras()).hasSize(1); // sin reintento
+
+        SessionUser malFirmado = new SessionUser(5, "x", "X", "CALIDAD", "FARET", "e30.e30.firma-falsa", Instant.now(),
+                Instant.now().plusSeconds(60));
+        assertThatThrownBy(() -> cliente.postJson(malFirmado, "/api/catalogos/areas", MAPPER.readTree("{}")))
+                .isInstanceOf(UpstreamNoAutorizadoException.class);
+        QC.rechazarLecturas(true);
+        assertThatThrownBy(() -> cliente.delete(usuario(7), "/api/catalogos/areas/3")).isInstanceOf(UpstreamNoAutorizadoException.class);
+    }
+
+    @Test
+    void escrituraConBearerSinTokenUpstreamNoLlamaALaApiYInvalidaLaSesion() throws Exception {
+        FaretApiClient cliente = new FaretApiClient(QC.baseUrl(), true, CONEXION, LECTURA);
+        SessionUser sinToken = new SessionUser(5, "x", "X", "CALIDAD", "FARET", null, Instant.now(), Instant.now().plusSeconds(60));
+        assertThatThrownBy(() -> cliente.postJson(sinToken, "/api/catalogos/areas", MAPPER.readTree("{}")))
+                .isInstanceOf(UpstreamNoAutorizadoException.class);
+        assertThatThrownBy(() -> cliente.delete(null, "/api/catalogos/areas/1")).isInstanceOf(UpstreamNoAutorizadoException.class);
+        assertThat(QC.escrituras()).isEmpty();
+    }
+
+    @Test
+    void escrituraSinBearerNuncaEnviaAuthorizationYUn401NoInvalidaNada() throws Exception {
+        FaretApiClient cliente = new FaretApiClient(MC.baseUrl(), false, CONEXION, LECTURA);
+        MC.responder("/api/no-conformidades", 201, "{\"id\":5}");
+        MC.responder("/api/no-conformidades/1", 401, "{\"title\":\"Unauthorized\"}");
+        assertThat(cliente.postJson(usuario(7), "/api/no-conformidades", MAPPER.readTree("{\"a\":1}")).status()).isEqualTo(201);
+        assertThat(cliente.patchJson(usuario(7), "/api/no-conformidades/1", MAPPER.readTree("{\"a\":2}")).status()).isEqualTo(401);
+        assertThat(cliente.delete(null, "/api/no-conformidades/1").status()).isEqualTo(401);
+        assertThat(MC.authorizations()).containsExactly(null, null, null);
+        assertThat(MC.peticiones()).containsExactly("POST /api/no-conformidades", "PATCH /api/no-conformidades/1",
+                "DELETE /api/no-conformidades/1");
+        assertThat(MC.cuerpos().get(0)).isEqualTo("{\"a\":1}");
+    }
+
+    @Test
+    void escrituraConRedCaidaDevuelveStatusCeroSinReintentarYErrorSinCuerpoSeSintetiza() throws Exception {
+        FaretApiClient caido = new FaretApiClient("http://127.0.0.1:9", false, CONEXION, LECTURA);
+        InnpackApiClient.Respuesta red = caido.postJson(null, "/api/no-conformidades", MAPPER.readTree("{}"));
+        assertThat(red.status()).isZero();
+        assertThat(red.body()).isEqualTo("{\"ok\":false,\"error\":\"Error de red al conectar con la API Faret\"}");
+
+        FaretApiClient cliente = new FaretApiClient(MC.baseUrl(), false, CONEXION, LECTURA);
+        MC.responder("/api/no-conformidades", 409, null);
+        InnpackApiClient.Respuesta conflicto = cliente.postJson(null, "/api/no-conformidades", MAPPER.readTree("{}"));
+        assertThat(conflicto.status()).isEqualTo(409);
+        assertThat(conflicto.body()).isEqualTo("{\"ok\":false,\"error\":\"HTTP 409: Conflict\"}");
+        // El mensaje que llega al navegador es el genérico de Faret (FaretRespuestas), nunca el detalle interno.
+        assertThat(FaretRespuestas.desenvolver(conflicto, MAPPER).error()).isEqualTo(FaretRespuestas.ERROR_FARET);
     }
 }

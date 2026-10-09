@@ -28,6 +28,9 @@ public final class FakeFaretApi implements AutoCloseable {
 
     public record Usuario(int id, String username, String correo, String password, String nombre, List<String> roles) {}
 
+    /** Escritura recibida (F0): método, "ruta?query" crudo, cuerpo, Content-Type y usuario (sub del JWT; -1 = sin Bearer válido). */
+    public record Escritura(String metodo, String uri, String cuerpo, String contentType, int sub) {}
+
     private final HttpServer server;
     private final ObjectMapper mapper = new ObjectMapper();
     private final Map<String, Usuario> usuarios = new ConcurrentHashMap<>();
@@ -39,6 +42,8 @@ public final class FakeFaretApi implements AutoCloseable {
     private final List<String> lecturas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final List<Integer> lecturasDeUsuario = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
     private final Map<String, String[]> respuestasLectura = new ConcurrentHashMap<>();
+    private final List<Escritura> escrituras = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final Map<String, String[]> respuestasEscritura = new ConcurrentHashMap<>();
     private volatile Supplier<Instant> expiracionToken;
     private volatile boolean caida;
     private volatile boolean lecturasRechazadas;
@@ -132,7 +137,19 @@ public final class FakeFaretApi implements AutoCloseable {
         this.lecturasRechazadas = valor;
     }
 
+    /** Escrituras (POST/PUT/PATCH/DELETE) recibidas en los contextos de lectura, en orden de llegada. */
+    public List<Escritura> escrituras() {
+        return List.copyOf(escrituras);
+    }
+
+    /** Respuesta fija para una escritura: clave "METODO /ruta" (sin query), p. ej. "POST /api/pnc-catalogos/clientes". */
+    public void respuestaEscritura(String metodoYRuta, int status, String body) {
+        respuestasEscritura.put(metodoYRuta, new String[] {String.valueOf(status), body});
+    }
+
     public void limpiarLecturas() {
+        escrituras.clear();
+        respuestasEscritura.clear();
         lecturasRechazadas = false;
         lecturas.clear();
         lecturasDeUsuario.clear();
@@ -190,6 +207,10 @@ public final class FakeFaretApi implements AutoCloseable {
     }
 
     private void lectura(HttpExchange ex) throws IOException {
+        if (!"GET".equals(ex.getRequestMethod())) {
+            escritura(ex);
+            return;
+        }
         Integer sub = subDeBearer(ex.getRequestHeaders().getFirst("Authorization"));
         String ruta = ex.getRequestURI().getRawPath();
         String uri = ruta + (ex.getRequestURI().getRawQuery() == null ? "" : "?" + ex.getRequestURI().getRawQuery());
@@ -208,6 +229,43 @@ public final class FakeFaretApi implements AutoCloseable {
         }
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"ruta\":\"" + ruta + "\",\"usuario\":" + sub
                 + "},\"errors\":null}");
+    }
+
+    /**
+     * Escrituras de QualityControlFaret.Api: exigen el Bearer del usuario (sin él o con firma mala: 401). Respuesta fija por
+     * "METODO /ruta" o, por defecto, 201 con ApiResponse y data = el cuerpo recibido + id 901 + activo (como CatalogoItemDto).
+     */
+    private void escritura(HttpExchange ex) throws IOException {
+        Integer sub = subDeBearer(ex.getRequestHeaders().getFirst("Authorization"));
+        String ruta = ex.getRequestURI().getRawPath();
+        String uri = ruta + (ex.getRequestURI().getRawQuery() == null ? "" : "?" + ex.getRequestURI().getRawQuery());
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        escrituras.add(new Escritura(ex.getRequestMethod(), uri, cuerpo, ex.getRequestHeaders().getFirst("Content-Type"),
+                sub == null ? -1 : sub));
+        if (sub == null || lecturasRechazadas) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        String[] fija = respuestasEscritura.get(ex.getRequestMethod() + " " + ruta);
+        if (fija != null) {
+            responder(ex, Integer.parseInt(fija[0]), fija[1]);
+            return;
+        }
+        String extra = "";
+        try {
+            JsonNode b = mapper.readTree(cuerpo);
+            if (b.isObject()) {
+                StringBuilder sb = new StringBuilder();
+                for (String k : b.propertyNames()) {
+                    sb.append(",\"").append(k).append("\":").append(b.get(k).toString());
+                }
+                extra = sb.toString();
+            }
+        } catch (RuntimeException e) {
+            // cuerpo no JSON: se responde sin eco
+        }
+        responder(ex, 201, "{\"success\":true,\"message\":\"Creado.\",\"data\":{\"id\":901" + extra + ",\"activo\":true},\"errors\":null}");
     }
 
     private String jwt(Usuario u) {
