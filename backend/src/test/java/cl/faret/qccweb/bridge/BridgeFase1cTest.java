@@ -193,6 +193,7 @@ class BridgeFase1cTest {
                 "certificadosLiberacion.buscar", "certificadosLiberacion.calidadPdf.descargar",
                 "formularios.list", "formularios.detalle", "formularios.abrirPdf",
                 "faret.data.list", "faret.indicadoresCalidad.resumen", "faret.talleresExternos.resumen",
+                "faret.nc.list", "faret.inspecciones.resumen", "faret.maquinas.resumen",
                 "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
                 "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
                 "controlDocumental.eliminar", "controlDocumental.adjunto.subir",

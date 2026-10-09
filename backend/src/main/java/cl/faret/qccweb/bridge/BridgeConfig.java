@@ -137,11 +137,16 @@ public class BridgeConfig {
         return new CertificadosLiberacionBridgeHandler(api, mapper);
     }
 
-    /** Lecturas del inicio FARET (Fase 6b): QualityControlFaret.Api con el Bearer del usuario de la sesión. */
+    /**
+     * Lecturas del inicio FARET (Fase 6b): QualityControlFaret.Api con el Bearer del usuario de la sesión; MejoraContinua
+     * y Calidad sin Authorization (Photino no les manda token).
+     */
     @Bean
     public FaretBridgeHandler faretBridgeHandler(
-            @Qualifier("faretQualityControlApiClient") FaretApiClient qualityControl, ObjectMapper mapper) {
-        return new FaretBridgeHandler(qualityControl, mapper);
+            @Qualifier("faretQualityControlApiClient") FaretApiClient qualityControl,
+            @Qualifier("faretMejoraContinuaApiClient") FaretApiClient mejoraContinua,
+            @Qualifier("faretCalidadApiClient") FaretApiClient calidad, ObjectMapper mapper) {
+        return new FaretBridgeHandler(qualityControl, mejoraContinua, calidad, mapper);
     }
 
     @Bean
@@ -342,6 +347,13 @@ public class BridgeConfig {
                         "faret.indicadoresCalidad.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::indicadoresCalidad),
                 new ActionPolicy.Regla(
                         "faret.talleresExternos.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::talleresExternosResumen),
+                // Fase 6b-3 — lecturas FARET a MejoraContinua (nc.list) y Calidad (inspecciones/maquinas): SIN Authorization.
+                new ActionPolicy.Regla(
+                        "faret.nc.list", Set.of("FARET"), ROLES_FARET, Map.of(), faret::ncList),
+                new ActionPolicy.Regla(
+                        "faret.inspecciones.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::inspeccionesResumen),
+                new ActionPolicy.Regla(
+                        "faret.maquinas.resumen", Set.of("FARET"), ROLES_FARET, Map.of(), faret::maquinasResumen),
                 // Fase 2h — Control Documental, SOLO LECTURA (payload plano). "alcanceEmpresa" es filtro
                 // de negocio validado en el handler. adjunto.abrir: previsualiza o descarga en el
                 // navegador, sin archivos temporales.

@@ -29,12 +29,20 @@ import tools.jackson.databind.node.ObjectNode;
  *
  * La sesión FARET es obligatoria (ActionPolicy por empresa): faret.data.list, faret.indicadoresCalidad.resumen y
  * faret.talleresExternos.resumen van a QualityControlFaret.Api con el Bearer del usuario de la sesión.
+ *
+ * 6b-3: faret.nc.list va a MejoraContinua (GET api/no-conformidades, respuesta cruda: el arreglo tal cual; errores por
+ * mensaje/error/title/detail como ExtractMcErrorMessage) y faret.inspecciones.resumen / faret.maquinas.resumen a Calidad
+ * (backend Node, respuesta {ok,data}). Photino NUNCA les manda token (no hace SetToken en esos clientes): el gateway
+ * tampoco, aunque haya sesión.
  */
 public class FaretBridgeHandler {
 
     public static final String MENSAJE_FILTRO_INVALIDO = FormulariosBridgeHandler.MENSAJE_FILTRO_INVALIDO;
     public static final String MENSAJE_FILTRO_LARGO = FormulariosBridgeHandler.MENSAJE_FILTRO_LARGO;
     public static final String MENSAJE_PAGINACION = "Parámetro de paginación inválido.";
+    public static final String MENSAJE_PRESENTA_DEFECTOS = "Filtro presentaDefectos inválido.";
+    public static final String MENSAJE_MC_NO_CONFIGURADA = "API de Mejora Continua no configurada. Revise la configuración del servidor.";
+    public static final String MENSAJE_CALIDAD_NO_CONFIGURADA = "API de Calidad no configurada. Revise la configuración del servidor.";
     public static final int MAX_FILTRO = FormulariosBridgeHandler.MAX_FILTRO;
     /** Tope de pageSize de api/importaciones/pnc (ImportacionesService: Math.Min(pageSize, 200)). */
     public static final int MAX_PAGE_SIZE_PNC = 200;
@@ -48,21 +56,39 @@ public class FaretBridgeHandler {
     /** FaretHandler.BuildTalleresExternosFiltros. */
     static final List<String> FILTROS_TALLERES = List.of("nv", "producto", "cliente", "tallerExterno", "proceso", "responsable",
             "prioridad", "estado", "fechaAsignacionDesde", "fechaAsignacionHasta", "fechaCompromisoDesde", "fechaCompromisoHasta");
+    /** FaretHandler.BuildInspeccionesFiltros (Calidad). */
+    static final List<String> FILTROS_INSPECCIONES = List.of("fechaDesde", "fechaHasta", "areaControl", "operador", "maquina",
+            "presentaDefectos", "nvFaret");
     /** Claves de fecha (AAAA-MM-DD) entre todos los filtros anteriores. */
     static final Set<String> FECHAS = Set.of("fechaDesde", "fechaHasta", "fechaAsignacionDesde", "fechaAsignacionHasta",
             "fechaCompromisoDesde", "fechaCompromisoHasta");
+    /** Valores que entiende Calidad para presentaDefectos (el select de la vista manda "true"/"false"; vacío = todos). */
+    static final Set<String> PRESENTA_DEFECTOS = Set.of("true", "false", "1", "0");
 
     private static final String RUTA_PNC = "/api/importaciones/pnc";
     private static final String RUTA_INDICADORES = "/api/importaciones/pnc/indicadores-calidad";
     private static final String RUTA_TALLERES_RESUMEN = "/api/talleres-externos/resumen";
+    private static final String RUTA_NC = "/api/no-conformidades";
+    private static final String RUTA_INSPECCIONES_RESUMEN = "/calidad-faret/resumen";
+    private static final String RUTA_MAQUINAS_RESUMEN = "/calidad-faret/maquinas/resumen";
     private static final Pattern FECHA_ISO = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
     private static final Pattern CONTROL = Pattern.compile("[\\p{Cntrl}]");
 
     private final FaretApiClient qualityControl;
+    private final FaretApiClient mejoraContinua;
+    private final FaretApiClient calidad;
     private final ObjectMapper mapper;
 
-    public FaretBridgeHandler(FaretApiClient qualityControl, ObjectMapper mapper) {
+    /**
+     * @param qualityControl QualityControlFaret.Api (con el Bearer del usuario)
+     * @param mejoraContinua MejoraContinua (sin Authorization)
+     * @param calidad        Calidad, backend Node (sin Authorization)
+     */
+    public FaretBridgeHandler(FaretApiClient qualityControl, FaretApiClient mejoraContinua, FaretApiClient calidad,
+            ObjectMapper mapper) {
         this.qualityControl = qualityControl;
+        this.mejoraContinua = mejoraContinua;
+        this.calidad = calidad;
         this.mapper = mapper;
     }
 
@@ -103,6 +129,38 @@ public class FaretBridgeHandler {
     public BridgeResult talleresExternosResumen(ObjectNode payload, SessionUser usuario) {
         Query filtros = construirQuery(payload, FILTROS_TALLERES);
         return filtros.error() != null ? BridgeResult.error(filtros.error()) : qc(usuario, RUTA_TALLERES_RESUMEN, new StringBuilder(filtros.texto()));
+    }
+
+    /** faret.nc.list → GET api/no-conformidades (MejoraContinua, respuesta cruda: arreglo de NC). */
+    public BridgeResult ncList(ObjectNode payload, SessionUser usuario) {
+        if (!mejoraContinua.configurada()) {
+            return BridgeResult.error(MENSAJE_MC_NO_CONFIGURADA);
+        }
+        return FaretRespuestas.crudoMc(mejoraContinua.get(usuario, RUTA_NC), mapper);
+    }
+
+    /** faret.inspecciones.resumen → GET calidad-faret/resumen?fechaDesde&fechaHasta&areaControl&operador&maquina&presentaDefectos&nvFaret */
+    public BridgeResult inspeccionesResumen(ObjectNode payload, SessionUser usuario) {
+        if (!calidad.configurada()) {
+            return BridgeResult.error(MENSAJE_CALIDAD_NO_CONFIGURADA);
+        }
+        Query filtros = construirQuery(payload, FILTROS_INSPECCIONES);
+        return filtros.error() != null ? BridgeResult.error(filtros.error())
+                : FaretRespuestas.desenvolver(calidad.get(usuario, ruta(RUTA_INSPECCIONES_RESUMEN, filtros.texto())), mapper);
+    }
+
+    /** faret.maquinas.resumen → GET calidad-faret/maquinas/resumen[?maquina=..] */
+    public BridgeResult maquinasResumen(ObjectNode payload, SessionUser usuario) {
+        if (!calidad.configurada()) {
+            return BridgeResult.error(MENSAJE_CALIDAD_NO_CONFIGURADA);
+        }
+        Query filtros = construirQuery(payload, List.of("maquina"));
+        return filtros.error() != null ? BridgeResult.error(filtros.error())
+                : FaretRespuestas.desenvolver(calidad.get(usuario, ruta(RUTA_MAQUINAS_RESUMEN, filtros.texto())), mapper);
+    }
+
+    private static String ruta(String ruta, String query) {
+        return query.isEmpty() ? ruta : ruta + "?" + query;
     }
 
     private BridgeResult qc(SessionUser usuario, String ruta, StringBuilder query) {
@@ -146,6 +204,9 @@ public class FaretBridgeHandler {
                 return "La fecha " + clave + " no es válida (formato AAAA-MM-DD).";
             }
             return null;
+        }
+        if (clave.equals("presentaDefectos")) {
+            return PRESENTA_DEFECTOS.contains(valor) ? null : MENSAJE_PRESENTA_DEFECTOS;
         }
         if (valor.length() > MAX_FILTRO) {
             return MENSAJE_FILTRO_LARGO;

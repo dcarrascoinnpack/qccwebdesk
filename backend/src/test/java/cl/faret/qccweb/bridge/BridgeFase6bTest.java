@@ -319,6 +319,165 @@ class BridgeFase6bTest {
         assertThat(QC.lecturas()).containsExactly("GET " + PNC + "/indicadores-calidad");
     }
 
+    // ----------------------------------------------------------------------------- 6b-3: MejoraContinua y Calidad
+
+    private static final String NC_LIST = "faret.nc.list";
+    private static final String INSPECCIONES = "faret.inspecciones.resumen";
+    private static final String MAQUINAS = "faret.maquinas.resumen";
+
+    @Test
+    void ncListDevuelveElArregloCrudoDeMejoraContinuaSinAuthorization() throws Exception {
+        MC.responder("/api/no-conformidades", 200, "[{\"id\":1,\"codigo\":\"NC-1\",\"estado\":\"ABIERTA\"},{\"id\":2,\"codigo\":\"NC-2\"}]");
+        MockHttpSession sesion = login("ana");
+        JsonNode json = json(accion(sesion, "{\"action\":\"" + NC_LIST + "\",\"_modulo\":\"faret-nc\",\"id\":5,\"data\":{\"x\":1},\"usuarioId\":9}")
+                .andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(true)).andReturn());
+        assertThat(json.get("data").toString()).isEqualTo("[{\"id\":1,\"codigo\":\"NC-1\",\"estado\":\"ABIERTA\"},{\"id\":2,\"codigo\":\"NC-2\"}]");
+        assertThat(MC.peticiones()).containsExactly("GET /api/no-conformidades");
+        // Photino nunca le hace SetToken al cliente de MejoraContinua: el Bearer del usuario NO sale hacia esa API.
+        assertThat(MC.authorizations()).containsExactly((String) null);
+        assertThat(QC.lecturas()).isEmpty();
+        assertThat(CALIDAD.peticiones()).isEmpty();
+        // Lista vacía también es un resultado válido.
+        MC.responder("/api/no-conformidades", 200, "[]");
+        accion(sesion, "{\"action\":\"" + NC_LIST + "\",\"_modulo\":\"faret\"}").andExpect(jsonPath("$.ok").value(true)).andExpect(jsonPath("$.data").isEmpty());
+    }
+
+    @Test
+    void ncListErroresSegunExtractMcErrorMessageYUn401DeMcNoCierraLaSesion() throws Exception {
+        MockHttpSession sesion = login("admin");
+        MC.responder("/api/no-conformidades", 500, "{\"type\":\"about:blank\",\"title\":\"Internal Server Error\",\"status\":500,\"detail\":\"SqlException x\"}");
+        accion(sesion, "{\"action\":\"" + NC_LIST + "\",\"_modulo\":\"faret-nc\"}").andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("Internal Server Error"));
+        MC.responder("/api/no-conformidades", 400, "{\"mensaje\":\"Sin permiso para listar\"}");
+        accion(sesion, "{\"action\":\"" + NC_LIST + "\",\"_modulo\":\"faret-nc\"}").andExpect(jsonPath("$.error").value("Sin permiso para listar"));
+        MC.responder("/api/no-conformidades", 500, null);
+        accion(sesion, "{\"action\":\"" + NC_LIST + "\",\"_modulo\":\"faret-nc\"}").andExpect(jsonPath("$.error").value("HTTP 500: Internal Server Error"));
+        MC.responder("/api/no-conformidades", 200, "esto no es json");
+        accion(sesion, "{\"action\":\"" + NC_LIST + "\",\"_modulo\":\"faret-nc\"}").andExpect(jsonPath("$.error").value("Error al comunicarse con la API de Mejora Continua"));
+        // 401 de MejoraContinua: sin token de por medio, es un error de esa API; la sesión del usuario sigue viva.
+        MC.responder("/api/no-conformidades", 401, "{\"title\":\"Unauthorized\"}");
+        accion(sesion, "{\"action\":\"" + NC_LIST + "\",\"_modulo\":\"faret-nc\"}").andExpect(status().isOk()).andExpect(jsonPath("$.ok").value(false))
+                .andExpect(jsonPath("$.error").value("Unauthorized"));
+        assertThat(sesion.isInvalid()).isFalse();
+        assertThat(MC.authorizations()).containsOnlyNulls();
+    }
+
+    @Test
+    void inspeccionesResumenFiltrosEnElOrdenDePhotinoYSinAuthorization() throws Exception {
+        CALIDAD.responder("/calidad-faret/resumen", 200, "{\"ok\":true,\"data\":{\"inspeccionesHoy\":4,\"conDefectos\":1}}");
+        MockHttpSession sesion = login("ana");
+        JsonNode json = json(accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"_modulo\":\"faret-inspecciones\"}")
+                .andExpect(status().isOk()).andReturn());
+        assertThat(json.get("ok").asBoolean()).isTrue();
+        assertThat(json.get("data").toString()).isEqualTo("{\"inspeccionesHoy\":4,\"conDefectos\":1}");
+        accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"nvFaret\":\" NV 55 \",\"presentaDefectos\":\"true\",\"maquina\":\"Línea 2\","
+                + "\"operador\":\"Juan\",\"areaControl\":\"Corrugado\",\"fechaHasta\":\"2026-10-09\",\"fechaDesde\":\"2026-10-01\","
+                + "\"_modulo\":\"faret-inspecciones\"}").andExpect(jsonPath("$.ok").value(true));
+        accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"presentaDefectos\":\"\",\"nvFaret\":\"   \",\"_modulo\":\"faret\"}").andExpect(jsonPath("$.ok").value(true));
+        assertThat(CALIDAD.peticiones()).containsExactly(
+                "GET /calidad-faret/resumen",
+                "GET /calidad-faret/resumen?fechaDesde=2026-10-01&fechaHasta=2026-10-09&areaControl=Corrugado&operador=Juan&maquina=L%C3%ADnea%202"
+                        + "&presentaDefectos=true&nvFaret=NV%2055",
+                "GET /calidad-faret/resumen");
+        assertThat(CALIDAD.authorizations()).containsOnlyNulls();
+        assertThat(QC.lecturas()).isEmpty();
+        assertThat(MC.peticiones()).isEmpty();
+    }
+
+    @Test
+    void inspeccionesPresentaDefectosSoloTrueFalseUnoCeroYValidacionesComunes() throws Exception {
+        CALIDAD.responder("/calidad-faret/resumen", 200, "{\"ok\":true,\"data\":{}}");
+        MockHttpSession sesion = login("admin");
+        for (String ok : List.of("true", "false", "1", "0")) {
+            accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"presentaDefectos\":\"" + ok + "\",\"_modulo\":\"faret-inspecciones\"}")
+                    .andExpect(jsonPath("$.ok").value(true));
+        }
+        for (String malo : List.of("\"TRUE\"", "\"si\"", "\"2\"", "\"true; drop\"", "\"true&x=1\"", "\"yes\"")) {
+            accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"presentaDefectos\":" + malo + ",\"_modulo\":\"faret-inspecciones\"}")
+                    .andExpect(jsonPath("$.ok").value(false)).andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_PRESENTA_DEFECTOS));
+        }
+        // true/false JSON (booleano) y 1/0 numérico: bool es regla 2e; el número se trata como texto, igual que GetString.
+        accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"presentaDefectos\":true,\"_modulo\":\"faret-inspecciones\"}")
+                .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+        accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"presentaDefectos\":1,\"_modulo\":\"faret-inspecciones\"}").andExpect(jsonPath("$.ok").value(true));
+        for (String clave : List.of("areaControl", "operador", "maquina", "nvFaret", "fechaDesde", "fechaHasta")) {
+            accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"" + clave + "\":{\"a\":1},\"_modulo\":\"faret-inspecciones\"}")
+                    .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+            accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"" + clave + "\":[1],\"_modulo\":\"faret-inspecciones\"}")
+                    .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+        }
+        accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"fechaDesde\":\"2026-02-31\",\"_modulo\":\"faret-inspecciones\"}")
+                .andExpect(jsonPath("$.error").value("La fecha fechaDesde no es válida (formato AAAA-MM-DD)."));
+        accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"operador\":\"" + "x".repeat(201) + "\",\"_modulo\":\"faret-inspecciones\"}")
+                .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_LARGO));
+        accion(sesion, "{\"action\":\"" + INSPECCIONES + "\",\"operador\":\"a\\nb\",\"_modulo\":\"faret-inspecciones\"}")
+                .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+        // Solo llegaron a Calidad los 4 válidos de presentaDefectos + el numérico 1.
+        assertThat(CALIDAD.peticiones()).hasSize(5);
+    }
+
+    @Test
+    void maquinasResumenConYSinMaquinaYErroresDeCalidad() throws Exception {
+        CALIDAD.responder("/calidad-faret/maquinas/resumen", 200, "{\"ok\":true,\"data\":{\"totalMaquinas\":2,\"maquinas\":[{\"maquina\":\"L1\",\"totalRegistros\":7}]}}");
+        MockHttpSession sesion = login("clara");
+        JsonNode json = json(accion(sesion, "{\"action\":\"" + MAQUINAS + "\",\"_modulo\":\"faret\"}").andExpect(status().isOk()).andReturn());
+        assertThat(json.get("data").at("/maquinas/0/totalRegistros").asInt()).isEqualTo(7);
+        accion(login("ana"), "{\"action\":\"" + MAQUINAS + "\",\"maquina\":\"  Línea 1/B  \",\"_modulo\":\"faret-maquinas\"}").andExpect(jsonPath("$.ok").value(true));
+        // Solo "maquina" cuenta: lo demás del payload no llega a la URL.
+        accion(login("ana"), "{\"action\":\"" + MAQUINAS + "\",\"cliente\":\"X\",\"fechaDesde\":\"2026-10-01\",\"_modulo\":\"faret-maquinas\"}")
+                .andExpect(jsonPath("$.ok").value(true));
+        accion(login("ana"), "{\"action\":\"" + MAQUINAS + "\",\"maquina\":true,\"_modulo\":\"faret-maquinas\"}")
+                .andExpect(jsonPath("$.error").value(FaretBridgeHandler.MENSAJE_FILTRO_INVALIDO));
+        assertThat(CALIDAD.peticiones()).containsExactly("GET /calidad-faret/maquinas/resumen",
+                "GET /calidad-faret/maquinas/resumen?maquina=L%C3%ADnea%201%2FB", "GET /calidad-faret/maquinas/resumen");
+
+        CALIDAD.responder("/calidad-faret/maquinas/resumen", 200, "{\"ok\":false,\"message\":\"Sin base de datos\"}");
+        accion(sesion, "{\"action\":\"" + MAQUINAS + "\",\"_modulo\":\"faret\"}").andExpect(jsonPath("$.error").value("Sin base de datos"));
+        CALIDAD.responder("/calidad-faret/maquinas/resumen", 500, "{\"title\":\"x\"}");
+        accion(sesion, "{\"action\":\"" + MAQUINAS + "\",\"_modulo\":\"faret\"}").andExpect(jsonPath("$.error").value("Error al comunicarse con la API Faret"));
+        // 401 de Calidad: error normal, sesión intacta (la API no recibe ni valida ningún token).
+        CALIDAD.responder("/calidad-faret/maquinas/resumen", 401, "{\"ok\":false,\"message\":\"No autorizado\"}");
+        accion(sesion, "{\"action\":\"" + MAQUINAS + "\",\"_modulo\":\"faret\"}").andExpect(status().isOk()).andExpect(jsonPath("$.error").value("No autorizado"));
+        assertThat(sesion.isInvalid()).isFalse();
+        assertThat(CALIDAD.authorizations()).containsOnlyNulls();
+    }
+
+    @Test
+    void siMejoraContinuaOCalidadNoEstanConfiguradasResponderComoPhotino() {
+        java.time.Duration t = java.time.Duration.ofSeconds(1);
+        FaretBridgeHandler sinUrls = new FaretBridgeHandler(new cl.faret.qccweb.upstream.FaretApiClient(QC.baseUrl(), true, t, t),
+                new cl.faret.qccweb.upstream.FaretApiClient("", false, t, t), new cl.faret.qccweb.upstream.FaretApiClient(null, false, t, t), mapper);
+        SessionUser u = usuario("FARET", "ADMIN");
+        assertThat(sinUrls.ncList(mapper.createObjectNode(), u).error()).isEqualTo(FaretBridgeHandler.MENSAJE_MC_NO_CONFIGURADA);
+        assertThat(sinUrls.inspeccionesResumen(mapper.createObjectNode(), u).error()).isEqualTo(FaretBridgeHandler.MENSAJE_CALIDAD_NO_CONFIGURADA);
+        assertThat(sinUrls.maquinasResumen(mapper.createObjectNode(), u).error()).isEqualTo(FaretBridgeHandler.MENSAJE_CALIDAD_NO_CONFIGURADA);
+        assertThat(FaretBridgeHandler.MENSAJE_MC_NO_CONFIGURADA).startsWith("API de Mejora Continua no configurada");
+    }
+
+    @Test
+    void rolesEmpresaYModuloDeLasTresLecturasDeMcYCalidad() throws Exception {
+        for (String a : List.of(NC_LIST, INSPECCIONES, MAQUINAS)) {
+            for (String rol : List.of("ADMIN", "ADMIN_TI", "CALIDAD", "INSPECTOR", "CONSULTA")) {
+                assertThat(policy.evaluar(a, usuario("FARET", rol))).as(a + " " + rol).isInstanceOf(ActionPolicy.Decision.Permitida.class);
+            }
+            assertThat(policy.evaluar(a, usuario("FARET", "operador"))).isEqualTo(new ActionPolicy.Decision.Denegada("ROL_NO_PERMITIDO"));
+            assertThat(policy.evaluar(a, usuario("INNPACK", "admin"))).isEqualTo(new ActionPolicy.Decision.Denegada("EMPRESA_NO_PERMITIDA"));
+            assertThat(PermisosModulo.esLectura(a)).isTrue();
+        }
+        MockHttpSession innpack = loginInnpack("operador1");
+        for (String a : List.of(NC_LIST, INSPECCIONES, MAQUINAS)) {
+            accion(innpack, "{\"action\":\"" + a + "\",\"_modulo\":\"faret\"}").andExpect(status().isForbidden())
+                    .andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
+        }
+        // CONSULTA no tiene faret-inspecciones: se rechaza antes de llamar a Calidad.
+        accion(login("clara"), "{\"action\":\"" + INSPECCIONES + "\",\"_modulo\":\"faret-inspecciones\"}").andExpect(status().isForbidden());
+        // Y sin sesión, nada.
+        mockMvc.perform(post("/api/v1/bridge").with(csrf()).contentType(MediaType.APPLICATION_JSON)
+                .content("{\"action\":\"" + NC_LIST + "\",\"_modulo\":\"faret\"}")).andExpect(status().isUnauthorized());
+        assertThat(MC.peticiones()).isEmpty();
+        assertThat(CALIDAD.peticiones()).isEmpty();
+    }
+
     // ----------------------------------------------------------------------------- helpers
 
     private static SessionUser usuario(String empresa, String rol) {
