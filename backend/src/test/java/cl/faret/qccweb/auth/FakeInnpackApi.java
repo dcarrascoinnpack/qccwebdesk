@@ -47,6 +47,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/fps/liberaciones/inspectores", this::fpsInspectores);
         server.createContext("/fps/materiales-por-proceso", this::fpsMateriales);
         server.createContext("/sap/api/recepcion/bobinas", this::sapBobinas);
+        server.createContext("/sap/api/despachos", this::sapDespachos);
+        server.createContext("/api/despachos-diarios", this::despachosDiarios);
         server.createContext("/api/home/dashboard", this::dashboard);
         server.createContext("/api/home/frecuencias", this::frecuenciasActualizar);
         server.createContext("/api/maquinas-seguimiento/resumen", this::maquinasResumen);
@@ -173,6 +175,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         fpsConsultas.clear();
         modoFps = "NORMAL";
         sapConsultas.clear();
+        despachosConsultas.clear();
         modoSap = "NORMAL";
         lotesCreados.clear();
         siguienteLote.set(1000);
@@ -275,6 +278,64 @@ public final class FakeInnpackApi implements AutoCloseable {
                 + "\"cantidadRecibida\":1250.5,\"anchoDeclarado\":1600,\"gramajeDeclarado\":125,\"empresaInterna\":\"no-debe-llegar\"},"
                 + "{\"docEntry\":502,\"lineNum\":1,\"fechaRecepcion\":\"20260927\",\"proveedor\":\"Papeles Sur\",\"guia\":\"G-78\","
                 + "\"itemCode\":\"ABC-1\",\"descripcion\":\"Test\",\"cantidadRecibida\":10,\"anchoDeclarado\":null,\"gramajeDeclarado\":null}]}");
+    }
+
+    // ------------------------------------------------------------------ Photino 1.8.23: despachos diarios
+    private final java.util.List<String> despachosConsultas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "api/despachos-diarios?<query cruda>" recibidas por el QualityControlInnpack.Api simulado. */
+    public java.util.List<String> despachosConsultas() {
+        return java.util.List.copyOf(despachosConsultas);
+    }
+
+    private void despachosDiarios(HttpExchange ex) throws IOException {
+        String query = ex.getRequestURI().getRawQuery() == null ? "" : ex.getRequestURI().getRawQuery();
+        despachosConsultas.add(ex.getRequestURI().getRawPath() + "?" + query);
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"filas\":[{\"destino\":\"Cliente A\",\"cantidad\":5}]},\"errors\":null}");
+    }
+
+    /**
+     * apisapfaret GET api/despachos/{resumen|detalle|categorias}: X-Api-Key (401), desde/hasta obligatorios (400), empresa
+     * INNPACK|FARET (400), cliente "MAL" invalido (400). Respuesta {ok, empresas, errors} con un campo extra en la raiz.
+     */
+    private void sapDespachos(HttpExchange ex) throws IOException {
+        if (!SAP_API_KEY.equals(ex.getRequestHeaders().getFirst("X-Api-Key"))) {
+            responder(ex, 401, "{\"ok\":false,\"error\":\"API key inválida\"}");
+            return;
+        }
+        String path = ex.getRequestURI().getRawPath();
+        String query = ex.getRequestURI().getRawQuery() == null ? "" : ex.getRequestURI().getRawQuery();
+        sapConsultas.add(path.substring(4) + "?" + query);
+        Map<String, String> q = new java.util.HashMap<>();
+        for (String par : query.split("&")) {
+            int i = par.indexOf('=');
+            if (i > 0) {
+                q.putIfAbsent(par.substring(0, i), java.net.URLDecoder.decode(par.substring(i + 1), StandardCharsets.UTF_8));
+            }
+        }
+        if (modoSap.equals("ERROR_502")) {
+            responder(ex, 502, "{\"ok\":false,\"error\":\"Service Layer: login failed for B1SESSION xyz\"}");
+            return;
+        }
+        if (modoSap.equals("JSON_INVALIDO")) {
+            responder(ex, 200, "<html>proxy</html>");
+            return;
+        }
+        if (q.getOrDefault("desde", "").isBlank() || q.getOrDefault("hasta", "").isBlank()) {
+            responder(ex, 400, "{\"ok\":false,\"error\":\"desde y hasta son obligatorios (yyyyMMdd)\"}");
+            return;
+        }
+        String empresa = q.getOrDefault("empresa", "");
+        if (!empresa.isEmpty() && !empresa.equals("INNPACK") && !empresa.equals("FARET")) {
+            responder(ex, 400, "{\"ok\":false,\"error\":\"empresa debe ser INNPACK o FARET\"}");
+            return;
+        }
+        if (q.getOrDefault("cliente", "").equals("MAL")) {
+            responder(ex, 400, "{\"ok\":false,\"error\":\"cliente invalido\"}");
+            return;
+        }
+        responder(ex, 200, "{\"ok\":true,\"interno\":\"no-debe-llegar\",\"empresas\":[{\"empresa\":\"INNPACK\",\"pallets\":3,"
+                + "\"cliente\":\"A & <b>B</b>\"}],\"errors\":[\"FARET: sin datos\",7]}");
     }
 
     // ------------------------------------------------------------------ Fase 3v: fps-api GET liberaciones/inspectores

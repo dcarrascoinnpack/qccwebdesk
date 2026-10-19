@@ -124,6 +124,7 @@ public final class PermisosModulo {
             "certificadosLiberacion.buscar",
             "certificadosLiberacion.pdf.descargar",
             "certificadosLiberacion.calidadPdf.descargar",
+            "despachosDiarios.sap.categorias",
             "controlDocumental.adjunto.abrir",
             "dashboard.obtenerFiltros",
             "dashboard.obtenerResumen",

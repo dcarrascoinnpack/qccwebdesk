@@ -11,6 +11,7 @@ import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesGestionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesRegistroBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretTalleresExternosBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.DespachosDiariosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FormulariosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.LiberacionCalidadBridgeHandler;
@@ -252,6 +253,12 @@ public class BridgeConfig {
     }
 
     @Bean
+    public DespachosDiariosBridgeHandler despachosDiariosBridgeHandler(
+            InnpackApiClient api, SapApiClient sap, ObjectMapper mapper, Clock clock) {
+        return new DespachosDiariosBridgeHandler(api, sap, mapper, clock);
+    }
+
+    @Bean
     public ControlDocumentalBridgeHandler controlDocumentalBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
         return new ControlDocumentalBridgeHandler(api, mapper);
     }
@@ -301,7 +308,7 @@ public class BridgeConfig {
             FaretBridgeHandler faret, FaretTalleresExternosBridgeHandler faretTalleres,
             FaretNoConformidadesBridgeHandler faretNc, FaretNoConformidadesGestionBridgeHandler faretNcGestion,
             FaretNoConformidadesRegistroBridgeHandler faretNcRegistro, FaretBorradosBridgeHandler faretBorrados,
-            FaretImportacionBridgeHandler faretImportacion) {
+            FaretImportacionBridgeHandler faretImportacion, DespachosDiariosBridgeHandler despachos) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -439,6 +446,16 @@ public class BridgeConfig {
                         "formularios.detalle", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), formularios::detalle),
                 new ActionPolicy.Regla(
                         "formularios.abrirPdf", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), formularios::abrirPdf),
+                // Photino 1.8.23 — Despachos Diarios (solo lectura). Solo INNPACK mientras no se decida la cuenta de
+                // servicio INNPACK para sesiones FARET (como Formularios). "empresa" es filtro de negocio, no identidad.
+                new ActionPolicy.Regla(
+                        "despachosDiarios.resumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), despachos::resumen),
+                new ActionPolicy.Regla(
+                        "despachosDiarios.sap.resumen", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), despachos::sapResumen),
+                new ActionPolicy.Regla(
+                        "despachosDiarios.sap.detalle", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), despachos::sapDetalle),
+                new ActionPolicy.Regla(
+                        "despachosDiarios.sap.categorias", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), despachos::sapCategorias),
                 // Fase 6b-2 — lecturas del inicio FARET a QualityControlFaret.Api (payload PLANO, como Photino). Sesión FARET
                 // obligatoria; sin empresa/identidad en el payload (los handlers solo leen su lista cerrada de filtros).
                 new ActionPolicy.Regla(
