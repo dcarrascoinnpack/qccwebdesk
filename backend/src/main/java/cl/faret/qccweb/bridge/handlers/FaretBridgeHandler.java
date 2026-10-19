@@ -605,6 +605,238 @@ public class FaretBridgeHandler {
         return BridgeResult.ok(PermisosModulo.armarMatriz("FARET", rol, upstream.data() instanceof JsonNode n ? n : null, mapper));
     }
 
+    // ----------------------------------------------------------------- Gestión de Usuarios FARET: escrituras (Photino 1.8.23)
+
+    static final String MENSAJE_FALTA_NOMBRE = "Falta el nombre";
+    static final String MENSAJE_FALTA_USERNAME = "Falta el RUT/usuario";
+    static final String MENSAJE_FALTA_ROL = "Falta el rol";
+    static final String MENSAJE_FALTA_CLAVE = "Falta la clave temporal";
+    static final String MENSAJE_ROL_INVALIDO = "Rol inválido";
+    static final String MENSAJE_SIN_PERMISOS = "No se recibieron permisos";
+    static final String MENSAJE_PERMISOS_INVALIDOS = "Los permisos recibidos no son válidos";
+    static final String MENSAJE_SI_MISMO = "No puedes aplicar esta acción sobre tu propio usuario";
+    private static final int MAX_USUARIO_NOMBRE = 150;
+    private static final int MAX_USUARIO_USERNAME = 50;
+    private static final int MAX_USUARIO_CLAVE = 256;
+    private static final Set<String> NIVELES_PERMISO = Set.of("SIN_ACCESO", "VER", "EDITAR");
+    private static final Set<String> CAMPOS_USUARIO_CREATE = Set.of("action", "nombre", "username", "rol", "password");
+    private static final Set<String> CAMPOS_USUARIO_ID = Set.of("action", "id");
+    private static final Set<String> CAMPOS_USUARIO_ROL = Set.of("action", "id", "rol");
+    private static final Set<String> CAMPOS_USUARIO_CLAVE = Set.of("action", "id", "password");
+    private static final Set<String> CAMPOS_USUARIO_PERMISOS = Set.of("action", "id", "permisos");
+
+    /** faret.usuarios.create -> POST api/usuarios {nombre, username, password, rol, roles:[rol]}. La clave nunca se registra. */
+    public BridgeResult usuariosCreate(ObjectNode payload, SessionUser usuario) {
+        String campo = NoConformidadesBridgeHandler.campoNoPermitido(payload, CAMPOS_USUARIO_CREATE);
+        if (campo != null) {
+            return BridgeResult.error(campo);
+        }
+        String nombre = textoUsuario(payload.get("nombre"));
+        String username = textoUsuario(payload.get("username"));
+        String rol = textoUsuario(payload.get("rol"));
+        String password = payload.get("password") != null && payload.get("password").isString() ? payload.get("password").asString() : "";
+        if (nombre.isEmpty()) {
+            return BridgeResult.error(MENSAJE_FALTA_NOMBRE);
+        }
+        if (username.isEmpty()) {
+            return BridgeResult.error(MENSAJE_FALTA_USERNAME);
+        }
+        if (rol.isEmpty()) {
+            return BridgeResult.error(MENSAJE_FALTA_ROL);
+        }
+        if (password.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_CLAVE);
+        }
+        if (nombre.length() > MAX_USUARIO_NOMBRE || username.length() > MAX_USUARIO_USERNAME || password.length() > MAX_USUARIO_CLAVE
+                || CONTROL.matcher(nombre).find() || CONTROL.matcher(username).find()) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        rol = rol.toUpperCase(Locale.ROOT);
+        if (!ROLES_FARET.contains(rol)) {
+            return BridgeResult.error(MENSAJE_ROL_INVALIDO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("nombre", nombre);
+        cuerpo.put("username", username);
+        cuerpo.put("password", password);
+        cuerpo.put("rol", rol);
+        cuerpo.putArray("roles").add(rol);
+        return confirmarUsuario(qualityControl.postJson(usuario, RUTA_USUARIOS, cuerpo), "Usuario creado correctamente");
+    }
+
+    /** faret.usuarios.cambiarRol -> PUT api/usuarios/{id}/roles {roles:[rol]}. Nadie cambia su propio rol (solo web). */
+    public BridgeResult usuariosCambiarRol(ObjectNode payload, SessionUser usuario) {
+        String campo = NoConformidadesBridgeHandler.campoNoPermitido(payload, CAMPOS_USUARIO_ROL);
+        if (campo != null) {
+            return BridgeResult.error(campo);
+        }
+        Integer id = enteroPositivo(payload.get("id"));
+        if (id == null) {
+            return BridgeResult.error(MENSAJE_FALTA_ID_USUARIO);
+        }
+        String rol = textoUsuario(payload.get("rol"));
+        if (rol.isEmpty()) {
+            return BridgeResult.error(MENSAJE_FALTA_ROL);
+        }
+        rol = rol.toUpperCase(Locale.ROOT);
+        if (!ROLES_FARET.contains(rol)) {
+            return BridgeResult.error(MENSAJE_ROL_INVALIDO);
+        }
+        if (id == usuario.userId()) {
+            return BridgeResult.error(MENSAJE_SI_MISMO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.putArray("roles").add(rol);
+        return confirmarUsuario(qualityControl.putJson(usuario, RUTA_USUARIOS + "/" + id + "/roles", cuerpo), "Rol actualizado correctamente");
+    }
+
+    /** faret.usuarios.resetPassword -> PUT api/usuarios/{id}/password {password} (clave temporal escrita por el ADMIN_TI). */
+    public BridgeResult usuariosResetPassword(ObjectNode payload, SessionUser usuario) {
+        String campo = NoConformidadesBridgeHandler.campoNoPermitido(payload, CAMPOS_USUARIO_CLAVE);
+        if (campo != null) {
+            return BridgeResult.error(campo);
+        }
+        Integer id = enteroPositivo(payload.get("id"));
+        if (id == null) {
+            return BridgeResult.error(MENSAJE_FALTA_ID_USUARIO);
+        }
+        String password = payload.get("password") != null && payload.get("password").isString() ? payload.get("password").asString() : "";
+        if (password.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_CLAVE);
+        }
+        if (password.length() > MAX_USUARIO_CLAVE) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.put("password", password);
+        return confirmarUsuario(qualityControl.putJson(usuario, RUTA_USUARIOS + "/" + id + "/password", cuerpo),
+                "Contraseña actualizada correctamente");
+    }
+
+    /** faret.usuarios.activar -> PUT api/usuarios/{id}/activar {}. */
+    public BridgeResult usuariosActivar(ObjectNode payload, SessionUser usuario) {
+        Integer id = idUsuario(payload, CAMPOS_USUARIO_ID);
+        if (id == null) {
+            return errorIdUsuario(payload, CAMPOS_USUARIO_ID);
+        }
+        return confirmarUsuario(qualityControl.putJson(usuario, RUTA_USUARIOS + "/" + id + "/activar", mapper.createObjectNode()),
+                "Usuario activado correctamente");
+    }
+
+    /** faret.usuarios.desactivar -> DELETE api/usuarios/{id}. Nadie desactiva su propia cuenta (solo web). */
+    public BridgeResult usuariosDesactivar(ObjectNode payload, SessionUser usuario) {
+        Integer id = idUsuario(payload, CAMPOS_USUARIO_ID);
+        if (id == null) {
+            return errorIdUsuario(payload, CAMPOS_USUARIO_ID);
+        }
+        if (id == usuario.userId()) {
+            return BridgeResult.error(MENSAJE_SI_MISMO);
+        }
+        return confirmarUsuario(qualityControl.delete(usuario, RUTA_USUARIOS + "/" + id), "Usuario desactivado correctamente");
+    }
+
+    /** faret.usuarios.eliminarDefinitivo -> DELETE api/usuarios/{id}/definitivo (la API solo lo permite sin historial). */
+    public BridgeResult usuariosEliminarDefinitivo(ObjectNode payload, SessionUser usuario) {
+        Integer id = idUsuario(payload, CAMPOS_USUARIO_ID);
+        if (id == null) {
+            return errorIdUsuario(payload, CAMPOS_USUARIO_ID);
+        }
+        if (id == usuario.userId()) {
+            return BridgeResult.error(MENSAJE_SI_MISMO);
+        }
+        return confirmarUsuario(qualityControl.delete(usuario, RUTA_USUARIOS + "/" + id + "/definitivo"), "Usuario eliminado definitivamente");
+    }
+
+    /**
+     * faret.usuarios.permisos.guardar -> PUT api/usuarios/{id}/permisos {permisos:[{modulo, nivel}]}. Cada módulo debe ser uno de los
+     * módulos FARET personalizables (nunca faret-usuarios), sin repetir, y el nivel null o SIN_ACCESO/VER/EDITAR.
+     */
+    public BridgeResult usuariosPermisosGuardar(ObjectNode payload, SessionUser usuario) {
+        String campo = NoConformidadesBridgeHandler.campoNoPermitido(payload, CAMPOS_USUARIO_PERMISOS);
+        if (campo != null) {
+            return BridgeResult.error(campo);
+        }
+        Integer id = enteroPositivo(payload.get("id"));
+        if (id == null) {
+            return BridgeResult.error(MENSAJE_FALTA_ID_USUARIO);
+        }
+        JsonNode permisos = payload.get("permisos");
+        if (permisos == null || !permisos.isArray()) {
+            return BridgeResult.error(MENSAJE_SIN_PERMISOS);
+        }
+        Set<String> validos = PermisosModulo.modulosPersonalizables("FARET");
+        Set<String> vistos = new java.util.HashSet<>();
+        ArrayNode lista = mapper.createArrayNode();
+        for (JsonNode p : permisos) {
+            JsonNode modulo = p.isObject() ? p.get("modulo") : null;
+            JsonNode nivel = p.isObject() ? p.get("nivel") : null;
+            boolean nivelOk = nivel == null || nivel.isNull() || (nivel.isString() && NIVELES_PERMISO.contains(nivel.asString()));
+            if (modulo == null || !modulo.isString() || !validos.contains(modulo.asString()) || !nivelOk || !vistos.add(modulo.asString())) {
+                return BridgeResult.error(MENSAJE_PERMISOS_INVALIDOS);
+            }
+            ObjectNode fila = lista.addObject();
+            fila.put("modulo", modulo.asString());
+            if (nivel == null || nivel.isNull()) {
+                fila.putNull("nivel");
+            } else {
+                fila.put("nivel", nivel.asString());
+            }
+        }
+        ObjectNode cuerpo = mapper.createObjectNode();
+        cuerpo.set("permisos", lista);
+        return confirmarUsuario(qualityControl.putJson(usuario, RUTA_USUARIOS + "/" + id + "/permisos", cuerpo), "Permisos guardados correctamente");
+    }
+
+    /** faret.usuarios.permisos.restablecer -> DELETE api/usuarios/{id}/permisos (vuelve al comportamiento por rol). */
+    public BridgeResult usuariosPermisosRestablecer(ObjectNode payload, SessionUser usuario) {
+        Integer id = idUsuario(payload, CAMPOS_USUARIO_ID);
+        if (id == null) {
+            return errorIdUsuario(payload, CAMPOS_USUARIO_ID);
+        }
+        return confirmarUsuario(qualityControl.delete(usuario, RUTA_USUARIOS + "/" + id + "/permisos"),
+                "Permisos restablecidos al comportamiento por rol");
+    }
+
+    /** Recurso auditado de las escrituras de usuarios FARET: "faret:usuarios:<id>:<accion>" (nunca claves ni nombres). */
+    public static String recursoUsuario(ObjectNode payload, String accion) {
+        Integer id = enteroPositivo(payload.get("id"));
+        return "faret:usuarios:" + (id == null ? "?" : id.toString()) + ":" + accion;
+    }
+
+    /** Recurso auditado del alta: "faret:usuarios:crear:<username sin controles>". */
+    public static String recursoUsuarioCrear(ObjectNode payload, Object dataRespuesta) {
+        JsonNode username = payload.get("username");
+        String u = username != null && username.isString() ? CONTROL.matcher(username.asString().trim()).replaceAll("") : "";
+        return "faret:usuarios:crear:" + (u.isEmpty() ? "?" : u);
+    }
+
+    /** id de las acciones que solo traen {id}: lista cerrada de claves y entero positivo; null si algo falla. */
+    private Integer idUsuario(ObjectNode payload, Set<String> permitidas) {
+        return NoConformidadesBridgeHandler.campoNoPermitido(payload, permitidas) != null ? null : enteroPositivo(payload.get("id"));
+    }
+
+    /** Mensaje de error cuando {@link #idUsuario} devolvió null: campo no permitido o id faltante. */
+    private BridgeResult errorIdUsuario(ObjectNode payload, Set<String> permitidas) {
+        String campo = NoConformidadesBridgeHandler.campoNoPermitido(payload, permitidas);
+        return BridgeResult.error(campo != null ? campo : MENSAJE_FALTA_ID_USUARIO);
+    }
+
+    /** GetString de Photino con trim: texto, o "" si falta o no es texto. */
+    private static String textoUsuario(JsonNode nodo) {
+        return nodo != null && nodo.isString() ? nodo.asString().trim() : "";
+    }
+
+    /** Éxito de la API (ApiResponse con data) -> {message}; error -> su mensaje. Photino devolvía la data, que el frontend no usa. */
+    private BridgeResult confirmarUsuario(InnpackApiClient.Respuesta respuesta, String mensaje) {
+        BridgeResult r = FaretRespuestas.desenvolver(respuesta, mapper);
+        if (!r.ok()) {
+            return r;
+        }
+        ObjectNode salida = mapper.createObjectNode();
+        salida.put("message", mensaje);
+        return BridgeResult.ok(salida);
+    }
+
     private static String escapar(String texto) {
         return MARCADO_ATRIBUTO.matcher(texto).find() ? HtmlUtils.htmlEscape(texto, "UTF-8") : texto;
     }

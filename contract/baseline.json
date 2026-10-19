@@ -1842,6 +1842,70 @@
       "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
       "photinoVersion": "1.8.23",
       "aprobado": "2026-10-19T16:41:43Z"
+    },
+    "faret.usuarios.create": {
+      "huella": "11d75f0cef5a50914cf0f5d70334bdfbf35e708041199533c6643dd586739d8f",
+      "huellaFrontend": "ff0807a9a8859389fe91dc18cda1e612f62d9453eae615ad674e08999eadc25d",
+      "handler": "FaretHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:52:51Z"
+    },
+    "faret.usuarios.cambiarRol": {
+      "huella": "e57059980eb6bb784d50e3bbb16eaf14fef0f073d8b23d3df746b92386e05dd3",
+      "huellaFrontend": "8300f06a2e4e54095ef383accac555dfeff2d55a96ab3bc667b44a382d709cf1",
+      "handler": "FaretHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:52:51Z"
+    },
+    "faret.usuarios.resetPassword": {
+      "huella": "a1800c274950fdd6ad0f12ded6e4f479c3b050d7e34bd4560dec9f3e8091e012",
+      "huellaFrontend": "abd8dcada8243da9786df36f10b17923aa7e7f3172e0e10a529c3f5db7267442",
+      "handler": "FaretHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:52:51Z"
+    },
+    "faret.usuarios.activar": {
+      "huella": "52289a3186d864cd970aa4f59e5e386edb80c4ceeeb390b3fd506ecc09fe6907",
+      "huellaFrontend": "e9876b396dcd388d0fdd8da689714b365b9b552655bcd7b26d27c649324ad061",
+      "handler": "FaretHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:52:51Z"
+    },
+    "faret.usuarios.desactivar": {
+      "huella": "b5d92c0117b03cdd32ea4d35a1f4c1f8fc69bc7b1007644e184637009b131825",
+      "huellaFrontend": "e9876b396dcd388d0fdd8da689714b365b9b552655bcd7b26d27c649324ad061",
+      "handler": "FaretHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:52:51Z"
+    },
+    "faret.usuarios.eliminarDefinitivo": {
+      "huella": "f24fe5c029bfe231a63d519e0ead1bd13936dc34c054f205723441be79f66ef0",
+      "huellaFrontend": "9d24936f17a33878c13827c490711b9142dc62eca84a53d3863c026b8d6162f2",
+      "handler": "FaretHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:52:51Z"
+    },
+    "faret.usuarios.permisos.guardar": {
+      "huella": "469ce787ccd1b672354c629b8e41e482ccd06f74a46f06ecb66478457b11bcbe",
+      "huellaFrontend": "7cd6a536a6f1a6cc169d480d5a059657cb82ac3c462ad076f589721f35432291",
+      "handler": "FaretHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:52:51Z"
+    },
+    "faret.usuarios.permisos.restablecer": {
+      "huella": "b55d4a93e7f52f7e3f90357a912a4f0d308ecfa66bffa4d3c78d1275cd08c308",
+      "huellaFrontend": "de8fc80c2603839d384b77dd74303ff3f5e2a588e6b2b3b38e7a68a87a999754",
+      "handler": "FaretHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:52:51Z"
     }
   }
 }

@@ -49,7 +49,7 @@ class BridgeFase2kTest {
 
     private static final String LIST = "usuarios.list";
     private static final String CUERPO = "{\"action\":\"" + LIST + "\",\"data\":{}}";
-    private static final List<String> ESCRITURAS = List.of("faret.usuarios.create", "usuarios.delete", "faret.usuarios.resetPassword");
+    private static final List<String> ESCRITURAS = List.of("usuarios.toggleActivo", "usuarios.delete", "usuarios.update");
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();
     private static final String PASS = "ClaveUsuarios#2026";

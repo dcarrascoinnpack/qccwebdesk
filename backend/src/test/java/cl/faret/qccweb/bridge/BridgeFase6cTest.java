@@ -847,9 +847,8 @@ class BridgeFase6cTest {
         accion(tecnico, "{\"action\":\"faret.usuarios.list\"}").andExpect(status().isForbidden());
         accion(tecnico, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"inventado\"}").andExpect(status().isForbidden());
         assertThat(QC.lecturas()).isEmpty();
-        // Escrituras de usuarios siguen denegadas incluso para admin_ti.
-        for (String a : List.of("faret.usuarios.create", "faret.usuarios.cambiarRol", "faret.usuarios.toggleActivo", "faret.usuarios.eliminarDefinitivo",
-                "faret.usuarios.resetPassword", "faret.usuarios.permisos.guardar", "faret.usuarios.permisos.restablecer")) {
+        // Acciones de usuarios no registradas siguen denegadas incluso para admin_ti (las escrituras reales: BridgeFaseFaretUsuariosEscTest).
+        for (String a : List.of("faret.usuarios.toggleActivo", "faret.usuarios.update", "faret.usuarios.delete")) {
             accion(tecnico, "{\"action\":\"" + a + "\",\"_modulo\":\"faret-usuarios\",\"id\":20}").andExpect(status().isForbidden());
         }
         assertThat(QC.lecturas()).isEmpty();

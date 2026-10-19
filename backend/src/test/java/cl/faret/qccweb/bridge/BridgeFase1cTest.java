@@ -141,7 +141,7 @@ class BridgeFase1cTest {
     void accionDesconocidaORegistradaEnPhotinoPeroNoHabilitadaSeRechaza() throws Exception {
         MockHttpSession sesion = login("admin1");
         int antes = API.llamadasDashboard();
-        for (String accion : List.of("faret.usuarios.create", "faretLab.ph.guardar", "excel.guardar",
+        for (String accion : List.of("usuarios.toggleActivo", "faretLab.ph.guardar", "excel.guardar",
                 "noConformidades.catalogos.clientes.desactivar", "accion.inventada", "Inicio.getDashboard", "inicio.getdashboard")) {
             bridge(sesion, "{\"action\":\"" + accion + "\"}")
                     .andExpect(status().isForbidden())
@@ -202,7 +202,9 @@ class BridgeFase1cTest {
                 "faret.nc.get", "faret.nc.seguimiento.list", "faret.nc.analisis.get", "faret.nc.acciones.list", "faret.nc.adjuntos.list",
                 "faret.talleresExternos.list", "faret.talleresExternos.catalogos", "faret.importacion.list", "faret.data.resumen",
                 "faret.inspecciones.list", "faret.inspecciones.adjuntos", "faret.inspeccionesPallet.list", "faret.inspeccionesPallet.get",
-                "faret.nc.adjuntos.abrir", "faret.usuarios.list", "faret.usuarios.permisos.get",
+                "faret.nc.adjuntos.abrir", "faret.usuarios.list", "faret.usuarios.permisos.get", "faret.usuarios.create", "faret.usuarios.cambiarRol", "faret.usuarios.resetPassword",
+                "faret.usuarios.activar", "faret.usuarios.desactivar", "faret.usuarios.eliminarDefinitivo", "faret.usuarios.permisos.guardar",
+                "faret.usuarios.permisos.restablecer",
                 "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
                 "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
                 "controlDocumental.eliminar", "controlDocumental.adjunto.subir",
@@ -344,7 +346,7 @@ class BridgeFase1cTest {
     void niJwtNiContrasenaEnLogsNiRespuestas(CapturedOutput salida) throws Exception {
         MockHttpSession sesion = login("operador1");
         String body = bridge(sesion, "{\"action\":\"inicio.getDashboard\"}").andReturn().getResponse().getContentAsString();
-        bridge(sesion, "{\"action\":\"faret.usuarios.create\"}");
+        bridge(sesion, "{\"action\":\"usuarios.toggleActivo\"}");
 
         assertThat(body).doesNotContain(FakeInnpackApi.firmaDeToken(10), "eyJ");
         assertThat(salida.getAll())

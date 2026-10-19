@@ -936,6 +936,32 @@ public class BridgeConfig {
                 "faret.usuarios.list", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosList));
         reglas.add(new ActionPolicy.Regla(
                 "faret.usuarios.permisos.get", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosPermisosGet));
+        // Photino 1.8.23 - ESCRITURAS de Gestion de Usuarios FARET: solo admin_ti de la sesion FARET (la API lo exige), lista cerrada de
+        // claves, rol validado, sin identidad del navegador y recurso auditado sin claves ni nombres.
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.create", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosCreate,
+                FaretBridgeHandler::recursoUsuarioCrear));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.cambiarRol", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosCambiarRol,
+                (p, d) -> FaretBridgeHandler.recursoUsuario(p, "cambiarRol")));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.resetPassword", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosResetPassword,
+                (p, d) -> FaretBridgeHandler.recursoUsuario(p, "resetPassword")));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.activar", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosActivar,
+                (p, d) -> FaretBridgeHandler.recursoUsuario(p, "activar")));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.desactivar", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosDesactivar,
+                (p, d) -> FaretBridgeHandler.recursoUsuario(p, "desactivar")));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.eliminarDefinitivo", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosEliminarDefinitivo,
+                (p, d) -> FaretBridgeHandler.recursoUsuario(p, "eliminarDefinitivo")));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.permisos.guardar", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosPermisosGuardar,
+                (p, d) -> FaretBridgeHandler.recursoUsuario(p, "permisos.guardar")));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.usuarios.permisos.restablecer", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosPermisosRestablecer,
+                (p, d) -> FaretBridgeHandler.recursoUsuario(p, "permisos.restablecer")));
         // Fase F1 - ESCRITURAS de catálogos FARET (QualityControlFaret.Api, Bearer del usuario; patrón oficial de escrituras): roles de la
         // API, lista cerrada de claves, `nombre` validado, sin identidad del navegador (el autor lo pone la API desde el sub del JWT),
         // recurso auditado "faret:catalogo:<clave>:<id>" y límite de escrituras por usuario. SOLO crear: desactivar (que el frontend de
