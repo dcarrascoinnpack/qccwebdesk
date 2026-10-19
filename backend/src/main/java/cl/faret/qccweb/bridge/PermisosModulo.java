@@ -34,6 +34,7 @@ public final class PermisosModulo {
     public static final String EDITAR = "EDITAR";
 
     static final String MENSAJE_SIN_SESION = "No hay una sesión activa. Vuelve a iniciar sesión.";
+    static final String MENSAJE_ELIMINAR_FORMULARIOS = "Acceso no autorizado: solo ADMIN_TI puede eliminar formularios.";
     static final String MENSAJE_USUARIOS = "Acceso no autorizado: solo ADMIN_TI puede administrar usuarios.";
     static final String MENSAJE_MODULO_DESCONOCIDO = "Acción rechazada: módulo de origen no reconocido.";
     static final String MENSAJE_SIN_ACCESO = "No tienes acceso a este módulo.";
@@ -65,7 +66,7 @@ public final class PermisosModulo {
         m.put("recepcion-calidad", new ModuloDef("INNPACK", List.of("recepcion")));
         m.put("muestra-laboratorio", new ModuloDef("INNPACK", List.of("muestraLab")));
         m.put("trazabilidad", new ModuloDef("INNPACK", List.of()));
-        m.put("formularios", new ModuloDef("INNPACK", List.of()));
+        m.put("formularios", new ModuloDef("INNPACK", List.of("formularios")));
         m.put("usuarios", new ModuloDef("INNPACK", List.of("usuarios")));
         m.put("faret", new ModuloDef("FARET", List.of()));
         m.put("faret-inspecciones", new ModuloDef("FARET", List.of("faret.inspecciones")));
@@ -81,7 +82,7 @@ public final class PermisosModulo {
         m.put("faret-maquinas", new ModuloDef("FARET", List.of()));
         m.put("faret-data", new ModuloDef("FARET", List.of()));
         m.put("faret-trazabilidad", new ModuloDef("FARET", List.of()));
-        m.put("faret-formularios", new ModuloDef("FARET", List.of()));
+        m.put("faret-formularios", new ModuloDef("FARET", List.of("formularios")));
         m.put("faret-laboratorio", new ModuloDef("FARET", List.of("faretLab")));
         m.put("faret-recepcion-calidad", new ModuloDef("FARET", List.of("recepcion")));
         m.put("faret-usuarios", new ModuloDef("FARET", List.of("faret.usuarios")));
@@ -188,6 +189,10 @@ public final class PermisosModulo {
             if (!esAdminTi(usuario) || !empresaAccion.equals(empresa)) {
                 return MENSAJE_USUARIOS;
             }
+        }
+        // Eliminar formularios (borrado físico, irreversible): solo ADMIN_TI.
+        if ("formularios.eliminar".equals(accion) && !esAdminTi(usuario)) {
+            return MENSAJE_ELIMINAR_FORMULARIOS;
         }
         ModuloDef def = modulo == null ? null : MODULOS.get(modulo);
         if (def == null) {

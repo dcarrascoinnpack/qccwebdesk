@@ -300,14 +300,14 @@ class BridgeFase5aTest {
 
     @Test
     void soloLecturasDelModuloYSoloRolesInnpack() throws Exception {
-        assertThat(policy.accionesRegistradas()).contains(LIST, DETALLE, ABRIR_PDF).doesNotContain("formularios.eliminar");
+        assertThat(policy.accionesRegistradas()).contains(LIST, DETALLE, ABRIR_PDF, "formularios.eliminar");
         assertThat(PermisosModulo.esLectura(LIST)).isTrue();
         assertThat(PermisosModulo.esLectura(DETALLE)).isTrue();
         assertThat(PermisosModulo.esLectura(ABRIR_PDF)).isTrue();
-        // formularios.eliminar existe solo en el WIP de Photino (no en 9e1b556): denegada por ActionPolicy.
+        // formularios.eliminar (Photino 1.8.23) es solo ADMIN_TI: admin queda denegado (detalle en BridgeFase7dTest).
         MockHttpSession admin = login("admin1");
         accion(admin, "{\"action\":\"formularios.eliminar\",\"data\":{\"tipo\":\"inspeccionesVehiculares\",\"id\":15}}")
-                .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value(BridgeController.MENSAJE_NO_DISPONIBLE));
+                .andExpect(status().isForbidden());
         // Rol consulta (no está en ROLES_INNPACK, igual que Certificados).
         for (String a : List.of(LIST, DETALLE, ABRIR_PDF)) {
             accion(login("consulta1"), "{\"action\":\"" + a + "\",\"data\":{\"tipo\":\"inspeccionesVehiculares\",\"id\":15,\"url\":\"" + PDF_OK + "\"}}")

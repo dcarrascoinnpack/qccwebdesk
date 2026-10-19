@@ -59,6 +59,7 @@ public class FormulariosBridgeHandler {
     /** Los PDF viven en la app web de formularios: solo https hacia ese host exacto. */
     static final String HOST_PDF = "solicitudes.faret.cl";
     private static final String BASE = "/api/formularios";
+    private static final Set<String> CLAVES_ELIMINAR = Set.of("tipo", "id");
     private static final Pattern FECHA_ISO = Pattern.compile("^\\d{4}-\\d{2}-\\d{2}$");
     private static final Pattern CONTROL = Pattern.compile("[\\p{Cntrl}]");
 
@@ -122,6 +123,37 @@ public class FormulariosBridgeHandler {
             return BridgeResult.error(MENSAJE_ID);
         }
         return InnpackRespuestas.reenviar(api.get(usuario, BASE + "/" + tipo + "/" + id), mapper);
+    }
+
+    /**
+     * formularios.eliminar → DELETE api/formularios/{tipo}/{id} (Photino 1.8.23): borrado FÍSICO e irreversible del
+     * registro y su detalle (la API usa una cuenta aparte solo con DELETE). Solo ADMIN_TI (regla + PermisosModulo).
+     * Lista cerrada de claves (tipo, id); tipo del mapa cerrado; id entero positivo validado antes de la ruta.
+     */
+    public BridgeResult eliminar(ObjectNode payload, SessionUser usuario) {
+        JsonNode data = data(payload);
+        for (String clave : data.propertyNames()) {
+            if (!CLAVES_ELIMINAR.contains(clave)) {
+                return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+            }
+        }
+        String tipo = TIPOS.get(texto(data.get("tipo")));
+        if (tipo == null) {
+            return BridgeResult.error(MENSAJE_TIPO);
+        }
+        Integer id = entero(data.get("id"));
+        if (id == null || id <= 0) {
+            return BridgeResult.error(MENSAJE_ID);
+        }
+        return InnpackRespuestas.reenviar(api.delete(usuario, BASE + "/" + tipo + "/" + id), mapper);
+    }
+
+    /** Recurso auditado: "formularios:&lt;tipo&gt;:&lt;id&gt;:eliminar" (tipo y id ya validados por el handler, "?" si no). */
+    public static String recursoEliminar(ObjectNode payload, Object dataRespuesta) {
+        JsonNode data = payload.get("data");
+        String tipo = data == null ? null : TIPOS.get(texto(data.get("tipo")));
+        Integer id = data == null ? null : entero(data.get("id"));
+        return "formularios:" + (tipo != null ? tipo : "?") + ":" + (id != null ? id : "?") + ":eliminar";
     }
 
     /** formularios.abrirPdf: valida la URL como Photino (https + host exacto) y la devuelve para que el navegador la abra. */

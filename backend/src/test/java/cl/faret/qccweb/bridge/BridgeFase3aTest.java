@@ -207,7 +207,7 @@ class BridgeFase3aTest {
                 "faret.nc.create", "faret.nc.update", "faret.nc.gestion.actualizar", "faret.nc.cerrar", "faret.nc.acciones.actualizar",
                 "faret.nc.crearRegistro", "faret.nc.actualizarRegistro",
                 "faret.nc.adjuntos.eliminar", "faret.nc.eliminarFila", "faret.inspecciones.eliminar", "faret.inspeccionesPallet.eliminar",
-                "faret.importacion.validar", "faret.importacion.confirmar");
+                "faret.importacion.validar", "faret.importacion.confirmar", "formularios.eliminar");
         for (String otra : List.of("noConformidades.catalogos.clientes.desactivar",
                 "noConformidades.catalogos.nciAreas.crear")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);

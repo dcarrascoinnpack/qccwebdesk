@@ -456,6 +456,11 @@ public class BridgeConfig {
                         "despachosDiarios.sap.detalle", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), despachos::sapDetalle),
                 new ActionPolicy.Regla(
                         "despachosDiarios.sap.categorias", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), despachos::sapCategorias),
+                // Photino 1.8.23 — borrado fisico e irreversible: solo ADMIN_TI y sesion INNPACK (dato compartido sin cuenta
+                // de servicio para FARET). Sin identidad del navegador.
+                new ActionPolicy.Regla(
+                        "formularios.eliminar", Set.of("INNPACK"), Set.of("admin_ti"), Map.of(), formularios::eliminar,
+                        FormulariosBridgeHandler::recursoEliminar),
                 // Fase 6b-2 — lecturas del inicio FARET a QualityControlFaret.Api (payload PLANO, como Photino). Sesión FARET
                 // obligatoria; sin empresa/identidad en el payload (los handlers solo leen su lista cerrada de filtros).
                 new ActionPolicy.Regla(

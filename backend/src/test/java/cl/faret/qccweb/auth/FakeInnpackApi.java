@@ -1178,6 +1178,15 @@ public final class FakeInnpackApi implements AutoCloseable {
         java.util.regex.Matcher m = java.util.regex.Pattern
                 .compile("^/api/formularios/(inspecciones-vehiculares|revision-camion-jornada|checklist-bodega-cajas|revision-bodega-oficinas)(?:/(\\d+))?$")
                 .matcher(path);
+        boolean borrar = ex.getRequestMethod().equals("DELETE");
+        if (borrar && m.matches() && m.group(2) != null) {
+            if (m.group(2).equals("404")) {
+                responder(ex, 404, fallo("El registro no existe"));
+            } else {
+                responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":null,\"errors\":null}");
+            }
+            return;
+        }
         if (!ex.getRequestMethod().equals("GET") || !m.matches() || (m.group(2) != null && m.group(1).equals("revision-camion-jornada"))) {
             responder(ex, 404, "{\"type\":\"about:blank\",\"title\":\"Not Found\",\"status\":404}");
             return;

@@ -279,7 +279,10 @@ class BridgeFase3uTest {
         assertThat(PermisosModulo.validar("formularios.list", "formularios", operador)).isNull();
         assertThat(PermisosModulo.validar("despachosDiarios.resumen", "despachos-diarios", operador)).isNull();
         assertThat(PermisosModulo.validar("formularios.list", "despachos-diarios", operador)).isEqualTo(NO_PERMITIDA);
-        assertThat(PermisosModulo.validar("formularios.guardar", "formularios", operador)).isEqualTo(NO_PERMITIDA);
+        // Photino 1.8.23: formularios tiene prefijo de escritura (eliminar); el borrado exige ADMIN_TI.
+        assertThat(PermisosModulo.validar("formularios.eliminar", "formularios", operador))
+                .isEqualTo("Acceso no autorizado: solo ADMIN_TI puede eliminar formularios.");
+        assertThat(PermisosModulo.validar("formularios.guardar", "despachos-diarios", operador)).isEqualTo(NO_PERMITIDA);
         SessionUser consultaFaret = new SessionUser(2, "c", "C", "CONSULTA", "FARET", "t", Instant.now(),
                 Instant.now().plusSeconds(60), Map.of());
         assertThat(PermisosModulo.nivelEfectivo("faret-despachos-diarios", consultaFaret)).isEqualTo("EDITAR");
