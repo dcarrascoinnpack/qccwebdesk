@@ -56,9 +56,11 @@ public class FaretAuthClient {
     public InnpackAuthClient.Resultado login(String identificador, String password) {
         ResponseEntity<String> respuesta;
         // Mismo orden que LoginRequest de Photino (identificador, password).
-        Map<String, String> peticion = new LinkedHashMap<>();
+        Map<String, Object> peticion = new LinkedHashMap<>();
         peticion.put("identificador", identificador);
         peticion.put("password", password);
+        // Como Photino >= 1.8.21: esta web sabe mostrar el cambio de clave, así que la API puede exigirlo.
+        peticion.put("soportaCambioPassword", true);
         byte[] cuerpo = mapper.writeValueAsBytes(peticion);
         try {
             respuesta = restClient.post()
@@ -105,7 +107,34 @@ public class FaretAuthClient {
                 username == null || username.isBlank() ? identificador : username,
                 nombre == null ? "" : nombre,
                 rol,
-                expiracionJwt(token));
+                expiracionJwt(token),
+                InnpackAuthClient.politicaDe(data));
+    }
+
+    /**
+     * Cambio de clave propio: POST api/Auth/cambiar-password con el token DEL usuario (FaretAuthApiService.CambiarPasswordAsync
+     * de Photino 1.8.23). Mismas garantías que el login: las claves solo existen durante la llamada.
+     */
+    public InnpackAuthClient.Cambio cambiarPassword(String token, String passwordActual, String passwordNueva) {
+        byte[] cuerpo = mapper.writeValueAsBytes(InnpackAuthClient.cuerpoCambio(passwordActual, passwordNueva));
+        ResponseEntity<String> respuesta;
+        try {
+            respuesta = restClient.post()
+                    .uri("/api/Auth/cambiar-password")
+                    .header("Authorization", "Bearer " + token)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .contentLength(cuerpo.length)
+                    .accept(MediaType.APPLICATION_JSON)
+                    .body(cuerpo)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {})
+                    .toEntity(String.class);
+        } catch (RestClientException e) {
+            return new InnpackAuthClient.CambioNoDisponible(e.getClass().getSimpleName());
+        } finally {
+            Arrays.fill(cuerpo, (byte) 0);
+        }
+        return InnpackAuthClient.interpretarCambio(respuesta.getStatusCode().value(), respuesta.getBody(), mapper, this::expiracionJwt);
     }
 
     /** Primer elemento string del arreglo de roles (igual que el foreach + break de Photino); "" si no hay. */

@@ -30,6 +30,12 @@ public final class AuditLogger {
         AUDIT.warn("evento=LOGIN_BLOQUEADO usuario={} ip={} motivo={}", sanear(usuario), sanear(ip), motivo);
     }
 
+    /** Cambio de clave propio (política de contraseñas). Nunca las claves; resultado OK | RECHAZADO | ERROR | LIMITE. */
+    public void cambioPassword(String usuario, String empresa, String ip, String resultado) {
+        AUDIT.info("evento=CAMBIO_PASSWORD usuario={} empresa={} ip={} resultado={}",
+                sanear(usuario), empresa, sanear(ip), resultado);
+    }
+
     public void loginErrorUpstream(String usuario, String ip, String detalle) {
         AUDIT.error("evento=LOGIN_ERROR_UPSTREAM usuario={} ip={} detalle={}", sanear(usuario), sanear(ip), sanear(detalle));
     }

@@ -42,6 +42,7 @@ public final class FakeInnpackApi implements AutoCloseable {
             throw new IllegalStateException(e);
         }
         server.createContext("/api/auth/login", this::login);
+        server.createContext("/api/auth/cambiar-password", this::cambiarPassword);
         server.createContext("/api/auth/mis-permisos", this::misPermisos);
         server.createContext("/fps/liberaciones/inspectores", this::fpsInspectores);
         server.createContext("/fps/materiales-por-proceso", this::fpsMateriales);
@@ -3414,7 +3415,9 @@ public final class FakeInnpackApi implements AutoCloseable {
             responder(ex, 500, "{\"title\":\"error interno\"}");
             return;
         }
-        JsonNode body = mapper.readTree(ex.getRequestBody().readAllBytes());
+        byte[] crudo = ex.getRequestBody().readAllBytes();
+        cuerposLogin.add(new String(crudo, StandardCharsets.UTF_8));
+        JsonNode body = mapper.readTree(crudo);
         String codigo = body.path("codigoUsuario").asString("");
         String password = body.path("password").asString("");
         if (codigo.isBlank() || password.isBlank()) {
@@ -3430,21 +3433,104 @@ public final class FakeInnpackApi implements AutoCloseable {
             responder(ex, 401, fallo("Usuario desactivado"));
             return;
         }
-        if (!u.password().equals(password)) {
+        if (!passwordDe(u).equals(password)) {
             responder(ex, 401, fallo("Contraseña incorrecta"));
             return;
         }
         String token = jwt(u);
         responder(ex, 200, "{\"success\":true,\"message\":\"Login correcto\",\"data\":{\"token\":\"" + token
                 + "\",\"userId\":" + u.id() + ",\"codigoUsuario\":\"" + u.codigo() + "\",\"nombreCompleto\":\""
-                + u.nombre() + "\",\"rol\":\"" + u.rol() + "\"},\"errors\":null}");
+                + u.nombre() + "\",\"rol\":\"" + u.rol() + "\"" + politicaPorCodigo.getOrDefault(u.codigo().toLowerCase(), "")
+                + "},\"errors\":null}");
+    }
+
+    // ---- Política de contraseñas (Photino 1.8.23): campos extra del login y cambio de clave propio ----
+
+    private final java.util.List<String> cuerposLogin = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final Map<String, String> politicaPorCodigo = new ConcurrentHashMap<>();
+    private final Map<Integer, String> passwordsNuevas = new ConcurrentHashMap<>();
+    private final java.util.List<String> cambiosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final AtomicInteger generacionToken = new AtomicInteger();
+    private volatile int estadoCambioForzado;
+
+    /** Cuerpos JSON recibidos en login (para verificar soportaCambioPassword). */
+    public java.util.List<String> cuerposLogin() {
+        return java.util.List.copyOf(cuerposLogin);
+    }
+
+    /** Campos extra de la respuesta de login del usuario, como fragmento JSON que empieza con coma. */
+    public void politicaLogin(String codigo, String fragmentoJson) {
+        politicaPorCodigo.put(codigo.toLowerCase(), fragmentoJson);
+    }
+
+    /** "Bearer ...|cuerpo" de cada POST api/auth/cambiar-password recibido. */
+    public java.util.List<String> cambiosRecibidos() {
+        return java.util.List.copyOf(cambiosRecibidos);
+    }
+
+    /** Si es distinto de 0, cambiar-password responde ese estado con un cuerpo vacío (p. ej. 500). */
+    public void estadoCambioForzado(int status) {
+        this.estadoCambioForzado = status;
+    }
+
+    public void restablecerPolitica() {
+        cuerposLogin.clear();
+        politicaPorCodigo.clear();
+        passwordsNuevas.clear();
+        cambiosRecibidos.clear();
+        estadoCambioForzado = 0;
+    }
+
+    private String passwordDe(Usuario u) {
+        return passwordsNuevas.getOrDefault(u.id(), u.password());
+    }
+
+    private void cambiarPassword(HttpExchange ex) throws IOException {
+        Integer sub = subDeBearer(ex.getRequestHeaders().getFirst("Authorization"));
+        byte[] crudo = ex.getRequestBody().readAllBytes();
+        cambiosRecibidos.add(ex.getRequestHeaders().getFirst("Authorization") + "|" + new String(crudo, StandardCharsets.UTF_8));
+        if (sub == null) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (estadoCambioForzado != 0) {
+            responder(ex, estadoCambioForzado, "{\"title\":\"error interno\"}");
+            return;
+        }
+        JsonNode body = mapper.readTree(crudo);
+        String actual = body.path("passwordActual").asString("");
+        String nueva = body.path("passwordNueva").asString("");
+        Usuario u = usuarios.values().stream().filter(x -> x.id() == sub).findFirst().orElse(null);
+        if (u == null || actual.isBlank() || nueva.isBlank()) {
+            responder(ex, 400, fallo("La contraseña actual y la nueva son requeridas."));
+            return;
+        }
+        if (!passwordDe(u).equals(actual)) {
+            responder(ex, 400, fallo("La contraseña actual es incorrecta."));
+            return;
+        }
+        if (nueva.equals(actual)) {
+            responder(ex, 400, fallo("La contraseña nueva debe ser distinta de la actual."));
+            return;
+        }
+        if (nueva.length() < 6) {
+            responder(ex, 400, fallo("La contraseña nueva debe tener al menos 6 caracteres."));
+            return;
+        }
+        passwordsNuevas.put(u.id(), nueva);
+        generacionToken.incrementAndGet();
+        responder(ex, 200, "{\"success\":true,\"message\":\"Contraseña actualizada correctamente\",\"data\":{\"token\":\"" + jwt(u)
+                + "\",\"userId\":" + u.id() + ",\"codigoUsuario\":\"" + u.codigo() + "\",\"nombreCompleto\":\"" + u.nombre()
+                + "\",\"rol\":\"" + u.rol() + "\",\"debeCambiarPassword\":false,\"motivoCambioPassword\":null,"
+                + "\"diasParaVencer\":60,\"passwordVenceEl\":\"2026-12-18T00:00:00\"},\"errors\":null}");
     }
 
     private String jwt(Usuario u) {
         Base64.Encoder b64 = Base64.getUrlEncoder().withoutPadding();
         String header = b64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = b64.encodeToString(("{\"sub\":\"" + u.id() + "\",\"role\":\"" + u.rol() + "\",\"exp\":"
-                + expiracionToken.get().getEpochSecond() + "}").getBytes(StandardCharsets.UTF_8));
+        String payload = b64.encodeToString(("{\"sub\":\"" + u.id() + "\",\"role\":\"" + u.rol() + "\",\"gen\":"
+                + generacionToken.get() + ",\"exp\":" + expiracionToken.get().getEpochSecond() + "}").getBytes(StandardCharsets.UTF_8));
         return header + "." + payload + "." + firmaDeToken(u.id());
     }
 

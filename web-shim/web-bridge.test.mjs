@@ -541,3 +541,27 @@ test("faret.logout invalida la sesión del servidor (POST logout con CSRF) y lim
     assert.equal(shim.ctx.sessionStorage.getItem("faretRol"), null);
     assert.equal(shim.ctx.sessionStorage.getItem("empresa"), null);
 });
+
+// ---------------------------------------------------------------- Política de contraseñas (Photino 1.8.23): cambiarPassword
+test("auth.cambiarPassword (INNPACK, claves dentro de data) va a POST auth/cambiar-password con CSRF y cuerpo {passwordActual,passwordNueva}", async () => {
+    const shim = shimConRespuesta({ ok: true, success: true, data: { Success: true }, error: null });
+    const res = await shim.ctx.PhotinoBridge.send({ action: "auth.cambiarPassword", data: { PasswordActual: "vieja123", PasswordNueva: "nueva456" } });
+
+    assert.equal(res.ok, true);
+    assert.equal(shim.registro.fetch.length, 1);
+    assert.equal(shim.registro.fetch[0].url, "api/v1/auth/cambiar-password");
+    assert.equal(shim.registro.fetch[0].opciones.method, "POST");
+    assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
+    assert.deepEqual(JSON.parse(shim.registro.fetch[0].opciones.body), { passwordActual: "vieja123", passwordNueva: "nueva456" });
+});
+
+test("faret.cambiarPassword (claves planas) va al mismo endpoint y un rechazo de la API se devuelve tal cual", async () => {
+    const shim = shimConRespuesta({ ok: false, success: false, data: null, error: "La contraseña actual es incorrecta." }, 400);
+    const res = await shim.ctx.PhotinoBridge.send({ action: "faret.cambiarPassword", passwordActual: "x", passwordNueva: "nueva4567" });
+
+    assert.equal(res.ok, false);
+    assert.equal(res.error, "La contraseña actual es incorrecta.");
+    assert.equal(shim.registro.fetch[0].url, "api/v1/auth/cambiar-password");
+    assert.deepEqual(JSON.parse(shim.registro.fetch[0].opciones.body), { passwordActual: "x", passwordNueva: "nueva4567" });
+    assert.equal(JSON.parse(shim.registro.fetch[0].opciones.body)._modulo, undefined);
+});

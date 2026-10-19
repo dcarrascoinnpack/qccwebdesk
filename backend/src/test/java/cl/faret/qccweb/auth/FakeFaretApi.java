@@ -56,6 +56,7 @@ public final class FakeFaretApi implements AutoCloseable {
             throw new IllegalStateException(e);
         }
         server.createContext("/api/Auth/login", this::login);
+        server.createContext("/api/Auth/cambiar-password", this::cambiarPassword);
         server.createContext("/api/auth/mis-permisos", this::misPermisos);
         // 6b: lecturas de QualityControlFaret.Api que EXIGEN el Bearer del usuario (sin él o con firma mala: 401).
         server.createContext("/api/importaciones/pnc", this::lectura);
@@ -179,7 +180,7 @@ public final class FakeFaretApi implements AutoCloseable {
             return;
         }
         Usuario u = usuarios.get(identificador.toLowerCase());
-        if (u == null || !u.password().equals(password)) {
+        if (u == null || !passwordDe(u).equals(password)) {
             responder(ex, 401, fallo("Credenciales inválidas."));
             return;
         }
@@ -187,7 +188,83 @@ public final class FakeFaretApi implements AutoCloseable {
         responder(ex, 200, "{\"success\":true,\"message\":\"Login exitoso.\",\"data\":{\"token\":\"" + jwt(u)
                 + "\",\"expiresAt\":\"" + expiracionToken.get() + "\",\"usuario\":{\"id\":" + u.id() + ",\"nombre\":\"" + u.nombre()
                 + "\",\"correo\":" + (u.correo() == null ? "null" : "\"" + u.correo() + "\"") + ",\"username\":\"" + u.username()
-                + "\",\"roles\":[" + roles + "]}},\"errors\":null}");
+                + "\",\"roles\":[" + roles + "]}" + politicaPorUsuario.getOrDefault(u.id(), "") + "},\"errors\":null}");
+    }
+
+    // ---- Política de contraseñas (Photino 1.8.23): campos extra del login y cambio de clave propio ----
+
+    private final Map<Integer, String> politicaPorUsuario = new ConcurrentHashMap<>();
+    private final Map<Integer, String> passwordsNuevas = new ConcurrentHashMap<>();
+    private final List<String> cambiosRecibidos = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private final AtomicInteger generacionToken = new AtomicInteger();
+    private volatile int estadoCambioForzado;
+
+    /** Campos extra de data en la respuesta de login del usuario, como fragmento JSON que empieza con coma. */
+    public void politicaLogin(int userId, String fragmentoJson) {
+        politicaPorUsuario.put(userId, fragmentoJson);
+    }
+
+    /** "Bearer ...|cuerpo" de cada POST api/Auth/cambiar-password recibido. */
+    public List<String> cambiosRecibidos() {
+        return List.copyOf(cambiosRecibidos);
+    }
+
+    /** Si es distinto de 0, cambiar-password responde ese estado con un cuerpo vacío (p. ej. 500). */
+    public void estadoCambioForzado(int status) {
+        this.estadoCambioForzado = status;
+    }
+
+    public void restablecerPolitica() {
+        politicaPorUsuario.clear();
+        passwordsNuevas.clear();
+        cambiosRecibidos.clear();
+        estadoCambioForzado = 0;
+    }
+
+    private String passwordDe(Usuario u) {
+        return passwordsNuevas.getOrDefault(u.id(), u.password());
+    }
+
+    private void cambiarPassword(HttpExchange ex) throws IOException {
+        Integer sub = subDeBearer(ex.getRequestHeaders().getFirst("Authorization"));
+        byte[] crudo = ex.getRequestBody().readAllBytes();
+        cambiosRecibidos.add(ex.getRequestHeaders().getFirst("Authorization") + "|" + new String(crudo, StandardCharsets.UTF_8));
+        if (sub == null) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        if (estadoCambioForzado != 0) {
+            responder(ex, estadoCambioForzado, "{\"title\":\"error interno\"}");
+            return;
+        }
+        JsonNode body = mapper.readTree(crudo);
+        String actual = body.path("passwordActual").asString("");
+        String nueva = body.path("passwordNueva").asString("");
+        Usuario u = usuarios.values().stream().filter(x -> x.id() == sub).findFirst().orElse(null);
+        if (u == null || actual.isBlank() || nueva.isBlank()) {
+            responder(ex, 400, fallo("La contraseña actual y la nueva son requeridas."));
+            return;
+        }
+        if (!passwordDe(u).equals(actual)) {
+            responder(ex, 400, fallo("La contraseña actual es incorrecta."));
+            return;
+        }
+        if (nueva.equals(actual)) {
+            responder(ex, 400, fallo("La contraseña nueva debe ser distinta de la actual."));
+            return;
+        }
+        if (nueva.length() < 8) {
+            responder(ex, 400, fallo("La contraseña nueva debe tener al menos 8 caracteres."));
+            return;
+        }
+        passwordsNuevas.put(u.id(), nueva);
+        generacionToken.incrementAndGet();
+        String roles = u.roles().stream().map(r -> "\"" + r + "\"").reduce((a, b) -> a + "," + b).orElse("");
+        responder(ex, 200, "{\"success\":true,\"message\":\"Contraseña actualizada.\",\"data\":{\"token\":\"" + jwt(u)
+                + "\",\"expiresAt\":\"" + expiracionToken.get() + "\",\"usuario\":{\"id\":" + u.id() + ",\"nombre\":\"" + u.nombre()
+                + "\",\"username\":\"" + u.username() + "\",\"roles\":[" + roles + "]},\"debeCambiarPassword\":false,"
+                + "\"motivoCambioPassword\":null,\"diasParaVencer\":60,\"passwordVenceEl\":\"2026-12-18T00:00:00\"},\"errors\":null}");
     }
 
     private void misPermisos(HttpExchange ex) throws IOException {
@@ -271,8 +348,8 @@ public final class FakeFaretApi implements AutoCloseable {
     private String jwt(Usuario u) {
         Base64.Encoder b64 = Base64.getUrlEncoder().withoutPadding();
         String header = b64.encodeToString("{\"alg\":\"HS256\",\"typ\":\"JWT\"}".getBytes(StandardCharsets.UTF_8));
-        String payload = b64.encodeToString(("{\"sub\":\"" + u.id() + "\",\"exp\":" + expiracionToken.get().getEpochSecond() + "}")
-                .getBytes(StandardCharsets.UTF_8));
+        String payload = b64.encodeToString(("{\"sub\":\"" + u.id() + "\",\"gen\":" + generacionToken.get() + ",\"exp\":"
+                + expiracionToken.get().getEpochSecond() + "}").getBytes(StandardCharsets.UTF_8));
         return header + "." + payload + "." + firmaDeToken(u.id());
     }
 

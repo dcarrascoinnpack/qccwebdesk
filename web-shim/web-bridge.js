@@ -503,6 +503,21 @@
                     return r.body;
                 });
 
+            // Política de contraseñas (Photino 1.8.23): cambio de clave propio. INNPACK manda PasswordActual/PasswordNueva
+            // dentro de data; FARET las manda planas. Ambas van al mismo endpoint (el gateway usa la API de la empresa de la
+            // sesión). El token nuevo que emite la API queda solo en el servidor.
+            case "auth.cambiarPassword":
+                return peticion("POST", AUTH_URL + "cambiar-password", {
+                    passwordActual: data.PasswordActual,
+                    passwordNueva: data.PasswordNueva
+                }).then(function (r) { return r.body; });
+
+            case "faret.cambiarPassword":
+                return peticion("POST", AUTH_URL + "cambiar-password", {
+                    passwordActual: payload.passwordActual,
+                    passwordNueva: payload.passwordNueva
+                }).then(function (r) { return r.body; });
+
             default:
                 var url = Object.prototype.hasOwnProperty.call(ACCIONES_ARCHIVO, payload.action) ? BRIDGE_ARCHIVO_URL : BRIDGE_URL;
                 // _modulo: módulo abierto, igual que el PhotinoBridge de Photino 1.8.14 (el gateway valida permisos

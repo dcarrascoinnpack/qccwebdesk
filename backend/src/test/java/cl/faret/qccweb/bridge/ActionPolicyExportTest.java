@@ -78,12 +78,15 @@ class ActionPolicyExportTest {
         assertThat(dashboard.get("empresas").toString()).isEqualTo("[\"INNPACK\"]");
         assertThat(dashboard.get("roles").toString()).isEqualTo("[\"admin\",\"admin_ti\",\"operador\"]");
         assertThat(dashboard.get("identidad").size()).isZero();
-        assertThat(Files.readString(SALIDA)).doesNotContainIgnoringCase("token").doesNotContainIgnoringCase("password");
+        // Los nombres auth.cambiarPassword / faret.cambiarPassword y la ruta cambiar-password son acciones, no datos: se descartan antes de buscar secretos.
+        assertThat(Files.readString(SALIDA).replace("cambiarPassword", "").replace("cambiar-password", "")).doesNotContainIgnoringCase("token").doesNotContainIgnoringCase("password");
 
         assertThat(buscar(leido, "auth.login").get("via").asString()).isEqualTo("AuthController POST /api/v1/auth/login");
         assertThat(buscar(leido, "auth.me").get("via").asString()).isEqualTo("AuthController GET /api/v1/auth/session");
         assertThat(buscar(leido, "faret.login").get("via").asString()).isEqualTo("AuthController POST /api/v1/auth/faret/login");
         assertThat(buscar(leido, "faret.logout").get("via").asString()).isEqualTo("AuthController POST /api/v1/auth/logout");
+        assertThat(buscar(leido, "auth.cambiarPassword").get("via").asString()).isEqualTo("AuthController POST /api/v1/auth/cambiar-password");
+        assertThat(buscar(leido, "faret.cambiarPassword").get("via").asString()).isEqualTo("AuthController POST /api/v1/auth/cambiar-password");
     }
 
     /** Todo lo habilitado en la web: reglas del bridge + acciones de autenticación. */

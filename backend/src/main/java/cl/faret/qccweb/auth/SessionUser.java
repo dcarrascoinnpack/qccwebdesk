@@ -11,6 +11,8 @@ import java.util.Map;
  * @param expiresAt      vencimiento absoluto de la sesión web (mínimo entre exp del JWT y el tope configurado)
  * @param permisosModulo permisos personalizados del usuario (módulo → SIN_ACCESO/VER/EDITAR), leídos de
  *                       GET api/auth/mis-permisos al iniciar sesión (Fase 3u, igual que Photino 1.8.14)
+ * @param cambioPasswordPendiente la API exigió cambiar la clave (temporal, nunca cambiada o vencida; política de
+ *                       contraseñas de Photino 1.8.23): hasta que cambie, el bridge solo atiende permisos.mios
  */
 public record SessionUser(
         int userId,
@@ -21,16 +23,29 @@ public record SessionUser(
         String upstreamToken,
         Instant createdAt,
         Instant expiresAt,
-        Map<String, String> permisosModulo) {
+        Map<String, String> permisosModulo,
+        boolean cambioPasswordPendiente) {
 
     public SessionUser {
         permisosModulo = permisosModulo == null ? Map.of() : Map.copyOf(permisosModulo);
     }
 
+    /** Sin cambio de clave pendiente. */
+    public SessionUser(int userId, String codigoUsuario, String nombreCompleto, String rol, String empresa,
+            String upstreamToken, Instant createdAt, Instant expiresAt, Map<String, String> permisosModulo) {
+        this(userId, codigoUsuario, nombreCompleto, rol, empresa, upstreamToken, createdAt, expiresAt, permisosModulo, false);
+    }
+
     /** Sin permisos personalizados: rige solo la regla por rol. */
     public SessionUser(int userId, String codigoUsuario, String nombreCompleto, String rol, String empresa,
             String upstreamToken, Instant createdAt, Instant expiresAt) {
-        this(userId, codigoUsuario, nombreCompleto, rol, empresa, upstreamToken, createdAt, expiresAt, Map.of());
+        this(userId, codigoUsuario, nombreCompleto, rol, empresa, upstreamToken, createdAt, expiresAt, Map.of(), false);
+    }
+
+    /** Misma identidad con el token nuevo que emite la API al cambiar la clave. */
+    public SessionUser conTokenNuevo(String tokenNuevo, Instant expiraNuevo, boolean pendiente) {
+        return new SessionUser(userId, codigoUsuario, nombreCompleto, rol, empresa, tokenNuevo, createdAt, expiraNuevo,
+                permisosModulo, pendiente);
     }
 
     public boolean expirada(Instant ahora) {

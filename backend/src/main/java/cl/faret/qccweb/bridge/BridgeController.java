@@ -43,6 +43,10 @@ public class BridgeController {
     static final String MENSAJE_NO_DISPONIBLE = "Acción no disponible en la versión web.";
     static final String MENSAJE_SESION_EXPIRADA = "Sesión expirada. Inicia sesión nuevamente.";
     static final String MENSAJE_ERROR_INTERNO = "Error interno al procesar la acción.";
+    /** Política de contraseñas (Photino 1.8.23): la API ya rechaza todo mientras la clave esté pendiente; el gateway ni la llama. */
+    static final String MENSAJE_CAMBIO_PASSWORD_PENDIENTE = "Debes cambiar tu contraseña para continuar.";
+    /** Única acción atendida con el cambio de clave pendiente (lectura de los permisos propios de la sesión). */
+    static final String ACCION_PERMITIDA_CON_CAMBIO_PENDIENTE = "permisos.mios";
     static final String MENSAJE_LIMITE_ESCRITURAS = "Demasiadas operaciones seguidas. Espera un momento e inténtalo de nuevo.";
     static final String MENSAJE_SUBIDAS_OCUPADAS = "Hay otras subidas de archivos en curso. Inténtalo de nuevo en unos segundos.";
     /** Acciones con archivo en base64: solo por /api/v1/bridge/archivo. */
@@ -90,6 +94,11 @@ public class BridgeController {
         String accion = accionNodo != null && accionNodo.isString() ? accionNodo.asString() : null;
         if (accion == null || accion.length() > 100 || !FORMATO_ACCION.matcher(accion).matches()) {
             return respuesta(HttpStatus.BAD_REQUEST, BridgeResult.error("Solicitud inválida."));
+        }
+
+        if (usuario.cambioPasswordPendiente() && !ACCION_PERMITIDA_CON_CAMBIO_PENDIENTE.equals(accion)) {
+            audit.accionDenegada(usuario.codigoUsuario(), usuario.empresa(), accion, "CAMBIO_PASSWORD_PENDIENTE");
+            return respuesta(HttpStatus.FORBIDDEN, BridgeResult.error(MENSAJE_CAMBIO_PASSWORD_PENDIENTE));
         }
 
         // Módulo abierto en el navegador (Fase 3u): lo agrega web-bridge.js como el PhotinoBridge de Photino 1.8.14.

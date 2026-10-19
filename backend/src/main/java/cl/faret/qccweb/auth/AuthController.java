@@ -3,6 +3,7 @@ package cl.faret.qccweb.auth;
 import com.fasterxml.jackson.annotation.JsonAlias;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import cl.faret.qccweb.bridge.EscrituraRateLimiter;
 import jakarta.servlet.http.HttpSession;
 import java.time.Clock;
 import java.time.Duration;
@@ -13,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -49,7 +51,9 @@ public class AuthController {
             "auth.login", "POST /api/v1/auth/login",
             "auth.me", "GET /api/v1/auth/session",
             "faret.login", "POST /api/v1/auth/faret/login",
-            "faret.logout", "POST /api/v1/auth/logout");
+            "faret.logout", "POST /api/v1/auth/logout",
+            "auth.cambiarPassword", "POST /api/v1/auth/cambiar-password",
+            "faret.cambiarPassword", "POST /api/v1/auth/cambiar-password");
 
     static final String EMPRESA_INNPACK = "INNPACK";
     static final String EMPRESA_FARET = "FARET";
@@ -61,6 +65,11 @@ public class AuthController {
     static final String MENSAJE_PERMISOS = "No se pudieron cargar los permisos del usuario. Intenta nuevamente.";
     private static final int MAX_LARGO_USUARIO = 100;
     private static final int MAX_LARGO_PASSWORD = 256;
+    static final String MENSAJE_CAMBIO_REQUERIDOS = "Debes ingresar la contraseña actual y la nueva";
+    static final String MENSAJE_CAMBIO_NO_DISPONIBLE = "No se pudo confirmar el cambio de contraseña. Revisa si puedes iniciar sesión con la nueva "
+            + "y, si no, con la anterior.";
+    static final String MENSAJE_CAMBIO_LIMITE = "Demasiados intentos de cambio de contraseña. Espera un momento e inténtalo de nuevo.";
+    static final String MENSAJE_SESION_EXPIRADA = "Sesión expirada. Inicia sesión nuevamente.";
 
     /**
      * Cuerpo de login. Acepta también los nombres PascalCase que envía Photino. Cualquier otro campo
@@ -83,6 +92,16 @@ public class AuthController {
         }
     }
 
+    /** Cuerpo de cambio de clave. Acepta también los nombres PascalCase que envía Photino (auth.cambiarPassword). */
+    public record CambiarPasswordRequest(
+            @JsonAlias("PasswordActual") String passwordActual,
+            @JsonAlias("PasswordNueva") String passwordNueva) {
+        @Override
+        public String toString() {
+            return "CambiarPasswordRequest[***]";
+        }
+    }
+
     private final InnpackAuthClient authClient;
     private final FaretAuthClient faretAuthClient;
     private final LoginRateLimiter rateLimiter;
@@ -92,6 +111,7 @@ public class AuthController {
     private final CsrfTokenRepository csrfTokenRepository;
     private final AuthProperties properties;
     private final Clock clock;
+    private final EscrituraRateLimiter limiteCambioPassword;
 
     public AuthController(
             InnpackAuthClient authClient,
@@ -102,7 +122,8 @@ public class AuthController {
             SecurityContextRepository securityContextRepository,
             CsrfTokenRepository csrfTokenRepository,
             AuthProperties properties,
-            Clock clock) {
+            Clock clock,
+            @Value("${qcc.web.auth.cambio-password-por-minuto:5}") int cambiosPorMinuto) {
         this.authClient = authClient;
         this.faretAuthClient = faretAuthClient;
         this.rateLimiter = rateLimiter;
@@ -112,6 +133,7 @@ public class AuthController {
         this.csrfTokenRepository = csrfTokenRepository;
         this.properties = properties;
         this.clock = clock;
+        this.limiteCambioPassword = new EscrituraRateLimiter(cambiosPorMinuto, Duration.ofMinutes(1), clock);
     }
 
     @PostMapping("/login")
@@ -195,6 +217,72 @@ public class AuthController {
         return salida;
     }
 
+    /**
+     * Cambio de clave del propio usuario (política de contraseñas de Photino 1.8.23): equivalente web de auth.cambiarPassword
+     * y faret.cambiarPassword. Usa el token de la sesión contra la API de SU empresa; la API devuelve un token nuevo (sin
+     * "cambio pendiente") que reemplaza al de la sesión, se rota el id de sesión y el token CSRF. Las claves no se guardan
+     * ni se loguean; límite por usuario contra el adivinado de la clave actual desde una sesión robada.
+     */
+    @PostMapping("/cambiar-password")
+    public ResponseEntity<Map<String, Object>> cambiarPassword(
+            @RequestBody(required = false) CambiarPasswordRequest body, HttpServletRequest request, HttpServletResponse response) {
+        SessionUser usuario = usuarioDe(SecurityContextHolder.getContext().getAuthentication());
+        if (usuario == null) {
+            return error(HttpStatus.UNAUTHORIZED, MENSAJE_SESION_EXPIRADA);
+        }
+        String ip = ipResolver.resolver(request);
+        String actual = body == null ? null : body.passwordActual();
+        String nueva = body == null ? null : body.passwordNueva();
+        if (actual == null || actual.isEmpty() || nueva == null || nueva.isEmpty()
+                || actual.length() > MAX_LARGO_PASSWORD || nueva.length() > MAX_LARGO_PASSWORD) {
+            return error(HttpStatus.BAD_REQUEST, MENSAJE_CAMBIO_REQUERIDOS);
+        }
+        if (!limiteCambioPassword.permitir(usuario.userId())) {
+            audit.cambioPassword(usuario.codigoUsuario(), usuario.empresa(), ip, "LIMITE");
+            return error(HttpStatus.TOO_MANY_REQUESTS, MENSAJE_CAMBIO_LIMITE);
+        }
+
+        boolean faret = EMPRESA_FARET.equals(usuario.empresa());
+        InnpackAuthClient.Cambio cambio = faret
+                ? faretAuthClient.cambiarPassword(usuario.upstreamToken(), actual, nueva)
+                : authClient.cambiarPassword(usuario.upstreamToken(), actual, nueva);
+        actual = null; // las claves no se usan más allá de esta llamada
+        nueva = null;
+
+        if (cambio instanceof InnpackAuthClient.CambioRechazado rechazado) {
+            audit.cambioPassword(usuario.codigoUsuario(), usuario.empresa(), ip, "RECHAZADO");
+            return error(HttpStatus.BAD_REQUEST, rechazado.mensaje());
+        }
+        if (!(cambio instanceof InnpackAuthClient.CambioOk ok)) {
+            audit.cambioPassword(usuario.codigoUsuario(), usuario.empresa(), ip, "ERROR");
+            return error(HttpStatus.SERVICE_UNAVAILABLE, MENSAJE_CAMBIO_NO_DISPONIBLE);
+        }
+
+        // Token nuevo: la sesión web no puede superar el tope configurado ni el vencimiento del token nuevo.
+        Instant tope = usuario.createdAt().plus(properties.sessionMaxDuration());
+        Instant expira = ok.tokenExpira() != null && ok.tokenExpira().isBefore(tope) ? ok.tokenExpira() : tope;
+        SessionUser actualizado = usuario.conTokenNuevo(ok.token(), expira, ok.politica().debeCambiar());
+        List<SimpleGrantedAuthority> autoridades = List.of(
+                new SimpleGrantedAuthority("ROLE_" + actualizado.rol().toUpperCase(Locale.ROOT)),
+                new SimpleGrantedAuthority("EMPRESA_" + actualizado.empresa()));
+        SecurityContext contexto = SecurityContextHolder.createEmptyContext();
+        contexto.setAuthentication(UsernamePasswordAuthenticationToken.authenticated(actualizado, null, autoridades));
+        SecurityContextHolder.setContext(contexto);
+        request.changeSessionId();
+        securityContextRepository.saveContext(contexto, request, response);
+        rotarCsrf(request, response);
+        audit.cambioPassword(actualizado.codigoUsuario(), actualizado.empresa(), ip, "OK");
+
+        // Mismo shape que el login de cada empresa (Photino responde el resultado de la sesión).
+        InnpackAuthClient.Autenticado autenticado = new InnpackAuthClient.Autenticado(ok.token(), actualizado.userId(),
+                actualizado.codigoUsuario(), actualizado.nombreCompleto(), actualizado.rol(), expira, ok.politica());
+        Map<String, Object> data = faret ? datosLoginFaret(autenticado) : datosLogin(autenticado);
+        if (!faret) {
+            data.put("Message", "Contraseña actualizada correctamente");
+        }
+        return ResponseEntity.ok(respuesta(true, data, null));
+    }
+
     @PostMapping("/logout")
     public ResponseEntity<Map<String, Object>> logout(HttpServletRequest request, HttpServletResponse response) {
         HttpSession sesion = request.getSession(false);
@@ -243,7 +331,7 @@ public class AuthController {
         Instant expira = ok.tokenExpira() != null && ok.tokenExpira().isBefore(tope) ? ok.tokenExpira() : tope;
         SessionUser usuario = new SessionUser(
                 ok.userId(), ok.codigoUsuario(), ok.nombreCompleto(), ok.rol(), empresa, ok.token(), ahora, expira,
-                permisosModulo);
+                permisosModulo, ok.politica().debeCambiar());
 
         List<SimpleGrantedAuthority> permisos = List.of(
                 new SimpleGrantedAuthority("ROLE_" + ok.rol().toUpperCase(Locale.ROOT)),
@@ -275,6 +363,11 @@ public class AuthController {
         data.put("CodigoUsuario", ok.codigoUsuario());
         data.put("NombreCompleto", ok.nombreCompleto());
         data.put("Rol", ok.rol());
+        // Política de contraseñas (Photino 1.8.23): el frontend decide con esto si abre cambiar-password.
+        data.put("DebeCambiarPassword", ok.politica().debeCambiar());
+        data.put("MotivoCambioPassword", ok.politica().motivo());
+        data.put("DiasParaVencer", ok.politica().dias());
+        data.put("PasswordVenceEl", ok.politica().venceEl());
         return data;
     }
 
@@ -283,6 +376,10 @@ public class AuthController {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("username", ok.nombreCompleto());
         data.put("role", ok.rol());
+        data.put("debeCambiarPassword", ok.politica().debeCambiar());
+        data.put("motivoCambioPassword", ok.politica().motivo());
+        data.put("diasParaVencer", ok.politica().dias());
+        data.put("passwordVenceEl", ok.politica().venceEl());
         return data;
     }
 

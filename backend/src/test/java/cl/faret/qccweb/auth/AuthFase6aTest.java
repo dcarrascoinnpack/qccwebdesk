@@ -104,7 +104,7 @@ class AuthFase6aTest {
         String cuerpo = res.getResponse().getContentAsString(StandardCharsets.UTF_8);
         assertThat(cuerpo).doesNotContain(FakeFaretApi.firmaDeToken(10), "token", "Token");
         // Photino manda {identificador, password} a api/Auth/login y luego mis-permisos con el token del usuario.
-        assertThat(API.cuerposLogin().get(antes)).isEqualTo("{\"identificador\":\"ana\",\"password\":\"" + PASS + "\"}");
+        assertThat(API.cuerposLogin().get(antes)).isEqualTo("{\"identificador\":\"ana\",\"password\":\"" + PASS + "\",\"soportaCambioPassword\":true}");
         assertThat(API.misPermisosConsultados()).contains(10);
 
         MockHttpSession sesion = (MockHttpSession) res.getRequest().getSession(false);
