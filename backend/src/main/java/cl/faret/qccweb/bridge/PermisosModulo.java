@@ -118,7 +118,8 @@ public final class PermisosModulo {
 
     /** Acciones permitidas sin sesión ni módulo de origen (en la web, auth.* y excel.guardar no llegan al bridge). */
     private static final Set<String> ACCIONES_PUBLICAS = Set.of(
-            "auth.login", "auth.logout", "auth.me", "faret.login", "faret.logout", "faret.health", "excel.guardar");
+            "auth.login", "auth.logout", "auth.me", "auth.cambiarPassword", "faret.login", "faret.logout",
+            "faret.cambiarPassword", "faret.health", "excel.guardar");
 
     /** Lecturas que no terminan en un sufijo genérico. Todo lo demás es escritura (ante la duda, se bloquea con VER). */
     private static final Set<String> ACCIONES_LECTURA = Set.of(
