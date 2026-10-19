@@ -695,18 +695,24 @@ class BridgeFase6cTest {
         MockHttpSession sesion = login("tecnico");
         QC.respuestaLectura(USUARIOS, 200, "{\"success\":true,\"data\":[{\"id\":10,\"nombre\":\"Admin <b>Faret</b>\",\"correo\":\"a@faret.cl\",\"username\":\"adm\\\"in\","
                 + "\"rol\":\"ADMIN\",\"activo\":true,\"roles\":[\"ADMIN\"],\"createdAt\":\"2026-01-02T03:04:05\",\"passwordHash\":\"$2a$10$secreto\","
+                + "\"passwordActualizadaEn\":\"2026-10-15T09:00:00\",\"passwordVenceEl\":\"2026-12-14T09:00:00\",\"debeCambiarPassword\":true,"
+                + "\"passwordSinVencimiento\":false,"
                 + "\"password\":\"x\",\"token\":\"t\",\"intentos\":3},{\"id\":20,\"nombre\":\"Ana\",\"correo\":null,\"username\":\"ana\",\"rol\":\"CALIDAD\",\"activo\":false,\"roles\":[]}],\"errors\":null}");
         MvcResult r = accion(sesion, "{\"action\":\"faret.usuarios.list\",\"_modulo\":\"faret-usuarios\",\"empresa\":\"INNPACK\",\"ruta\":\"/x\"}")
                 .andExpect(status().isOk()).andReturn();
         JsonNode data = json(r).get("data");
         assertThat(data).hasSize(2);
-        assertThat(data.get(0).propertyNames()).containsExactlyInAnyOrder("id", "nombre", "correo", "username", "rol", "activo", "roles", "createdAt");
+        assertThat(data.get(0).propertyNames()).containsExactlyInAnyOrder("id", "nombre", "correo", "username", "rol", "activo", "roles", "createdAt",
+                "passwordActualizadaEn", "passwordVenceEl", "debeCambiarPassword", "passwordSinVencimiento");
+        assertThat(data.get(0).get("debeCambiarPassword").asBoolean()).isTrue();
+        assertThat(data.get(0).get("passwordVenceEl").asString()).isEqualTo("2026-12-14T09:00:00");
+        assertThat(data.get(1).has("debeCambiarPassword")).isFalse();
         assertThat(data.get(0).get("nombre").asString()).isEqualTo("Admin &lt;b&gt;Faret&lt;/b&gt;");
         assertThat(data.get(0).get("username").asString()).isEqualTo("adm&quot;in");
         assertThat(data.get(1).get("correo").isNull()).isTrue();
         assertThat(data.get(1).get("activo").asBoolean()).isFalse();
         String crudo = r.getResponse().getContentAsString(StandardCharsets.UTF_8);
-        assertThat(crudo).doesNotContain("secreto").doesNotContain("passwordHash").doesNotContain("password").doesNotContain("intentos");
+        assertThat(crudo).doesNotContain("secreto").doesNotContain("passwordHash").doesNotContain("\"password\"").doesNotContain("intentos");
         assertThat(QC.lecturas()).containsExactly("GET /api/usuarios");
         assertThat(QC.lecturasDeUsuario()).containsExactly(50);
         assertThat(MC.peticiones()).isEmpty();

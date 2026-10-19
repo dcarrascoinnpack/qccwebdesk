@@ -5,6 +5,7 @@ import cl.faret.qccweb.bridge.BridgeResult;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.InnpackRespuestas;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
@@ -72,6 +73,16 @@ public class UsuariosBridgeHandler {
                 u.put("Activo", activo != null && activo.asBoolean());
                 u.put("CreadoEn", texto(campo(item, "creadoEn"), null));
                 u.put("ActualizadoEn", texto(campo(item, "actualizadoEn"), null));
+                // Política de contraseñas (Photino 1.8.23, columna "Clave" de Gestión de Usuarios).
+                u.put("PasswordActualizadaEn", texto(campo(item, "passwordActualizadaEn"), null));
+                u.put("PasswordVenceEl", texto(campo(item, "passwordVenceEl"), null));
+                for (String booleano : List.of("debeCambiarPassword", "passwordSinVencimiento")) {
+                    JsonNode valor = campo(item, booleano);
+                    if (valor != null && !valor.isBoolean()) {
+                        throw new IllegalArgumentException();
+                    }
+                    u.put(Character.toUpperCase(booleano.charAt(0)) + booleano.substring(1), valor != null && valor.asBoolean());
+                }
             }
         } catch (IllegalArgumentException e) {
             // Photino (System.Text.Json) no convierte tipos: un campo con tipo distinto hace fallar la lista.

@@ -554,6 +554,21 @@ public class FaretBridgeHandler {
             if (creado != null && creado.isString()) {
                 u.put("createdAt", creado.asString());
             }
+            // Política de contraseñas (Photino 1.8.23, columna "Clave" de Gestión de Usuarios FARET): solo se copian con su tipo.
+            for (String campo : List.of("passwordActualizadaEn", "passwordVenceEl")) {
+                JsonNode v = item.get(campo);
+                if (v != null && v.isString()) {
+                    u.put(campo, v.asString());
+                } else if (v != null && v.isNull()) {
+                    u.putNull(campo);
+                }
+            }
+            for (String campo : List.of("debeCambiarPassword", "passwordSinVencimiento")) {
+                JsonNode v = item.get(campo);
+                if (v != null && v.isBoolean()) {
+                    u.put(campo, v.asBoolean());
+                }
+            }
         }
         return BridgeResult.ok(salida);
     }

@@ -97,12 +97,16 @@ class BridgeFase2kTest {
         assertThat(json.get("data")).hasSize(2);
         List<String> campos = new ArrayList<>();
         json.at("/data/0").propertyNames().forEach(campos::add);
-        assertThat(campos).containsExactly("Id", "CodigoUsuario", "NombreCompleto", "Rol", "Activo", "CreadoEn", "ActualizadoEn");
+        assertThat(campos).containsExactly("Id", "CodigoUsuario", "NombreCompleto", "Rol", "Activo", "CreadoEn", "ActualizadoEn",
+                "PasswordActualizadaEn", "PasswordVenceEl", "DebeCambiarPassword", "PasswordSinVencimiento");
         assertThat(json.get("data").get(0)).isEqualTo(mapper.readTree("{\"Id\":10,\"CodigoUsuario\":\"operador1\","
-                + "\"NombreCompleto\":\"María José Peña «ñ»\",\"Rol\":\"operador\",\"Activo\":true,\"CreadoEn\":\"2026-07-29T10:15:00\",\"ActualizadoEn\":null}"));
+                + "\"NombreCompleto\":\"María José Peña «ñ»\",\"Rol\":\"operador\",\"Activo\":true,\"CreadoEn\":\"2026-07-29T10:15:00\",\"ActualizadoEn\":null,"
+                + "\"PasswordActualizadaEn\":\"2026-10-15T09:00:00\",\"PasswordVenceEl\":\"2026-12-14T09:00:00\",\"DebeCambiarPassword\":false,"
+                + "\"PasswordSinVencimiento\":true}"));
         // Nombres en otra capitalización (case-insensitive como Photino) y campos ausentes → defaults del DTO.
         assertThat(json.get("data").get(1)).isEqualTo(mapper.readTree("{\"Id\":20,\"CodigoUsuario\":\"admin1\","
-                + "\"NombreCompleto\":\"<b>Admin</b>\",\"Rol\":null,\"Activo\":false,\"CreadoEn\":null,\"ActualizadoEn\":null}"));
+                + "\"NombreCompleto\":\"<b>Admin</b>\",\"Rol\":null,\"Activo\":false,\"CreadoEn\":null,\"ActualizadoEn\":null,"
+                + "\"PasswordActualizadaEn\":null,\"PasswordVenceEl\":null,\"DebeCambiarPassword\":false,\"PasswordSinVencimiento\":false}"));
         String texto = json.toString();
         assertThat(texto).doesNotContain("passwordHash", "SECRETO", "$2a$", "token", "eyJ");
         assertThat(API.peticionesUsuarios()).containsExactly("GET /api/usuarios");
@@ -125,7 +129,7 @@ class BridgeFase2kTest {
         API.modoUsuarios("NULO");
         accion(sesion, CUERPO).andExpect(jsonPath("$.ok").value(true)).andExpect(jsonPath("$.data.length()").value(0));
         // Photino (System.Text.Json) no convierte tipos: cualquiera de estos hace fallar la lista.
-        for (String modo : List.of("OBJETO", "ITEM_INVALIDO", "ACTIVO_TEXTO", "FECHA_NUMERO", "ID_TEXTO")) {
+        for (String modo : List.of("OBJETO", "ITEM_INVALIDO", "ACTIVO_TEXTO", "FECHA_NUMERO", "ID_TEXTO", "DEBE_TEXTO")) {
             API.modoUsuarios(modo);
             accion(sesion, CUERPO)
                     .andExpect(status().isOk())

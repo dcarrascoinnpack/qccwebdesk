@@ -2480,8 +2480,10 @@ public final class FakeInnpackApi implements AutoCloseable {
             case "ACTIVO_TEXTO" -> "[{\"id\":1,\"activo\":\"true\"}]";
             case "FECHA_NUMERO" -> "[{\"id\":1,\"creadoEn\":123}]";
             case "ID_TEXTO" -> "[{\"id\":\"1\"}]";
+            case "DEBE_TEXTO" -> "[{\"id\":1,\"debeCambiarPassword\":\"si\"}]";
             default -> "[{\"id\":10,\"codigoUsuario\":\"operador1\",\"nombreCompleto\":\"María José Peña «ñ»\",\"rol\":\"operador\",\"activo\":true,"
-                    + "\"creadoEn\":\"2026-07-29T10:15:00\",\"actualizadoEn\":null,\"passwordHash\":\"$2a$11$SECRETO\",\"token\":\"eyJSECRETO\"},"
+                    + "\"creadoEn\":\"2026-07-29T10:15:00\",\"actualizadoEn\":null,\"passwordActualizadaEn\":\"2026-10-15T09:00:00\","
+                    + "\"passwordVenceEl\":\"2026-12-14T09:00:00\",\"debeCambiarPassword\":false,\"passwordSinVencimiento\":true,\"passwordHash\":\"$2a$11$SECRETO\",\"token\":\"eyJSECRETO\"},"
                     + "{\"Id\":20,\"CODIGOUSUARIO\":\"admin1\",\"NombreCompleto\":\"<b>Admin</b>\",\"rol\":null}]";
         };
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
