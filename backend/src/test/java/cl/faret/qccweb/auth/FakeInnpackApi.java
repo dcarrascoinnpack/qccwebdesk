@@ -50,6 +50,8 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/sap/api/despachos", this::sapDespachos);
         server.createContext("/plan/api/plan/vista-planificacion", this::planVista);
         server.createContext("/fpsmat/materiales-por-proceso", this::fpsMaterialesTraz);
+        server.createContext("/fpsmat/registros-por-proceso", this::fpsRegistrosLab);
+        server.createContext("/sap/api/lotes", this::sapLote);
         server.createContext("/api/trazabilidad/paletizado", this::paletizado);
         server.createContext("/api/despachos-diarios", this::despachosDiarios);
         server.createContext("/api/home/dashboard", this::dashboard);
@@ -416,6 +418,58 @@ public final class FakeInnpackApi implements AutoCloseable {
             data.append(data.length() > 1 ? "," : "").append("{\"Id_Proceso\":88004,\"ItemCode\":\"INS-09\",\"ItemName\":\"Cola\"}");
         }
         responder(ex, 200, "{\"ok\":true,\"total\":0,\"data\":" + data + "]}");
+    }
+
+    /** fps registros-por-proceso/{id}: x-api-key; 88001 -> 2 registros (tipos mixtos y un campo extra), el resto sin registros. */
+    private void fpsRegistrosLab(HttpExchange ex) throws IOException {
+        trazConsultas.add("fpsreg " + ex.getRequestURI().getRawPath());
+        if (!FPS_API_KEY.equals(ex.getRequestHeaders().getFirst("x-api-key"))) {
+            responder(ex, 401, "{\"ok\":false,\"message\":\"No autorizado\"}");
+            return;
+        }
+        if (modoFpsMat.equals("ERROR_500")) {
+            responder(ex, 500, "{\"ok\":false,\"message\":\"SQL timeout\"}");
+            return;
+        }
+        if (modoFpsMat.equals("OK_FALSE")) {
+            responder(ex, 200, "{\"ok\":false,\"message\":\"Proceso <b>x</b>\"}");
+            return;
+        }
+        String id = ex.getRequestURI().getRawPath().replaceAll(".*/", "");
+        String data = id.equals("88001")
+                ? "[{\"RecordKey\":\"5001\",\"IdProceso\":88001,\"Maquina\":\"M1\",\"MaquinaDescripcion\":\"Heidelberg <b>1</b>\","
+                        + "\"Operador\":\"Operador & Co\",\"ProductionStartDate\":\"2026-10-02T08:00:00\\\"<x>\",\"ProductionEndDate\":null,"
+                        + "\"ProductionQuantity\":1200.5,\"Interno\":\"no-debe-llegar\"},"
+                        + "{\"RecordKey\":5002,\"IdProceso\":\"x\",\"Maquina\":\"M2\"}]"
+                : "[]";
+        responder(ex, 200, "{\"ok\":true,\"total\":0,\"data\":" + data + "}");
+    }
+
+    /** apisapfaret GET api/lotes/{lote}: X-Api-Key; NOEXISTE -> data vacia, L404 -> 404, BAD -> 400, otro -> 2 filas (1 con campo extra). */
+    private void sapLote(HttpExchange ex) throws IOException {
+        String path = ex.getRequestURI().getRawPath();
+        trazConsultas.add("sap " + path);
+        if (!SAP_API_KEY.equals(ex.getRequestHeaders().getFirst("X-Api-Key"))) {
+            responder(ex, 401, "{\"ok\":false,\"error\":\"API key invalida\"}");
+            return;
+        }
+        String lote = java.net.URLDecoder.decode(path.replaceFirst("^/sap/api/lotes/", ""), StandardCharsets.UTF_8);
+        if (modoSap.equals("ERROR_502")) {
+            responder(ex, 502, "{\"ok\":false,\"error\":\"Service Layer: login failed for B1SESSION xyz\"}");
+            return;
+        }
+        if (modoSap.equals("JSON_INVALIDO")) {
+            responder(ex, 200, "<html>proxy</html>");
+            return;
+        }
+        switch (lote) {
+            case "NOEXISTE" -> responder(ex, 200, "{\"ok\":true,\"total\":0,\"data\":[]}");
+            case "L404" -> responder(ex, 404, "{\"ok\":false,\"error\":\"Lote no encontrado\"}");
+            case "BAD" -> responder(ex, 400, "{\"ok\":false,\"error\":\"lote invalido\"}");
+            default -> responder(ex, 200, "{\"ok\":true,\"total\":2,\"data\":[{\"empresa\":\"INNPACK\",\"itemCode\":\"1095SC\","
+                    + "\"itemName\":\"Kraft 125\",\"unidad\":\"KG\",\"stock\":1250.5,\"ubicacion\":\"BOD-1\",\"interno\":\"no-debe-llegar\"},"
+                    + "{\"empresa\":\"FARET\",\"itemCode\":\"OTRO\"}]}");
+        }
     }
 
     /** api/trazabilidad/paletizado?np= de QualityControlInnpack.Api ([Authorize], ApiResponse). */

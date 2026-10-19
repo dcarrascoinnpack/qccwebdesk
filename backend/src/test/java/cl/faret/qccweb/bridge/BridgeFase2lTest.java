@@ -57,7 +57,7 @@ class BridgeFase2lTest {
     private static final List<String> LECTURAS = List.of(LIST, DETALLE, "muestraLab.catalogos", "muestraLab.indicadores",
             "muestraLab.metodo.list", "muestraLab.especificacion.list", HISTORIAL, REGISTRO, ADJUNTO);
     private static final List<String> NO_HABILITADAS = List.of(
-            "muestraLab.consultarNp", "muestraLab.consultarRegistroProduccion", "muestraLab.resolverBobina");
+            "faretLab.ph.guardar", "faretLab.cobb.guardar", "faretLab.nc.crear"); // faretLab sigue diferido
     private static final String BASE = "GET /api/muestra-laboratorio";
     private static final FakeInnpackApi API = new FakeInnpackApi(Clock.systemUTC());
     private static final Path WWW = crearWww();

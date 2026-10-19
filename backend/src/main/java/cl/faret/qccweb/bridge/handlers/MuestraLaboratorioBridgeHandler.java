@@ -6,6 +6,8 @@ import cl.faret.qccweb.bridge.LecturasDeSesion;
 import cl.faret.qccweb.upstream.FpsApiClient;
 import cl.faret.qccweb.upstream.InnpackApiClient;
 import cl.faret.qccweb.upstream.InnpackRespuestas;
+import cl.faret.qccweb.upstream.PlanificacionApiClient;
+import cl.faret.qccweb.upstream.SapApiClient;
 import cl.faret.qccweb.upstream.UriEscape;
 import java.math.BigDecimal;
 import java.util.List;
@@ -57,8 +59,8 @@ import tools.jackson.databind.node.ObjectNode;
  * de `controlDocumental.eliminar`, estas dos SÍ reciben un error real de la API si el id no existe (no hace falta
  * releer antes de borrar).
  *
- * Fuera: consultarNp (Planificación FARET), consultarRegistroProduccion (FPS, solo en el alta de muestra, que depende
- * de consultarNp) y resolverBobina (SAP) — único trío que falta, requieren clientes de otras APIs externas.
+ * Photino 1.8.23: lecturas del alta de muestra consultarNp (Planificación FARET), consultarRegistroProduccion (FPS, solo
+ * para procesos devueltos antes por consultarNp en la misma sesión) y resolverBobina (SAP).
  */
 public class MuestraLaboratorioBridgeHandler {
 
@@ -84,11 +86,16 @@ public class MuestraLaboratorioBridgeHandler {
 
     private final InnpackApiClient api;
     private final FpsApiClient fps;
+    private final PlanificacionApiClient planificacion;
+    private final SapApiClient sap;
     private final ObjectMapper mapper;
 
-    public MuestraLaboratorioBridgeHandler(InnpackApiClient api, FpsApiClient fps, ObjectMapper mapper) {
+    public MuestraLaboratorioBridgeHandler(InnpackApiClient api, FpsApiClient fps, PlanificacionApiClient planificacion,
+            SapApiClient sap, ObjectMapper mapper) {
         this.api = api;
         this.fps = fps;
+        this.planificacion = planificacion;
+        this.sap = sap;
         this.mapper = mapper;
     }
 
@@ -207,6 +214,222 @@ public class MuestraLaboratorioBridgeHandler {
 
     private static String recursoProcesoFps(String proceso) {
         return "fps-proceso:" + proceso;
+    }
+
+    // ------------------------------------------------------------------ Photino 1.8.23: lecturas del alta de muestra (NP, FPS, SAP)
+    static final String MENSAJE_PLANIFICACION_NO_CONFIGURADA = "Planificación FARET no está configurada en este equipo.";
+    static final String MENSAJE_PLANIFICACION = "No se pudo consultar Planificación FARET";
+    static final String MENSAJE_PLANIFICACION_INESPERADA = "Respuesta inesperada de Planificación FARET.";
+    static final String MENSAJE_PLANIFICACION_INVALIDA = "Respuesta inválida de Planificación FARET.";
+    static final String MENSAJE_NP_INVALIDA = "La NP no es válida.";
+    static final String MENSAJE_FALTA_PROCESO_NP = "Falta indicar el proceso (selecciona primero la NP)";
+    static final String MENSAJE_PROCESO_SIN_NP = "Consulta primero la NP para elegir el proceso.";
+    static final String MENSAJE_FPS_REGISTROS = "No fue posible consultar FPS.";
+    static final String MENSAJE_FALTA_LOTE = "Falta indicar el lote/bobina";
+    static final String MENSAJE_LOTE_INVALIDO = "El lote/bobina no es válido.";
+    static final String MENSAJE_SAP_NO_CONFIGURADA = "SAP (apisapfaret) no está configurado en este equipo.";
+    static final String MENSAJE_SAP_FALLO = "No fue posible consultar SAP (apisapfaret).";
+    static final String MENSAJE_SAP_INVALIDA = "Respuesta inválida de SAP (apisapfaret).";
+    static final int MAX_NP = 50;
+    static final int MAX_LOTE = 50;
+    static final int MAX_MENSAJE_EXTERNO = 200;
+    private static final Pattern CONTROL_LECTURA = Pattern.compile("[\\x00-\\x1F\\x7F]");
+    private static final Pattern PELIGROSO_HTML_LECTURA = Pattern.compile("[<>\"&']");
+
+    /**
+     * muestraLab.consultarNp {data:{np}} → GET Planificación FARET api/plan/vista-planificacion (sin auth), filtrado en
+     * memoria por np o nvInn, como Photino. Devuelve {idProceso, cliente, codigoProducto, descripcion, proceso} por proceso
+     * y registra en la sesión cada idProceso devuelto: solo esos procesos se pueden consultar luego en FPS
+     * (consultarRegistroProduccion), así no se enumeran procesos arbitrarios. Textos tal cual (la vista escapa proceso y
+     * usa .value para el resto).
+     */
+    public BridgeResult consultarNp(ObjectNode payload, SessionUser usuario) {
+        String np = textoGet(data(payload).get("np"));
+        if (np.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_NP);
+        }
+        if (np.length() > MAX_NP || CONTROL_LECTURA.matcher(np).find()) {
+            return BridgeResult.error(MENSAJE_NP_INVALIDA);
+        }
+        if (!planificacion.configurada()) {
+            return BridgeResult.error(MENSAJE_PLANIFICACION_NO_CONFIGURADA);
+        }
+        InnpackApiClient.Respuesta r = planificacion.get("api/plan/vista-planificacion");
+        JsonNode raiz = leerJson(r.body());
+        if (r.status() < 200 || r.status() > 299) {
+            return BridgeResult.error(mensajeExterno(r, raiz, "message", MENSAJE_PLANIFICACION));
+        }
+        if (raiz == null) {
+            return BridgeResult.error(MENSAJE_PLANIFICACION_INVALIDA);
+        }
+        if (!raiz.isArray()) {
+            return BridgeResult.error(MENSAJE_PLANIFICACION_INESPERADA);
+        }
+        ArrayNode lista = mapper.createArrayNode();
+        for (JsonNode fila : raiz) {
+            if (!np.equals(textoGet(fila.get("np"))) && !np.equals(textoGet(fila.get("nvInn")))) {
+                continue;
+            }
+            ObjectNode m = lista.addObject();
+            JsonNode id = fila.get("id");
+            long idProc = id != null && id.isIntegralNumber() && id.canConvertToLong() ? id.asLong() : 0L;
+            m.put("idProceso", idProc);
+            m.put("cliente", textoGet(fila.get("cli")));
+            m.put("codigoProducto", textoGet(fila.get("item")));
+            m.put("descripcion", textoGet(fila.get("itemName")));
+            m.put("proceso", textoGet(fila.get("proc")));
+            if (idProc > 0) {
+                LecturasDeSesion.registrar(recursoProcesoNp(Long.toString(idProc)), "1");
+            }
+        }
+        if (lista.isEmpty()) {
+            return BridgeResult.error("No se encontró la NP " + np + " en Planificación FARET.");
+        }
+        return BridgeResult.ok(lista);
+    }
+
+    /**
+     * muestraLab.consultarRegistroProduccion {data:{idProceso}} → GET fps-api registros-por-proceso/{id} (WorkOrderRecords),
+     * como Photino. El idProceso debe haberse devuelto antes por consultarNp en ESTA sesión. Respuesta = registros con
+     * {recordKey, idProceso, maquina, maquinaDescripcion, operador, productionStartDate, productionEndDate,
+     * productionQuantity} (GetString/GetLong de Photino); productionStartDate se escapa (la vista lo pinta sin escapar).
+     */
+    public BridgeResult consultarRegistroProduccion(ObjectNode payload, SessionUser usuario) {
+        JsonNode nodo = data(payload).get("idProceso");
+        if (nodo != null && !nodo.isNull() && !(nodo.isString() || nodo.isNumber())) {
+            return BridgeResult.error(MENSAJE_FILTRO_INVALIDO);
+        }
+        String proceso = idProceso(nodo);
+        if (proceso == null) {
+            return BridgeResult.error(MENSAJE_FALTA_PROCESO_NP);
+        }
+        if (!fps.configurada()) {
+            return BridgeResult.error(MENSAJE_FPS_NO_CONFIGURADO);
+        }
+        if (LecturasDeSesion.huella(recursoProcesoNp(proceso)) == null) {
+            return BridgeResult.error(MENSAJE_PROCESO_SIN_NP);
+        }
+        InnpackApiClient.Respuesta r = fps.get("registros-por-proceso/" + proceso);
+        JsonNode raiz = leerJson(r.body());
+        JsonNode okProp = raiz == null ? null : raiz.get("ok");
+        if (r.status() < 200 || r.status() > 299 || okProp == null || !okProp.isBoolean() || !okProp.asBoolean()) {
+            // Como materialesFps: un fallo de FPS (SQL, red, timeout) es genérico, nunca el texto interno de la API.
+            return BridgeResult.error(MENSAJE_FPS_REGISTROS);
+        }
+        ArrayNode lista = mapper.createArrayNode();
+        JsonNode filas = raiz.get("data");
+        if (filas != null && filas.isArray()) {
+            for (JsonNode fila : filas) {
+                ObjectNode m = lista.addObject();
+                m.put("recordKey", longGet(fila, "RecordKey"));
+                m.put("idProceso", longGet(fila, "IdProceso"));
+                m.put("maquina", textoFila(fila, "Maquina"));
+                m.put("maquinaDescripcion", textoFila(fila, "MaquinaDescripcion"));
+                m.put("operador", textoFila(fila, "Operador"));
+                m.put("productionStartDate", escaparHtml(textoFila(fila, "ProductionStartDate")));
+                m.put("productionEndDate", escaparHtml(textoFila(fila, "ProductionEndDate")));
+                m.put("productionQuantity", escaparHtml(textoFila(fila, "ProductionQuantity")));
+            }
+        }
+        return BridgeResult.ok(lista);
+    }
+
+    /**
+     * muestraLab.resolverBobina {data:{lote}} → GET apisapfaret api/lotes/{lote} (X-Api-Key del servidor), como Photino:
+     * el primer elemento de data → {empresa, itemCode, itemName, unidad, stock, ubicacion}. Solo informa (la vista usa
+     * textContent). Lote acotado (50) y sin controles, escapado en la ruta. Solo el 400/404 de apisapfaret muestra su
+     * texto (acotado); un fallo de SAP, red o timeout es genérico.
+     */
+    public BridgeResult resolverBobina(ObjectNode payload, SessionUser usuario) {
+        String lote = textoGet(data(payload).get("lote"));
+        if (lote.isBlank()) {
+            return BridgeResult.error(MENSAJE_FALTA_LOTE);
+        }
+        if (lote.length() > MAX_LOTE || CONTROL_LECTURA.matcher(lote).find()) {
+            return BridgeResult.error(MENSAJE_LOTE_INVALIDO);
+        }
+        if (!sap.configurada()) {
+            return BridgeResult.error(MENSAJE_SAP_NO_CONFIGURADA);
+        }
+        InnpackApiClient.Respuesta r = sap.get("api/lotes/" + UriEscape.dataString(lote));
+        JsonNode raiz = leerJson(r.body());
+        boolean ok = r.status() >= 200 && r.status() <= 299;
+        if (!ok && r.status() != 404) {
+            String texto = r.status() == 400 ? mensajeExterno(r, raiz, "error", null) : null;
+            return BridgeResult.error(texto != null ? texto : MENSAJE_SAP_FALLO);
+        }
+        if (ok && raiz == null) {
+            return BridgeResult.error(MENSAJE_SAP_INVALIDA);
+        }
+        JsonNode filas = ok && raiz != null ? raiz.get("data") : null;
+        if (filas == null || !filas.isArray() || filas.isEmpty()) {
+            return BridgeResult.error("No se encontró el lote " + lote + " en SAP.");
+        }
+        JsonNode primero = filas.get(0);
+        ObjectNode m = mapper.createObjectNode();
+        m.put("empresa", textoFila(primero, "empresa"));
+        m.put("itemCode", textoFila(primero, "itemCode"));
+        m.put("itemName", textoFila(primero, "itemName"));
+        m.put("unidad", textoFila(primero, "unidad"));
+        m.put("stock", textoFila(primero, "stock"));
+        m.put("ubicacion", textoFila(primero, "ubicacion"));
+        return BridgeResult.ok(m);
+    }
+
+    private static String recursoProcesoNp(String proceso) {
+        return "plan-proceso:" + proceso;
+    }
+
+    private JsonNode leerJson(String body) {
+        if (body == null || body.isBlank()) {
+            return null;
+        }
+        try {
+            return mapper.readTree(body);
+        } catch (RuntimeException e) {
+            return null;
+        }
+    }
+
+    /** Mensaje de la API externa solo si es texto corto (propiedad indicada o "error"); si no, el genérico. */
+    private static String mensajeExterno(InnpackApiClient.Respuesta r, JsonNode raiz, String propiedad, String generico) {
+        JsonNode m = raiz == null ? null : raiz.get(propiedad);
+        if (m != null && m.isString() && !m.asString().isBlank() && m.asString().length() <= MAX_MENSAJE_EXTERNO
+                && !CONTROL_LECTURA.matcher(m.asString()).find()) {
+            return m.asString();
+        }
+        return generico;
+    }
+
+    /** GetString de Photino: string o número → texto; cualquier otro tipo (o ausente) → "". */
+    private static String textoGet(JsonNode nodo) {
+        return nodo != null && (nodo.isString() || nodo.isNumber()) ? nodo.asString() : "";
+    }
+
+    /** GetLong de FpsRegistroProduccionApiService: número int64 o texto convertible; si no, 0. */
+    private static long longGet(JsonNode fila, String campo) {
+        JsonNode v = fila != null && fila.isObject() ? fila.get(campo) : null;
+        if (v == null) {
+            return 0L;
+        }
+        if (v.isIntegralNumber() && v.canConvertToLong()) {
+            return v.asLong();
+        }
+        if (v.isString()) {
+            try {
+                return Long.parseLong(v.asString().trim());
+            } catch (NumberFormatException e) {
+                return 0L;
+            }
+        }
+        return 0L;
+    }
+
+    private static String escaparHtml(String v) {
+        if (v == null || !PELIGROSO_HTML_LECTURA.matcher(v).find()) {
+            return v;
+        }
+        return v.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace("\"", "&quot;").replace("'", "&#39;");
     }
 
     /** muestraLab.catalogos → GET api/muestra-laboratorio/catalogos */

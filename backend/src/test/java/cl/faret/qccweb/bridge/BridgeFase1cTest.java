@@ -141,7 +141,7 @@ class BridgeFase1cTest {
     void accionDesconocidaORegistradaEnPhotinoPeroNoHabilitadaSeRechaza() throws Exception {
         MockHttpSession sesion = login("admin1");
         int antes = API.llamadasDashboard();
-        for (String accion : List.of("usuarios.create", "muestraLab.consultarNp", "excel.guardar",
+        for (String accion : List.of("usuarios.create", "faretLab.ph.guardar", "excel.guardar",
                 "noConformidades.catalogos.clientes.desactivar", "accion.inventada", "Inicio.getDashboard", "inicio.getdashboard")) {
             bridge(sesion, "{\"action\":\"" + accion + "\"}")
                     .andExpect(status().isForbidden())
@@ -216,7 +216,8 @@ class BridgeFase1cTest {
                 "noConformidades.catalogos.impactos.list",
                 "recepcion.list", "recepcion.detalle", "recepcion.foto.abrir", "recepcion.sap.consultar", "recepcion.sap.lotes",
                 "usuarios.list",
-                "muestraLab.list", "muestraLab.detalle", "muestraLab.materialesFps", "muestraLab.catalogos", "muestraLab.indicadores",
+                "muestraLab.list", "muestraLab.detalle", "muestraLab.materialesFps", "muestraLab.consultarNp", "muestraLab.consultarRegistroProduccion",
+                "muestraLab.resolverBobina", "muestraLab.catalogos", "muestraLab.indicadores",
                 "muestraLab.metodo.list", "muestraLab.especificacion.list", "muestraLab.bobinaHistorial",
                 "muestraLab.registroProduccion.list", "muestraLab.adjunto.abrir", "muestraLab.crear", "muestraLab.ph.guardar",
                 "muestraLab.humedad.guardar", "muestraLab.gramaje.guardar", "muestraLab.cobb.guardar",

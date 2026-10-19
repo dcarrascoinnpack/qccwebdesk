@@ -294,8 +294,8 @@ public class BridgeConfig {
 
     @Bean
     public MuestraLaboratorioBridgeHandler muestraLaboratorioBridgeHandler(InnpackApiClient api, FpsApiClient fps,
-            ObjectMapper mapper) {
-        return new MuestraLaboratorioBridgeHandler(api, fps, mapper);
+            PlanificacionApiClient planificacion, SapApiClient sap, ObjectMapper mapper) {
+        return new MuestraLaboratorioBridgeHandler(api, fps, planificacion, sap, mapper);
     }
 
     @Bean
@@ -635,6 +635,13 @@ public class BridgeConfig {
                 // solo el proceso FPS de una muestra abierta en la sesión.
                 new ActionPolicy.Regla(
                         "muestraLab.materialesFps", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::materialesFps),
+                new ActionPolicy.Regla(
+                        "muestraLab.consultarNp", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::consultarNp),
+                new ActionPolicy.Regla(
+                        "muestraLab.consultarRegistroProduccion", Set.of("INNPACK"), ROLES_INNPACK, Map.of(),
+                        laboratorio::consultarRegistroProduccion),
+                new ActionPolicy.Regla(
+                        "muestraLab.resolverBobina", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), laboratorio::resolverBobina),
                 // Fase 4e-1 — piloto de las 25 escrituras de Laboratorio: crear + ph.guardar. Roles = matriz
                 // (operador/admin/admin_ti); usuarioId/analistaUsuarioId y usuarioNombre/analistaNombre ← sesión,
                 // ni siquiera son claves aceptadas del payload. Sin huella ni candado: altas puras.
