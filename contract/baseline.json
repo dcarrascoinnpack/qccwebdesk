@@ -1778,6 +1778,70 @@
       "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
       "photinoVersion": "1.8.23",
       "aprobado": "2026-10-19T16:28:13Z"
+    },
+    "usuarios.activo": {
+      "huella": "e2e4898b3e2e7d60bf9d2e52da29932c43ebab615c3c054715cb0babab8c3d71",
+      "huellaFrontend": "dd57c02dec951cecf0b57c8a84502419709d2f5cdaddad69e02c6b5095eb24c1",
+      "handler": "UsuariosHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:41:43Z"
+    },
+    "usuarios.cambiarRol": {
+      "huella": "2891beb4afc73951b7ccf886a30501cb77b62c08b2f8e780f5d6fcda13a046ec",
+      "huellaFrontend": "6fadd80737907febe426d4b88f0711dd0e2e69baa0178eb12ec36cfff1e7616b",
+      "handler": "UsuariosHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:41:43Z"
+    },
+    "usuarios.create": {
+      "huella": "83f250975d492fd6d980fa9f80a178dec59823a5f3b263540e9502ce2563436d",
+      "huellaFrontend": "2a1c05d697a135bd60538aef971bce4690ec089783cbccc6c20259763c53423c",
+      "handler": "UsuariosHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:41:43Z"
+    },
+    "usuarios.eliminarDefinitivo": {
+      "huella": "d570c991c33621df3d3b9c50824e2cd2be2583bcc5598f64b20d381ee9928a56",
+      "huellaFrontend": "b4fc7b9825ed98c935a83a5a1569e3a69a5d2447437046b6df762ad696f1e614",
+      "handler": "UsuariosHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:41:43Z"
+    },
+    "usuarios.permisos.get": {
+      "huella": "1e506fab37c36a01e50f9102cc196e8623baff48a9318b43165ab032ce365508",
+      "huellaFrontend": "04a393870a9c5efdee0f4cc8f934affd3c46fc9021a09db24ff6e731f5f78d60",
+      "handler": "UsuariosHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:41:43Z"
+    },
+    "usuarios.permisos.guardar": {
+      "huella": "7ca54bf062adb53e382ef9c666de7c3302af909e0ece4e23e8fce72e8835ca19",
+      "huellaFrontend": "376cf9b009198bdfb5f225ca491d144721dca2bb340337d080e755211cd4efff",
+      "handler": "UsuariosHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:41:43Z"
+    },
+    "usuarios.permisos.restablecer": {
+      "huella": "d1267318fbcc979934f92f21850b115f70a58a8cfab6ff8a2957e8eb9bc5fc20",
+      "huellaFrontend": "0b703d789cf87df275cc76fea6a247022404fbfa072e1445b5ac4e8438c7f3c0",
+      "handler": "UsuariosHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:41:43Z"
+    },
+    "usuarios.resetPassword": {
+      "huella": "710b3d799992916e5c3e09197c3f6df0d9e99e1ba59727bc0c5096496cbd9b0c",
+      "huellaFrontend": "46fd2c8d970c22be069d7f24084381bc892a6e2ea791dcd95852b757b9148c0c",
+      "handler": "UsuariosHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:41:43Z"
     }
   }
 }

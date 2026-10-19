@@ -186,6 +186,8 @@ class BridgeFase3aTest {
                         "talleresExternos.sincronizarFps",
                         "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
                         "controlDocumental.eliminar", "controlDocumental.adjunto.subir",
+                        "usuarios.create", "usuarios.resetPassword", "usuarios.activo", "usuarios.cambiarRol", "usuarios.eliminarDefinitivo",
+                        "usuarios.permisos.guardar", "usuarios.permisos.restablecer",
                         "muestraLab.crear", "muestraLab.ph.guardar", "muestraLab.humedad.guardar",
                         "muestraLab.gramaje.guardar", "muestraLab.cobb.guardar", "muestraLab.espesor.guardar",
                         "muestraLab.rct.guardar", "muestraLab.fct.guardar", "muestraLab.ect.guardar",

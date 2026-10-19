@@ -148,6 +148,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         planesInsertados.set(0);
         demoraPlanMs = 0;
         peticionesUsuarios.clear();
+        cuerposUsuarios.clear();
         peticionesLaboratorio.clear();
         origenMuestraLab.clear();
         muestrasLabAnuladas.clear();
@@ -2700,6 +2701,9 @@ public final class FakeInnpackApi implements AutoCloseable {
             ex.close();
             return;
         }
+        if (usuariosEscritura(ex)) {
+            return;
+        }
         if (!ex.getRequestMethod().equals("GET") || !ex.getRequestURI().getRawPath().equals("/api/usuarios")) {
             responder(ex, 200, "{\"success\":true,\"message\":\"NO DEBERIA LLEGAR\",\"data\":null,\"errors\":null}");
             return;
@@ -2719,6 +2723,52 @@ public final class FakeInnpackApi implements AutoCloseable {
                     + "{\"Id\":20,\"CODIGOUSUARIO\":\"admin1\",\"NombreCompleto\":\"<b>Admin</b>\",\"rol\":null}]";
         };
         responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":" + data + ",\"errors\":null}");
+    }
+
+    private final java.util.List<String> cuerposUsuarios = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+
+    /** "<metodo> <ruta>|<cuerpo>" de cada escritura de usuarios recibida (para verificar el cuerpo exacto). */
+    public java.util.List<String> cuerposUsuarios() {
+        return java.util.List.copyOf(cuerposUsuarios);
+    }
+
+    /**
+     * Escrituras de Gestion de Usuarios (Photino 1.8.23): POST api/usuarios (codigo "dup" -> 400), PUT/DELETE api/usuarios/{id}/...
+     * (id 404 -> 404, DELETE definitivo de 409 -> 400) y GET api/usuarios/{id}/permisos. Devuelve true si atendio la peticion.
+     */
+    private boolean usuariosEscritura(HttpExchange ex) throws IOException {
+        String metodo = ex.getRequestMethod();
+        String path = ex.getRequestURI().getRawPath();
+        java.util.regex.Matcher m = java.util.regex.Pattern.compile("^/api/usuarios/(\\d+)/(password|activo|rol|permisos|definitivo)$").matcher(path);
+        boolean alta = metodo.equals("POST") && path.equals("/api/usuarios");
+        if (!alta && !m.matches()) {
+            return false;
+        }
+        String cuerpo = new String(ex.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+        if (!metodo.equals("GET")) {
+            cuerposUsuarios.add(metodo + " " + path + "|" + cuerpo);
+        }
+        if (alta) {
+            if (cuerpo.contains("\"codigoUsuario\":\"dup\"")) {
+                responder(ex, 400, fallo("El código de usuario ya existe"));
+            } else {
+                responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":{\"id\":77,\"interno\":\"x\"},\"errors\":null}");
+            }
+            return true;
+        }
+        String id = m.group(1);
+        String recurso = m.group(2);
+        if (id.equals("404")) {
+            responder(ex, 404, fallo("Usuario no encontrado"));
+        } else if (id.equals("409") && recurso.equals("definitivo")) {
+            responder(ex, 400, fallo("El usuario tiene historial y no puede eliminarse"));
+        } else if (metodo.equals("GET") && recurso.equals("permisos")) {
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":[{\"modulo\":\"dashboard\",\"nivel\":\"ver\","
+                    + "\"modificadoPor\":\"ti1\",\"fechaModificacion\":\"2026-10-01T10:00:00\",\"interno\":\"no-debe-llegar\"}],\"errors\":null}");
+        } else {
+            responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":null,\"errors\":null}");
+        }
+        return true;
     }
 
     private final java.util.List<String> peticionesLaboratorio = java.util.Collections.synchronizedList(new java.util.ArrayList<>());

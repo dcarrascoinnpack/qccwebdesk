@@ -79,7 +79,7 @@ class ActionPolicyExportTest {
         assertThat(dashboard.get("roles").toString()).isEqualTo("[\"admin\",\"admin_ti\",\"operador\"]");
         assertThat(dashboard.get("identidad").size()).isZero();
         // Los nombres auth.cambiarPassword / faret.cambiarPassword y la ruta cambiar-password son acciones, no datos: se descartan antes de buscar secretos.
-        assertThat(Files.readString(SALIDA).replace("cambiarPassword", "").replace("cambiar-password", "")).doesNotContainIgnoringCase("token").doesNotContainIgnoringCase("password");
+        assertThat(Files.readString(SALIDA).replace("cambiarPassword", "").replace("resetPassword", "").replace("cambiar-password", "")).doesNotContainIgnoringCase("token").doesNotContainIgnoringCase("password");
 
         assertThat(buscar(leido, "auth.login").get("via").asString()).isEqualTo("AuthController POST /api/v1/auth/login");
         assertThat(buscar(leido, "auth.me").get("via").asString()).isEqualTo("AuthController GET /api/v1/auth/session");

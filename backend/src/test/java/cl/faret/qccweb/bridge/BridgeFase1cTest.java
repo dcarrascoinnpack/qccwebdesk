@@ -141,7 +141,7 @@ class BridgeFase1cTest {
     void accionDesconocidaORegistradaEnPhotinoPeroNoHabilitadaSeRechaza() throws Exception {
         MockHttpSession sesion = login("admin1");
         int antes = API.llamadasDashboard();
-        for (String accion : List.of("usuarios.create", "faretLab.ph.guardar", "excel.guardar",
+        for (String accion : List.of("faret.usuarios.create", "faretLab.ph.guardar", "excel.guardar",
                 "noConformidades.catalogos.clientes.desactivar", "accion.inventada", "Inicio.getDashboard", "inicio.getdashboard")) {
             bridge(sesion, "{\"action\":\"" + accion + "\"}")
                     .andExpect(status().isForbidden())
@@ -215,7 +215,8 @@ class BridgeFase1cTest {
                 "noConformidades.catalogos.familiasProducto.list", "noConformidades.catalogos.niveles.list",
                 "noConformidades.catalogos.impactos.list",
                 "recepcion.list", "recepcion.detalle", "recepcion.foto.abrir", "recepcion.sap.consultar", "recepcion.sap.lotes",
-                "usuarios.list",
+                "usuarios.list", "usuarios.create", "usuarios.resetPassword", "usuarios.activo", "usuarios.cambiarRol", "usuarios.eliminarDefinitivo",
+                "usuarios.permisos.get", "usuarios.permisos.guardar", "usuarios.permisos.restablecer",
                 "muestraLab.list", "muestraLab.detalle", "muestraLab.materialesFps", "muestraLab.consultarNp", "muestraLab.consultarRegistroProduccion",
                 "muestraLab.resolverBobina", "muestraLab.catalogos", "muestraLab.indicadores",
                 "muestraLab.metodo.list", "muestraLab.especificacion.list", "muestraLab.bobinaHistorial",
@@ -343,7 +344,7 @@ class BridgeFase1cTest {
     void niJwtNiContrasenaEnLogsNiRespuestas(CapturedOutput salida) throws Exception {
         MockHttpSession sesion = login("operador1");
         String body = bridge(sesion, "{\"action\":\"inicio.getDashboard\"}").andReturn().getResponse().getContentAsString();
-        bridge(sesion, "{\"action\":\"usuarios.create\"}");
+        bridge(sesion, "{\"action\":\"faret.usuarios.create\"}");
 
         assertThat(body).doesNotContain(FakeInnpackApi.firmaDeToken(10), "eyJ");
         assertThat(salida.getAll())

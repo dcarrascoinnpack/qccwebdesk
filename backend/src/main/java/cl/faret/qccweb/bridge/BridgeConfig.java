@@ -613,6 +613,30 @@ public class BridgeConfig {
                 // Escrituras y matriz de permisos fuera (deny-by-default; se abordan aparte).
                 new ActionPolicy.Regla(
                         "usuarios.list", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::list),
+                // Photino 1.8.23 — escrituras de Gestion de Usuarios INNPACK: solo admin_ti (como UsuariosHandler.IsAdmin y la API).
+                new ActionPolicy.Regla(
+                        "usuarios.create", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::create,
+                        UsuariosBridgeHandler::recursoCreate),
+                new ActionPolicy.Regla(
+                        "usuarios.resetPassword", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::resetPassword,
+                        (p, d) -> UsuariosBridgeHandler.recurso(p, "resetPassword")),
+                new ActionPolicy.Regla(
+                        "usuarios.activo", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::activo,
+                        (p, d) -> UsuariosBridgeHandler.recurso(p, "activo")),
+                new ActionPolicy.Regla(
+                        "usuarios.cambiarRol", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::cambiarRol,
+                        (p, d) -> UsuariosBridgeHandler.recurso(p, "cambiarRol")),
+                new ActionPolicy.Regla(
+                        "usuarios.eliminarDefinitivo", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::eliminarDefinitivo,
+                        (p, d) -> UsuariosBridgeHandler.recurso(p, "eliminarDefinitivo")),
+                new ActionPolicy.Regla(
+                        "usuarios.permisos.get", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::permisosGet),
+                new ActionPolicy.Regla(
+                        "usuarios.permisos.guardar", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::permisosGuardar,
+                        (p, d) -> UsuariosBridgeHandler.recurso(p, "permisos.guardar")),
+                new ActionPolicy.Regla(
+                        "usuarios.permisos.restablecer", Set.of("INNPACK"), ROLES_ADMIN_TI_INNPACK, Map.of(), usuarios::permisosRestablecer,
+                        (p, d) -> UsuariosBridgeHandler.recurso(p, "permisos.restablecer")),
                 // Fase 2l — Laboratorio - Muestras contra la API INNPACK (payload en "data", sin empresa ni
                 // rol propio para lecturas). adjunto.abrir: validado como Control Documental y
                 // previsualizado/descargado en el navegador. Fuera: consultarNp/consultarRegistroProduccion/

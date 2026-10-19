@@ -297,6 +297,18 @@ public final class PermisosModulo {
         return salida;
     }
 
+    /** Módulos de la empresa cuyos permisos se pueden personalizar (todos menos Gestión de Usuarios). */
+    public static Set<String> modulosPersonalizables(String empresa) {
+        String emp = empresa.toUpperCase(Locale.ROOT);
+        Set<String> salida = new java.util.LinkedHashSet<>();
+        MODULOS.forEach((modulo, def) -> {
+            if (def.empresa().equals(emp) && !modulo.equals("usuarios") && !modulo.equals("faret-usuarios")) {
+                salida.add(modulo);
+            }
+        });
+        return java.util.Collections.unmodifiableSet(salida);
+    }
+
     private static String textoOpcional(JsonNode objeto, String campo) {
         JsonNode v = objeto == null ? null : objeto.get(campo);
         return v != null && v.isString() ? v.asString() : null;
