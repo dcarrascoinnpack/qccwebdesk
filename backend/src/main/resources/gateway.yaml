@@ -83,6 +83,14 @@ qcc:
       read-timeout: 25s          # = HttpClient.Timeout de SapRecepcionApiClient en Photino
       max-bytes-respuesta: 5242880
 
+    planificacion:
+      # Planificacion FARET / Programa de Produccion (Trazabilidad, Laboratorio): misma API que Photino (config.json →
+      # PlanificacionApi). Sin autenticacion (confirmado en Photino), por eso no hay API key. Sin base URL = "no configurada".
+      base-url: ${QCC_PLANIFICACION_API_BASE_URL:}
+      connect-timeout: 5s
+      read-timeout: 20s          # = HttpClient.Timeout de PlanificacionApiClient en Photino
+      max-bytes-respuesta: 20971520   # vista-planificacion trae el plan completo
+
 management:
   endpoints:
     web:

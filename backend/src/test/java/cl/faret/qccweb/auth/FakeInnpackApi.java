@@ -48,6 +48,9 @@ public final class FakeInnpackApi implements AutoCloseable {
         server.createContext("/fps/materiales-por-proceso", this::fpsMateriales);
         server.createContext("/sap/api/recepcion/bobinas", this::sapBobinas);
         server.createContext("/sap/api/despachos", this::sapDespachos);
+        server.createContext("/plan/api/plan/vista-planificacion", this::planVista);
+        server.createContext("/fpsmat/materiales-por-proceso", this::fpsMaterialesTraz);
+        server.createContext("/api/trazabilidad/paletizado", this::paletizado);
         server.createContext("/api/despachos-diarios", this::despachosDiarios);
         server.createContext("/api/home/dashboard", this::dashboard);
         server.createContext("/api/home/frecuencias", this::frecuenciasActualizar);
@@ -176,6 +179,7 @@ public final class FakeInnpackApi implements AutoCloseable {
         modoFps = "NORMAL";
         sapConsultas.clear();
         despachosConsultas.clear();
+        limpiarTraz();
         modoSap = "NORMAL";
         lotesCreados.clear();
         siguienteLote.set(1000);
@@ -336,6 +340,110 @@ public final class FakeInnpackApi implements AutoCloseable {
         }
         responder(ex, 200, "{\"ok\":true,\"interno\":\"no-debe-llegar\",\"empresas\":[{\"empresa\":\"INNPACK\",\"pallets\":3,"
                 + "\"cliente\":\"A & <b>B</b>\"}],\"errors\":[\"FARET: sin datos\",7]}");
+    }
+
+    // ------------------------------------------------------------------ Trazabilidad: Planificacion FARET + fps-api + paletizado
+    private final java.util.List<String> trazConsultas = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+    private volatile String modoPlan = "NORMAL";
+    private volatile String modoFpsMat = "NORMAL";
+    private volatile String modoPaletizado = "NORMAL";
+
+    /** "plan GET <ruta>", "fps <query>", "pal <query>" recibidos por las tres fuentes de Trazabilidad. */
+    public java.util.List<String> trazConsultas() {
+        return java.util.List.copyOf(trazConsultas);
+    }
+
+    public void limpiarTraz() {
+        trazConsultas.clear();
+        modoPlan = "NORMAL";
+        modoFpsMat = "NORMAL";
+        modoPaletizado = "NORMAL";
+    }
+
+    /** NORMAL | ERROR_500 | ERROR_MENSAJE | JSON_INVALIDO | NO_ARRAY */
+    public void modoPlan(String modo) {
+        this.modoPlan = modo;
+    }
+
+    /** NORMAL | ERROR_500 */
+    public void modoFpsMat(String modo) {
+        this.modoFpsMat = modo;
+    }
+
+    /** NORMAL | ERROR_500 | SUCCESS_FALSE | TIPOS_RAROS */
+    public void modoPaletizado(String modo) {
+        this.modoPaletizado = modo;
+    }
+
+    /** vista-planificacion: sin auth. Filas del NP 4101 (ids 88001/88002), una por nvInn (88004), otro NP y una fila no objeto. */
+    private void planVista(HttpExchange ex) throws IOException {
+        trazConsultas.add("plan " + ex.getRequestMethod() + " " + ex.getRequestURI().getRawPath());
+        switch (modoPlan) {
+            case "ERROR_500" -> { responder(ex, 500, "<html>boom</html>"); return; }
+            case "ERROR_MENSAJE" -> { responder(ex, 500, "{\"message\":\"Plan <b>caido</b>\"}"); return; }
+            case "JSON_INVALIDO" -> { responder(ex, 200, "<html>proxy</html>"); return; }
+            case "NO_ARRAY" -> { responder(ex, 200, "{\"data\":[]}"); return; }
+            default -> { }
+        }
+        responder(ex, 200, "[{\"id\":88001,\"np\":\"4101\",\"nvInn\":\"NV-9\",\"cant\":1500.5,\"ent\":\"2026-10-30\",\"sec\":\"Imprenta\","
+                + "\"rec\":\"Heidelberg\",\"est\":\"Planificada\",\"item\":\"CP-1\",\"itemName\":\"Estuche <b>carton</b>\",\"cli\":\"Cliente & Cia\","
+                + "\"proc\":\"Impresion\",\"cantProd\":300,\"vel\":1200.5,\"leadDias\":5,\"interno\":\"no-debe-llegar\"},"
+                + "{\"id\":88002,\"np\":4101,\"nvInn\":\"\",\"cant\":\"x\",\"ent\":null,\"sec\":\"Troquel\",\"rec\":\"R2\",\"est\":\"No Planificado\","
+                + "\"item\":\"CP-1\",\"itemName\":\"Estuche\",\"cli\":\"Cliente\",\"proc\":\"Troquelado\",\"cantProd\":0,\"vel\":null,\"leadDias\":null},"
+                + "{\"id\":88004,\"np\":\"7000\",\"nvInn\":\"4101\",\"cant\":10,\"sec\":\"Pegado\",\"est\":\"Planificada\",\"proc\":\"Pegado\"},"
+                + "{\"id\":88003,\"np\":\"9999\",\"nvInn\":\"X\",\"proc\":\"Otro\"},5]");
+    }
+
+    /** fps materiales-por-proceso (varios ids): x-api-key; 88001 → 2 insumos, 88004 → 1, el resto sin insumos. */
+    private void fpsMaterialesTraz(HttpExchange ex) throws IOException {
+        String query = ex.getRequestURI().getRawQuery() == null ? "" : ex.getRequestURI().getRawQuery();
+        trazConsultas.add("fps " + query);
+        if (!FPS_API_KEY.equals(ex.getRequestHeaders().getFirst("x-api-key"))) {
+            responder(ex, 401, "{\"ok\":false,\"message\":\"No autorizado\"}");
+            return;
+        }
+        if (modoFpsMat.equals("ERROR_500")) {
+            responder(ex, 500, "{\"ok\":false,\"message\":\"SQL timeout\"}");
+            return;
+        }
+        java.util.List<String> ids = java.util.Arrays.asList(query.replaceFirst("^ids=", "").split(","));
+        StringBuilder data = new StringBuilder("[");
+        if (ids.contains("88001")) {
+            data.append("{\"Id_Proceso\":88001,\"ItemCode\":\"INS-01\",\"ItemName\":\"Tinta <b>negra</b>\"},"
+                    + "{\"Id_Proceso\":\"88001\",\"ItemCode\":\"INS-02\",\"ItemName\":null,\"Extra\":\"no-debe-llegar\"}");
+        }
+        if (ids.contains("88004")) {
+            data.append(data.length() > 1 ? "," : "").append("{\"Id_Proceso\":88004,\"ItemCode\":\"INS-09\",\"ItemName\":\"Cola\"}");
+        }
+        responder(ex, 200, "{\"ok\":true,\"total\":0,\"data\":" + data + "]}");
+    }
+
+    /** api/trazabilidad/paletizado?np= de QualityControlInnpack.Api ([Authorize], ApiResponse). */
+    private void paletizado(HttpExchange ex) throws IOException {
+        String auth = ex.getRequestHeaders().getFirst("Authorization");
+        authorizationRecibidos.add(auth == null ? "" : auth);
+        String query = ex.getRequestURI().getRawQuery() == null ? "" : ex.getRequestURI().getRawQuery();
+        trazConsultas.add("pal " + query);
+        Integer sub = subDeBearer(auth);
+        if (sub == null || revocados.contains(sub)) {
+            ex.sendResponseHeaders(401, -1);
+            ex.close();
+            return;
+        }
+        switch (modoPaletizado) {
+            case "ERROR_500" -> { responder(ex, 500, "{\"title\":\"error\"}"); return; }
+            case "SUCCESS_FALSE" -> { responder(ex, 200, fallo("sin acceso a MySQL")); return; }
+            case "TIPOS_RAROS" -> {
+                responder(ex, 200, "{\"success\":true,\"data\":[{\"idPalet\":12,\"cantidad\":\"x\"}]}");
+                return;
+            }
+            default -> { }
+        }
+        responder(ex, 200, "{\"success\":true,\"message\":null,\"data\":["
+                + "{\"IdPalet\":\"P-001\",\"fecha\":\"2026-10-02T10:15:00\",\"planta\":\"Planta <i>1</i>\",\"npCliente\":\"4101\","
+                + "\"notaVentaInnpack\":\"NV-9\",\"nombreCliente\":\"Cliente\",\"taller\":null,\"tipo\":\"EST\",\"cantidad\":250.5,"
+                + "\"descripcion\":\"Estuche & caja\",\"fechaImpresion\":\"2026-10-02\",\"secreto\":\"no-debe-llegar\"},"
+                + "{\"idPalet\":\"P-002\",\"fecha\":null,\"cantidad\":100}],\"errors\":null}");
     }
 
     // ------------------------------------------------------------------ Fase 3v: fps-api GET liberaciones/inspectores

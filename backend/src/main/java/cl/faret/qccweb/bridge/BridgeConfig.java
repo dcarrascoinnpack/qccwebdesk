@@ -20,6 +20,7 @@ import cl.faret.qccweb.bridge.handlers.MuestraLaboratorioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ProductoTerminadoBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RecepcionCalidadBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.TrazabilidadBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosControlBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.RegistrosProduccionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.TalleresExternosBridgeHandler;
@@ -29,6 +30,8 @@ import cl.faret.qccweb.upstream.FaretProperties;
 import cl.faret.qccweb.upstream.FpsApiClient;
 import cl.faret.qccweb.upstream.FpsProperties;
 import cl.faret.qccweb.upstream.InnpackApiClient;
+import cl.faret.qccweb.upstream.PlanificacionApiClient;
+import cl.faret.qccweb.upstream.PlanificacionProperties;
 import cl.faret.qccweb.upstream.SapApiClient;
 import cl.faret.qccweb.upstream.SapProperties;
 import java.time.Clock;
@@ -144,6 +147,17 @@ public class BridgeConfig {
     @Bean
     public FpsApiClient fpsApiClient(FpsProperties properties) {
         return new FpsApiClient(properties);
+    }
+
+    @Bean
+    public PlanificacionApiClient planificacionApiClient(PlanificacionProperties properties) {
+        return new PlanificacionApiClient(properties);
+    }
+
+    @Bean
+    public TrazabilidadBridgeHandler trazabilidadBridgeHandler(
+            PlanificacionApiClient planificacion, FpsApiClient fps, InnpackApiClient api, ObjectMapper mapper) {
+        return new TrazabilidadBridgeHandler(planificacion, fps, api, mapper);
     }
 
     @Bean
@@ -308,7 +322,8 @@ public class BridgeConfig {
             FaretBridgeHandler faret, FaretTalleresExternosBridgeHandler faretTalleres,
             FaretNoConformidadesBridgeHandler faretNc, FaretNoConformidadesGestionBridgeHandler faretNcGestion,
             FaretNoConformidadesRegistroBridgeHandler faretNcRegistro, FaretBorradosBridgeHandler faretBorrados,
-            FaretImportacionBridgeHandler faretImportacion, DespachosDiariosBridgeHandler despachos) {
+            FaretImportacionBridgeHandler faretImportacion, DespachosDiariosBridgeHandler despachos,
+            TrazabilidadBridgeHandler trazabilidad) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -461,6 +476,9 @@ public class BridgeConfig {
                 new ActionPolicy.Regla(
                         "formularios.eliminar", Set.of("INNPACK"), Set.of("admin_ti"), Map.of(), formularios::eliminar,
                         FormulariosBridgeHandler::recursoEliminar),
+                // Trazabilidad (INNPACK, solo lectura): Planificacion FARET + fps-api + paletizado; sin identidad del navegador.
+                new ActionPolicy.Regla(
+                        "trazabilidad.consultarNp", Set.of("INNPACK"), ROLES_INNPACK, Map.of(), trazabilidad::consultarNp),
                 // Fase 6b-2 — lecturas del inicio FARET a QualityControlFaret.Api (payload PLANO, como Photino). Sesión FARET
                 // obligatoria; sin empresa/identidad en el payload (los handlers solo leen su lista cerrada de filtros).
                 new ActionPolicy.Regla(

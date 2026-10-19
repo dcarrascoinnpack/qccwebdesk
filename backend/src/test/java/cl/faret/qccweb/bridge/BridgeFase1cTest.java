@@ -191,7 +191,7 @@ class BridgeFase1cTest {
                 "productoTerminado.detalle", "productoTerminado.exportarDetalle",
                 "productoTerminado.eliminar", "productoTerminado.actualizarFecha",
                 "certificadosLiberacion.buscar", "certificadosLiberacion.calidadPdf.descargar",
-                "formularios.list", "formularios.detalle", "formularios.abrirPdf", "formularios.eliminar",
+                "formularios.list", "formularios.detalle", "formularios.abrirPdf", "formularios.eliminar", "trazabilidad.consultarNp",
                 "despachosDiarios.resumen", "despachosDiarios.sap.resumen", "despachosDiarios.sap.detalle", "despachosDiarios.sap.categorias",
                 "faret.data.list", "faret.indicadoresCalidad.resumen", "faret.talleresExternos.resumen",
                 "faret.nc.list", "faret.inspecciones.resumen", "faret.maquinas.resumen", "faret.dashboard.resumen",

@@ -1746,6 +1746,14 @@
       "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
       "photinoVersion": "1.8.23",
       "aprobado": "2026-10-19T15:13:14Z"
+    },
+    "trazabilidad.consultarNp": {
+      "huella": "2e2e0f099c60b97a840e79bc35178689b1096ff8b1f91b7d805045b3e35ee721",
+      "huellaFrontend": "682e1d4658aa16150e78a47e68287081a5056c7210e6026ca5495152b358dcb5",
+      "handler": "TrazabilidadHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-19T16:21:13Z"
     }
   }
 }
