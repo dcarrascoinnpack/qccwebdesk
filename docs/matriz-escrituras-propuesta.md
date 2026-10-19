@@ -1236,6 +1236,20 @@ Roles (decisión del usuario): **solo admin, admin_ti y calidad** (Photino los d
 - **Auditoría** `evento=ESCRITURA` (sin contenido): `faret:nc:<id>:adjunto:<adjuntoId>:eliminar`, `faret:inspeccion:<id>:eliminar`, `faret:inspeccionPallet:<id>:eliminar` y, para eliminarFila, el resultado por lado: `faret:nc:fila:data:<dataId>:OK|ERROR:nc:<ncId>:OK|ERROR:eliminar` (un lado ausente no aparece; `_` si la validación falló antes de borrar).
 - **Tests**: `BridgeFaseF5Test` (14). Se actualizaron los tests que daban estas 4 acciones como "no habilitadas" (`BridgeFase6cTest`, `BridgeFaseF4Test`, `AuthFase6aTest`) y las listas de escrituras auditadas de `BridgeFase1cTest` / `BridgeFase3aTest`.
 
+## FARET — IMPORTACIÓN MASIVA `importacion.validar` / `importacion.confirmar` — VALIDADAS (Fase F6, 2026-10-19)
+
+Carga masiva de registros PNC desde un `.xlsx`. Photino 1.8.15 (`9e1b556`, `FaretHandler.cs`: `HandleImportacionValidar` / `HandleImportacionConfirmar`; `FaretImportacionApiService`); contract check 211/254 (209 + 2). Handler nuevo `FaretImportacionBridgeHandler`; `FaretApiClient.postMultipart` (multipart armado con el JDK). Roles: **admin y admin_ti** (Photino solo muestra `faret-importacion` a ellos; la API admite también CALIDAD, no se habilita en la web). Una sesión INNPACK nunca llega.
+
+| Acción | Endpoint | Claves permitidas | Autorización hacia la API | Riesgo |
+|---|---|---|---|---|
+| `faret.importacion.validar` | QC POST multipart `api/importaciones/validar` (campo `archivo`), por `/api/v1/bridge/archivo` | `fileName`, `base64` | Bearer del usuario | MEDIO (no inserta: deja el lote en el caché de la API) |
+| `faret.importacion.confirmar` | QC POST `api/importaciones/confirmar` `{loteId}` | `loteId` | Bearer del usuario | ALTO (inserta filas; no hay deshacer desde la UI) |
+
+- **validar**: solo `.xlsx`, nombre saneado (sin marcado, comillas, rutas ni controles; la API lo guarda y el historial lo pinta con `innerHTML`), base64 estricto, tope de 10 MB decodificados (el de la API; Photino no tiene tope), firma ZIP (`PK\3\4`) y estructura mínima de libro (`[Content_Types].xml`, `xl/workbook.xml`) con tope de entradas (500) y de bytes descomprimidos (100 MB, zip-bomb); no se interpreta el contenido. Respuesta reproyectada a `{loteId, nombreArchivo, totalFilas, filasValidas, filasConError, errores:[{fila, errores:[texto]}]}` con los textos de error escapados (llevan valores de celdas). El `loteId` (GUID "N") se registra en la sesión (`LecturasDeSesion`). Límite propio por usuario/minuto (10).
+- **confirmar**: solo un `loteId` devuelto por un `validar` de la MISMA sesión (otro, inventado o ya confirmado se rechaza sin llamar a la API). Un lote no se confirma dos veces a la vez (la API quita el lote del caché después de insertar). Inserción transaccional en la API (no hay lote parcial). Si la llamada falla por red/timeout, o la API responde éxito con forma inesperada, el resultado es DESCONOCIDO: el lote se olvida y el error pide revisar el historial antes de volver a importar. Un error normal de la API (400) deja el lote vigente; "no existe o expiró" lo olvida. Límite propio (5/minuto).
+- **Auditoría** `evento=ESCRITURA` (el auditor acota el recurso a 64 caracteres; nunca nombre ni contenido): `faret:importacion:validar:lote:<loteId>` y `faret:importacion:[<importacionId>:]lote:<loteId>` (el id solo si la API confirmó).
+- **Tests**: `BridgeFaseF6Test` (11: multipart y Bearer, reproyección y escape, claves/nombre/base64/zip/tamaño, saneo del nombre, errores de la API, solo ruta de archivos, lote por sesión, forma de `confirmar`, fallos e incertidumbre, roles/empresa, módulo cruzado y CSRF, auditoría). Se ajustaron `BridgeFase1cTest`, `BridgeFase3aTest` y `BridgeFase6cTest` (ya no son "no habilitadas") y `web-bridge.test.mjs` (ruta de archivos).
+
 ## Hallazgos de seguridad para el backlog de hardening de Photino/APIs
 
 Referenciados contra `docs/SECURITY_HARDENING_BACKLOG.md` del repo Photino (rama `fase-1a-gateway`, commit `27f75fd`).

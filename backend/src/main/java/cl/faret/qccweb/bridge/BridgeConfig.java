@@ -5,6 +5,7 @@ import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretBorradosBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.FaretImportacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.FaretNoConformidadesGestionBridgeHandler;
@@ -85,6 +86,11 @@ public class BridgeConfig {
      * admin, admin_ti y calidad (Photino los daba a todos menos CONSULTA).
      */
     static final Set<String> ROLES_FARET_BORRADOS = Set.of("admin", "admin_ti", "calidad");
+    /**
+     * IMPORTACIÓN MASIVA FARET (Fase F6): Photino solo muestra faret-importacion a ADMIN y ADMIN_TI. La API admite también CALIDAD, pero
+     * no se habilita en la web.
+     */
+    static final Set<String> ROLES_FARET_IMPORTACION = Set.of("admin", "admin_ti");
     /** Catálogos PNC con `crear`: acción -> {segmento de ruta de api/pnc-catalogos, largo máximo de `nombre` (columna real)}. */
     static final Map<String, Object[]> PNC_CATALOGOS_CREAR = new java.util.LinkedHashMap<>();
 
@@ -208,6 +214,17 @@ public class BridgeConfig {
         return new FaretNoConformidadesRegistroBridgeHandler(qualityControl, mejoraContinua, mapper);
     }
 
+    /** Importación masiva FARET (Fase F6): QualityControlFaret.Api con el Bearer del usuario; límites propios por usuario y minuto. */
+    @Bean
+    public FaretImportacionBridgeHandler faretImportacionBridgeHandler(
+            @Qualifier("faretQualityControlApiClient") FaretApiClient qualityControl, ObjectMapper mapper, Clock clock,
+            @Value("${qcc.web.bridge.validaciones-importacion-por-minuto:10}") int validacionesPorMinuto,
+            @Value("${qcc.web.bridge.confirmaciones-importacion-por-minuto:5}") int confirmacionesPorMinuto) {
+        return new FaretImportacionBridgeHandler(qualityControl, mapper,
+                new EscrituraRateLimiter(validacionesPorMinuto, Duration.ofMinutes(1), clock),
+                new EscrituraRateLimiter(confirmacionesPorMinuto, Duration.ofMinutes(1), clock));
+    }
+
     /** Borrados FARET (Fase F5): QualityControlFaret.Api con el Bearer del usuario; MejoraContinua y Calidad sin Authorization. */
     @Bean
     public FaretBorradosBridgeHandler faretBorradosBridgeHandler(
@@ -283,7 +300,8 @@ public class BridgeConfig {
             LiberacionCalidadBridgeHandler liberacionCalidad, FormulariosBridgeHandler formularios,
             FaretBridgeHandler faret, FaretTalleresExternosBridgeHandler faretTalleres,
             FaretNoConformidadesBridgeHandler faretNc, FaretNoConformidadesGestionBridgeHandler faretNcGestion,
-            FaretNoConformidadesRegistroBridgeHandler faretNcRegistro, FaretBorradosBridgeHandler faretBorrados) {
+            FaretNoConformidadesRegistroBridgeHandler faretNcRegistro, FaretBorradosBridgeHandler faretBorrados,
+            FaretImportacionBridgeHandler faretImportacion) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -940,6 +958,13 @@ public class BridgeConfig {
         reglas.add(new ActionPolicy.Regla(
                 "faret.inspeccionesPallet.eliminar", Set.of("FARET"), ROLES_FARET_BORRADOS, Map.of(),
                 faretBorrados::inspeccionPalletEliminar, FaretBorradosBridgeHandler::recursoInspeccionPalletEliminar));
+        // Fase F6 - IMPORTACIÓN MASIVA FARET: validar (multipart, ruta de archivos) y confirmar (solo un lote validado por esta sesión).
+        reglas.add(new ActionPolicy.Regla(
+                "faret.importacion.validar", Set.of("FARET"), ROLES_FARET_IMPORTACION, Map.of(), faretImportacion::validar,
+                FaretImportacionBridgeHandler::recursoValidar));
+        reglas.add(new ActionPolicy.Regla(
+                "faret.importacion.confirmar", Set.of("FARET"), ROLES_FARET_IMPORTACION, Map.of(), faretImportacion::confirmar,
+                FaretImportacionBridgeHandler::recursoConfirmar));
         return new ActionPolicy(reglas);
     }
 }

@@ -28,9 +28,11 @@
     // Fase 3z: el alta de lote de Recepción lleva la foto (PVA/Pliego) en base64 en el mismo payload.
     // Fase 4d: alta de documento/versión de Control Documental lleva el adjunto inicial opcional en base64.
     // Fase F3: faret.nc.adjuntos.subir (PDF/fotos de una NC FARET, base64) usa la misma ruta de archivos.
+    // Fase F6: faret.importacion.validar (xlsx en base64) también; faret.importacion.confirmar solo lleva el loteId.
     var ACCIONES_ARCHIVO = {
         "noConformidades.adjuntos.subir": true, "faret.nc.adjuntos.subir": true, "recepcion.crear": true,
         "controlDocumental.create": true, "controlDocumental.version.crear": true, "controlDocumental.adjunto.subir": true,
+        "faret.importacion.validar": true,
     };
     var AUTH_URL = "api/v1/auth/";
     var TIMEOUT_MS = 35000; // > read-timeout del gateway (30 s, = Photino): el gateway responde primero

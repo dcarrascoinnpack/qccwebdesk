@@ -155,8 +155,12 @@ test("adjuntos.subir va por la ruta de archivos (con CSRF) y el resto por el bri
     // Fase F3: subir adjunto de una NC FARET, misma ruta de archivos; las demás escrituras de NC FARET van por el bridge normal.
     await shim.ctx.PhotinoBridge.send({ action: "faret.nc.adjuntos.subir", id: 7, tipo: "CAUSA_RAIZ_PDF" });
     await shim.ctx.PhotinoBridge.send({ action: "faret.nc.seguimiento.crear", id: 7, comentario: "x" });
+    // Fase F6: validar de la importación masiva FARET (xlsx) por la ruta de archivos; confirmar (solo loteId) por la normal.
+    await shim.ctx.PhotinoBridge.send({ action: "faret.importacion.validar", fileName: "a.xlsx", base64: "UEsDBA==" });
+    await shim.ctx.PhotinoBridge.send({ action: "faret.importacion.confirmar", loteId: "0123456789abcdef0123456789abcdef" });
     assert.deepEqual(shim.registro.fetch.map(f => f.url), ["api/v1/bridge/archivo", "api/v1/bridge", "api/v1/bridge/archivo",
-        "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge"]);
+        "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge/archivo", "api/v1/bridge",
+        "api/v1/bridge/archivo", "api/v1/bridge"]);
     assert.equal(shim.registro.fetch[0].opciones.headers["X-XSRF-TOKEN"], "token-csrf");
     assert.deepEqual(JSON.parse(shim.registro.fetch[0].opciones.body), { ...payload, _modulo: null });
 });

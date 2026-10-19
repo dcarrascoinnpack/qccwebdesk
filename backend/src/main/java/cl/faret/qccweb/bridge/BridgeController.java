@@ -47,7 +47,7 @@ public class BridgeController {
     static final String MENSAJE_SUBIDAS_OCUPADAS = "Hay otras subidas de archivos en curso. Inténtalo de nuevo en unos segundos.";
     /** Acciones con archivo en base64: solo por /api/v1/bridge/archivo. */
     public static final Set<String> ACCIONES_ARCHIVO = Set.of("noConformidades.adjuntos.subir", "faret.nc.adjuntos.subir", "recepcion.crear",
-            "controlDocumental.create", "controlDocumental.version.crear", "controlDocumental.adjunto.subir");
+            "controlDocumental.create", "controlDocumental.version.crear", "controlDocumental.adjunto.subir", "faret.importacion.validar");
     /** Módulo de origen de cada acción (Fase 3u, PermisosModulo). */
     static final String CAMPO_MODULO = "_modulo";
     private static final Pattern FORMATO_ACCION = Pattern.compile("[A-Za-z][A-Za-z0-9]*(\\.[A-Za-z0-9]+){1,4}");

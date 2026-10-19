@@ -33,6 +33,9 @@ import tools.jackson.databind.JsonNode;
  */
 public class FaretApiClient {
 
+    /** Valores de cabecera multipart: sin controles, comillas ni barras invertidas (no pueden romper las cabeceras de la parte). */
+    private static final java.util.regex.Pattern CABECERA_SEGURA = java.util.regex.Pattern.compile("[^\\p{Cntrl}\"\\\\]{1,255}");
+
     private final RestClient restClient;
     private final String baseUrl;
     private final boolean conBearer;
@@ -117,6 +120,67 @@ public class FaretApiClient {
     /** DELETE (sin cuerpo). Sin reintentos. */
     public InnpackApiClient.Respuesta delete(SessionUser usuario, String path) {
         return enviar(HttpMethod.DELETE, usuario, path, null);
+    }
+
+    /**
+     * POST multipart/form-data con UN archivo (Fase F6: importación masiva, FaretApiClient.PostMultipartFileAsync de Photino).
+     * Cuerpo armado aquí con el JDK (boundary aleatorio): campo, filename y Content-Type los fija el llamador, nunca el navegador.
+     * Mismas garantías que las demás escrituras (Bearer si {@code conBearer}, sin redirecciones, sin reintentos, 401 con Bearer =
+     * UpstreamNoAutorizadoException).
+     *
+     * @throws IllegalArgumentException si campo, nombre o mime traen caracteres que romperían las cabeceras del multipart
+     */
+    public InnpackApiClient.Respuesta postMultipart(SessionUser usuario, String path, String campo, String nombreArchivo,
+            String mime, byte[] contenido) {
+        if (!CABECERA_SEGURA.matcher(campo).matches() || !CABECERA_SEGURA.matcher(nombreArchivo).matches()
+                || !CABECERA_SEGURA.matcher(mime).matches()) {
+            throw new IllegalArgumentException("Cabecera multipart inválida");
+        }
+        if (conBearer && (usuario == null || usuario.upstreamToken() == null || usuario.upstreamToken().isBlank())) {
+            throw new UpstreamNoAutorizadoException();
+        }
+        String boundary = "qccweb" + java.util.UUID.randomUUID().toString().replace("-", "");
+        // filename ASCII de respaldo + filename* (RFC 5987) con el nombre completo, como arma .NET los nombres no ASCII.
+        StringBuilder ascii = new StringBuilder();
+        boolean noAscii = false;
+        for (char c : nombreArchivo.toCharArray()) {
+            if (c < 0x20 || c > 0x7e) {
+                ascii.append('_');
+                noAscii = true;
+            } else {
+                ascii.append(c);
+            }
+        }
+        String cabecera = "--" + boundary + "\r\nContent-Disposition: form-data; name=\"" + campo + "\"; filename=\"" + ascii + "\""
+                + (noAscii ? "; filename*=UTF-8''" + java.net.URLEncoder.encode(nombreArchivo, java.nio.charset.StandardCharsets.UTF_8)
+                        .replace("+", "%20") : "")
+                + "\r\nContent-Type: " + mime + "\r\n\r\n";
+        byte[] inicio = cabecera.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] fin = ("\r\n--" + boundary + "--\r\n").getBytes(java.nio.charset.StandardCharsets.UTF_8);
+        byte[] cuerpo = new byte[inicio.length + contenido.length + fin.length];
+        System.arraycopy(inicio, 0, cuerpo, 0, inicio.length);
+        System.arraycopy(contenido, 0, cuerpo, inicio.length, contenido.length);
+        System.arraycopy(fin, 0, cuerpo, inicio.length + contenido.length, fin.length);
+        ResponseEntity<String> r;
+        try {
+            r = restClient.method(HttpMethod.POST)
+                    .uri(URI.create(baseUrl + path))
+                    .accept(MediaType.APPLICATION_JSON)
+                    .contentType(MediaType.parseMediaType("multipart/form-data; boundary=" + boundary))
+                    .headers(h -> {
+                        if (conBearer) {
+                            h.setBearerAuth(usuario.upstreamToken());
+                        }
+                    })
+                    .body(cuerpo)
+                    .retrieve()
+                    .onStatus(HttpStatusCode::isError, (req, res) -> {})
+                    .toEntity(String.class);
+        } catch (RestClientException e) {
+            return new InnpackApiClient.Respuesta(0,
+                    errorLocal(esTimeout(e) ? "Timeout al conectar con la API Faret" : "Error de red al conectar con la API Faret"));
+        }
+        return resultado(r);
     }
 
     private InnpackApiClient.Respuesta enviar(HttpMethod metodo, SessionUser usuario, String path, JsonNode cuerpo) {
