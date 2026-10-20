@@ -1906,6 +1906,174 @@
       "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
       "photinoVersion": "1.8.23",
       "aprobado": "2026-10-19T16:52:51Z"
+    },
+    "faretLab.list": {
+      "huella": "7cf9f30bcb4fbde02ea4bacc3831d627ef4819ae11c90e44c8c501d3b95bb7ec",
+      "huellaFrontend": "4308ac4fcd88e53da947a8ff209f80e307280d94e4219be503c051eb515855ba",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.detalle": {
+      "huella": "dcb47209e2275a1c4d259ab4ce337f506af70bbfcca83b8e0fbd7af33674897b",
+      "huellaFrontend": "97e6fabdc978a8d3172e6779c2b62673395c6b6894d7bae9dd56bdf21155e60d",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.especificacion.list": {
+      "huella": "a45ba777a751a2bfa08af48347b4c2c4a9674a53530393e49007b5cd60c7755b",
+      "huellaFrontend": "1d0b01784a7355043a587c297d917a4c94768fe10476ed781f9f06f6fed01861",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.crear": {
+      "huella": "70ca6841d00b9cd590f8e95d0ad86381148117e890adb70c866feb1e42b73719",
+      "huellaFrontend": "d1a80ac8c0d45ca028189dafa9af67cd10a8dc5742ad0372816e9488063a0634",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.ph.guardar": {
+      "huella": "bf7100e84bdabb3050cf47d244bf5aa4c2a072cf460f692c06de8be3c82936df",
+      "huellaFrontend": "09bae4a6315eda6c8fb918aae3f8e87366ed2b4c650c609971b3e1b693a9f713",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.humedad.guardar": {
+      "huella": "2a52e0a71109aaf4656865c88f7709e231f798bf907c484957b2b037833f5e95",
+      "huellaFrontend": "af5d8fc99df2fbae3f18e2d66bb489dd5365fde041ce3af72a7e349f1833ad18",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.gramaje.guardar": {
+      "huella": "4367cd470e19841c3dfa04e026d4bcc3fb8427b2f38d14d508e1ef27f379b010",
+      "huellaFrontend": "4b1fb2387a982eaf80cadc5b168bdeed4420a8064b3a1f8669845634e9fa53e3",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.cobb.guardar": {
+      "huella": "f633da2e79ff78fecaba13840e742c324d044847ddec3fea45aa476e803f7ad0",
+      "huellaFrontend": "d16e6effe5060cfa1fa8d4ed431b4234088b37058b604c8ed4469f29bd1a759e",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.espesor.guardar": {
+      "huella": "42f3366540ca4e28d5da5b436f29a9507eebfecaece3906d1f4e98ec9a1bf91f",
+      "huellaFrontend": "b90ffb46ad90f5a49b83f4d1384886589654d4412ca7998d8ca6b6acc28f6bdf",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.rct.guardar": {
+      "huella": "118b3bea556e90278d3027db55cb059f966824034239a1fa431de78d4b1466ed",
+      "huellaFrontend": "846c89a0f4547a8214f257cbcfb87860faa0d16fae52656b9b44625a235e6369",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.fct.guardar": {
+      "huella": "118b3bea556e90278d3027db55cb059f966824034239a1fa431de78d4b1466ed",
+      "huellaFrontend": "f2c5546cc80a525b0c1594a789167c7a62339741cf0c336f269c259c375b0ee4",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.ect.guardar": {
+      "huella": "cc5c58e32262f6782d1ac747cd8f782a08e436239482e4aba97b0444f8621743",
+      "huellaFrontend": "56c7cb7b1a6a7972e0a161b90f0a3772c1d2f856642770cf8cee43997f24d6d3",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.bctMedido.guardar": {
+      "huella": "cadee36928fc85825a71a628941ccca9b34e01577951e59b1f145683cf4a0f05",
+      "huellaFrontend": "e7f04aa7af2eb89fe5e2ed459b5e883a9c5ccbc2a71f5f13d294c06bb266ee44",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.bctTeorico.guardar": {
+      "huella": "580309c548b02c470ec126c82f8daef00a0e7b9710e17aa408b8bb256d3c8f6e",
+      "huellaFrontend": "a14c436b14da2892136f799c9abe6f8c7724c70bc1105fa9a4aa5eba8137cb6b",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.viscosidad.guardar": {
+      "huella": "abc0b617acbdf337fc9b37b0c88822f37ac172dffa396e2ed01fcb83c4773c5c",
+      "huellaFrontend": "5bf24a1ccf758eb1a3381644316a7e267377ad9bffe8163588f2621fbe7faa00",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.solidos.guardar": {
+      "huella": "1ef0409c63cc0580e8195889f961a7be6a464552dc8d1e65a60b7084debe265e",
+      "huellaFrontend": "a8fef0292b48ba03301a80d466823f230c24aebac686fdce8a898a0f1f67c3a0",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.lugol.guardar": {
+      "huella": "9e3185ef81ec99c08504cc966bab70ddb774d626ddf2fd8b4d78097e67ef5e9f",
+      "huellaFrontend": "715952fd6e506141e39a79db9340bf19956614a871c2ac58ddb5f804e582aca1",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.especificacion.guardar": {
+      "huella": "0d7180a9a445f9c1155936418375936d7e0ea402048740efb14cbde9c058e99f",
+      "huellaFrontend": "68d5da431140bc3ddbca205ad67fc08c0ec994a5dd27855afa4390656e302d9d",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.especificacion.activar": {
+      "huella": "af5beb789c4a20de0cb514b612acee768270ce44b1e1528b825a5d4fffb3b378",
+      "huellaFrontend": "b84fcbba0539d514f44168e35e20365fe718c437308456fbbe23a32edf79378a",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.ensayo.anular": {
+      "huella": "f57151caaa6decf2fde7f41b042c82dd9c2f78915fa0dec6061c135caa3f1ac2",
+      "huellaFrontend": "35a699d172331faf8a4c160414a0eab3973b28c9816f9186e890384e221f89de",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
+    },
+    "faretLab.nc.crear": {
+      "huella": "62eb44e775e29fc8e027de663f036f488aad998c881465c55e73674b8440f04f",
+      "huellaFrontend": "d84c3ab04012bb90effaf590202df048d938ce955a343ce09ebae96baddf02ed",
+      "handler": "FaretLaboratorioHandler",
+      "photinoCommit": "85a77c952eebc67247831201129a7461dbd34a8e",
+      "photinoVersion": "1.8.23",
+      "aprobado": "2026-10-20T15:01:10Z"
     }
   }
 }
