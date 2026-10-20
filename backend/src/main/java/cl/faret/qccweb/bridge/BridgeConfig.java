@@ -972,6 +972,27 @@ public class BridgeConfig {
         reglas.add(new ActionPolicy.Regla(
                 "faretLab.crear", Set.of("FARET"), ROLES_FARET, Map.of(), faretLab::crear,
                 (p, d) -> FaretLaboratorioBridgeHandler.recurso(MuestraLaboratorioBridgeHandler.recursoCrear(p, d))));
+        // Los 13 ensayos (faretLab.{tipo}.guardar): mismo cuerpo comun (muestraId, metodo, observacion, correccion) y analista de sesion.
+        MuestraLaboratorioBridgeHandler ensayosFaretLab = faretLab.escrituras();
+        record EnsayoFaretLab(String tipo, BridgeAction handler, ActionPolicy.RecursoAuditado recurso) {}
+        for (EnsayoFaretLab e : List.of(
+                new EnsayoFaretLab("ph", ensayosFaretLab::phGuardar, MuestraLaboratorioBridgeHandler::recursoPhGuardar),
+                new EnsayoFaretLab("humedad", ensayosFaretLab::humedadGuardar, MuestraLaboratorioBridgeHandler::recursoHumedadGuardar),
+                new EnsayoFaretLab("gramaje", ensayosFaretLab::gramajeGuardar, MuestraLaboratorioBridgeHandler::recursoGramajeGuardar),
+                new EnsayoFaretLab("cobb", ensayosFaretLab::cobbGuardar, MuestraLaboratorioBridgeHandler::recursoCobbGuardar),
+                new EnsayoFaretLab("espesor", ensayosFaretLab::espesorGuardar, MuestraLaboratorioBridgeHandler::recursoEspesorGuardar),
+                new EnsayoFaretLab("rct", ensayosFaretLab::rctGuardar, MuestraLaboratorioBridgeHandler::recursoRctGuardar),
+                new EnsayoFaretLab("fct", ensayosFaretLab::fctGuardar, MuestraLaboratorioBridgeHandler::recursoFctGuardar),
+                new EnsayoFaretLab("ect", ensayosFaretLab::ectGuardar, MuestraLaboratorioBridgeHandler::recursoEctGuardar),
+                new EnsayoFaretLab("bctMedido", ensayosFaretLab::bctMedidoGuardar, MuestraLaboratorioBridgeHandler::recursoBctMedidoGuardar),
+                new EnsayoFaretLab("bctTeorico", ensayosFaretLab::bctTeoricoGuardar, MuestraLaboratorioBridgeHandler::recursoBctTeoricoGuardar),
+                new EnsayoFaretLab("viscosidad", ensayosFaretLab::viscosidadGuardar, MuestraLaboratorioBridgeHandler::recursoViscosidadGuardar),
+                new EnsayoFaretLab("solidos", ensayosFaretLab::solidosGuardar, MuestraLaboratorioBridgeHandler::recursoSolidosGuardar),
+                new EnsayoFaretLab("lugol", ensayosFaretLab::lugolGuardar, MuestraLaboratorioBridgeHandler::recursoLugolGuardar))) {
+            reglas.add(new ActionPolicy.Regla(
+                    "faretLab." + e.tipo() + ".guardar", Set.of("FARET"), ROLES_FARET, Map.of(), e.handler(),
+                    (p, d) -> FaretLaboratorioBridgeHandler.recurso(e.recurso().de(p, d))));
+        }
         // Photino 1.8.23 - ESCRITURAS de Gestion de Usuarios FARET: solo admin_ti de la sesion FARET (la API lo exige), lista cerrada de
         // claves, rol validado, sin identidad del navegador y recurso auditado sin claves ni nombres.
         reglas.add(new ActionPolicy.Regla(

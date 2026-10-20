@@ -224,8 +224,8 @@ class AuthFase6aTest {
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.ok").value(false));
         accion(tito, "{\"action\":\"usuarios.list\",\"data\":{},\"_modulo\":\"usuarios\"}")
                 .andExpect(status().isForbidden());
-        // Las acciones FARET que aún no tienen fase (p. ej. faretLab.ph.guardar) siguen denegadas, no "sin acceso".
-        accion(tito, "{\"action\":\"faretLab.ph.guardar\",\"data\":{},\"_modulo\":\"faret\"}")
+        // Las acciones FARET que aún no tienen fase (p. ej. faretLab.nc.crear) siguen denegadas, no "sin acceso".
+        accion(tito, "{\"action\":\"faretLab.nc.crear\",\"data\":{},\"_modulo\":\"faret\"}")
                 .andExpect(status().isForbidden()).andExpect(jsonPath("$.error").value("Acción no disponible en la versión web."));
     }
 

@@ -45,6 +45,14 @@ public class FaretLaboratorioBridgeHandler {
         this.escrituras = escrituras;
     }
 
+    /**
+     * La lógica reutilizada de muestraLab.* para los 13 ensayos (faretLab.{tipo}.guardar → POST api/faret-laboratorio/{tipo}): las
+     * claves, las listas de opciones y la validación son las de muestraLab y cubren todo lo que envía la vista de FARET.
+     */
+    public MuestraLaboratorioBridgeHandler escrituras() {
+        return escrituras;
+    }
+
     /** faretLab.crear → POST api/faret-laboratorio (Photino 1.8.23, FaretLaboratorioHandler.cs). */
     public BridgeResult crear(ObjectNode payload, SessionUser usuario) {
         return escrituras.crear(payload, usuario);

@@ -83,6 +83,27 @@ class FaretLaboratorioEscriturasTest {
     }
 
     @Test
+    void losTreceEnsayosVanASuRutaDeFaretLaboratorioConElAnalistaDeLaSesionFaret() throws Exception {
+        var lab = handler("svc").escrituras();
+        ObjectNode p = (ObjectNode) mapper.readTree("{\"data\":{\"muestraId\":7,\"metodo\":\"M\",\"observacion\":\"o\"}}");
+        List<cl.faret.qccweb.bridge.BridgeAction> acciones = List.of(lab::phGuardar, lab::humedadGuardar, lab::gramajeGuardar,
+                lab::cobbGuardar, lab::espesorGuardar, lab::rctGuardar, lab::fctGuardar, lab::ectGuardar, lab::bctMedidoGuardar,
+                lab::bctTeoricoGuardar, lab::viscosidadGuardar, lab::solidosGuardar, lab::lugolGuardar);
+        for (var accion : acciones) {
+            assertThat(accion.ejecutar(p, ana).ok()).isTrue();
+        }
+        List<String> rutas = List.of("ph", "humedad", "gramaje", "cobb", "espesor", "rct", "fct", "ect", "bct-medido", "bct-teorico",
+                "viscosidad", "solidos", "lugol");
+        assertThat(recibidos).hasSize(13);
+        for (int i = 0; i < rutas.size(); i++) {
+            String s = recibidos.get(i);
+            assertThat(s).as(rutas.get(i)).startsWith("POST /api/faret-laboratorio/" + rutas.get(i) + " Bearer TOKEN-SERVICIO ")
+                    .contains("\"muestraId\":7").contains("\"analistaUsuarioId\":5").contains("\"analistaNombre\":\"Ana Calidad\"")
+                    .doesNotContain("TOKEN-FARET");
+        }
+    }
+
+    @Test
     void sinCuentaDeServicioNoLlamaALaApiYDaErrorSinLanzar() throws Exception {
         ObjectNode p = (ObjectNode) mapper.readTree("{\"data\":{\"origen\":\"Pegado\",\"tipoMuestra\":\"CajaPegada\"}}");
         BridgeResult r = handler("").crear(p, ana); // no lanza UpstreamNoAutorizadoException: la sesión web no se cierra
