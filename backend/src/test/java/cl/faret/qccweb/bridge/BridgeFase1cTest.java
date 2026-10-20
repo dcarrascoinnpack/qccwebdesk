@@ -141,7 +141,7 @@ class BridgeFase1cTest {
     void accionDesconocidaORegistradaEnPhotinoPeroNoHabilitadaSeRechaza() throws Exception {
         MockHttpSession sesion = login("admin1");
         int antes = API.llamadasDashboard();
-        for (String accion : List.of("usuarios.toggleActivo", "faretLab.nc.crear", "excel.guardar",
+        for (String accion : List.of("usuarios.toggleActivo", "faretLab.noRegistrada", "excel.guardar",
                 "noConformidades.catalogos.clientes.desactivar", "accion.inventada", "Inicio.getDashboard", "inicio.getdashboard")) {
             bridge(sesion, "{\"action\":\"" + accion + "\"}")
                     .andExpect(status().isForbidden())
@@ -209,6 +209,7 @@ class BridgeFase1cTest {
                 "faretLab.cobb.guardar", "faretLab.espesor.guardar", "faretLab.rct.guardar", "faretLab.fct.guardar",
                 "faretLab.ect.guardar", "faretLab.bctMedido.guardar", "faretLab.bctTeorico.guardar",
                 "faretLab.viscosidad.guardar", "faretLab.solidos.guardar", "faretLab.lugol.guardar",
+                "faretLab.especificacion.guardar", "faretLab.especificacion.activar", "faretLab.ensayo.anular", "faretLab.nc.crear",
                 "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
                 "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
                 "controlDocumental.eliminar", "controlDocumental.adjunto.subir",

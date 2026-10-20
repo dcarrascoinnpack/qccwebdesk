@@ -216,7 +216,8 @@ class BridgeFase3aTest {
                 "faretLab.crear", "faretLab.ph.guardar", "faretLab.humedad.guardar", "faretLab.gramaje.guardar",
                 "faretLab.cobb.guardar", "faretLab.espesor.guardar", "faretLab.rct.guardar", "faretLab.fct.guardar",
                 "faretLab.ect.guardar", "faretLab.bctMedido.guardar", "faretLab.bctTeorico.guardar",
-                "faretLab.viscosidad.guardar", "faretLab.solidos.guardar", "faretLab.lugol.guardar");
+                "faretLab.viscosidad.guardar", "faretLab.solidos.guardar", "faretLab.lugol.guardar",
+                "faretLab.especificacion.guardar", "faretLab.especificacion.activar", "faretLab.ensayo.anular", "faretLab.nc.crear");
         for (String otra : List.of("noConformidades.catalogos.clientes.desactivar",
                 "noConformidades.catalogos.nciAreas.crear")) {
             assertThat(policy.accionesRegistradas()).doesNotContain(otra);

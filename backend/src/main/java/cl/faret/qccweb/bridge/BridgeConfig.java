@@ -993,6 +993,19 @@ public class BridgeConfig {
                     "faretLab." + e.tipo() + ".guardar", Set.of("FARET"), ROLES_FARET, Map.of(), e.handler(),
                     (p, d) -> FaretLaboratorioBridgeHandler.recurso(e.recurso().de(p, d))));
         }
+        // Especificaciones, anulacion de ensayo y NC vinculada: ultimas 4 de las 18 escrituras de faretLab (sin autor en la API salvo nc.crear,
+        // cuyo usuarioNombre sale de la sesion FARET).
+        for (EnsayoFaretLab e : List.of(
+                new EnsayoFaretLab("especificacion.guardar", ensayosFaretLab::especificacionGuardar,
+                        MuestraLaboratorioBridgeHandler::recursoEspecificacionGuardar),
+                new EnsayoFaretLab("especificacion.activar", ensayosFaretLab::especificacionActivar,
+                        MuestraLaboratorioBridgeHandler::recursoEspecificacionActivar),
+                new EnsayoFaretLab("ensayo.anular", ensayosFaretLab::ensayoAnular, MuestraLaboratorioBridgeHandler::recursoEnsayoAnular),
+                new EnsayoFaretLab("nc.crear", ensayosFaretLab::ncCrear, MuestraLaboratorioBridgeHandler::recursoNcCrear))) {
+            reglas.add(new ActionPolicy.Regla(
+                    "faretLab." + e.tipo(), Set.of("FARET"), ROLES_FARET, Map.of(), e.handler(),
+                    (p, d) -> FaretLaboratorioBridgeHandler.recurso(e.recurso().de(p, d))));
+        }
         // Photino 1.8.23 - ESCRITURAS de Gestion de Usuarios FARET: solo admin_ti de la sesion FARET (la API lo exige), lista cerrada de
         // claves, rol validado, sin identidad del navegador y recurso auditado sin claves ni nombres.
         reglas.add(new ActionPolicy.Regla(

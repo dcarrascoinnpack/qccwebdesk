@@ -104,6 +104,25 @@ class FaretLaboratorioEscriturasTest {
     }
 
     @Test
+    void especificacionesAnulacionYNcVanASuRutaConElTokenDeServicio() throws Exception {
+        var lab = handler("svc").escrituras();
+        assertThat(lab.especificacionGuardar((ObjectNode) mapper.readTree(
+                "{\"data\":{\"tipoMuestra\":\"Papel\",\"tipoEnsayo\":\"HUMEDAD\",\"limiteMin\":1,\"unidad\":\"%\"}}"), ana).ok()).isTrue();
+        assertThat(lab.especificacionActivar((ObjectNode) mapper.readTree("{\"data\":{\"id\":9,\"activo\":true}}"), ana).ok()).isTrue();
+        assertThat(lab.ensayoAnular((ObjectNode) mapper.readTree("{\"data\":{\"ensayoId\":4,\"motivo\":\"error\"}}"), ana).ok()).isTrue();
+        assertThat(lab.ncCrear((ObjectNode) mapper.readTree("{\"data\":{\"muestraId\":7}}"), ana).ok()).isTrue();
+        assertThat(recibidos).hasSize(4);
+        assertThat(recibidos.get(0)).startsWith("POST /api/faret-laboratorio/especificaciones Bearer TOKEN-SERVICIO ");
+        assertThat(recibidos.get(1)).startsWith("PATCH /api/faret-laboratorio/especificaciones/9/activo Bearer TOKEN-SERVICIO ")
+                .endsWith("{\"activo\":true}");
+        assertThat(recibidos.get(2)).startsWith("POST /api/faret-laboratorio/ensayos/4/anular Bearer TOKEN-SERVICIO ")
+                .endsWith("{\"motivo\":\"error\"}");
+        assertThat(recibidos.get(3)).startsWith("POST /api/faret-laboratorio/7/nc Bearer TOKEN-SERVICIO ")
+                .endsWith("{\"usuarioNombre\":\"Ana Calidad\"}");
+        assertThat(String.join("", recibidos)).doesNotContain("TOKEN-FARET");
+    }
+
+    @Test
     void sinCuentaDeServicioNoLlamaALaApiYDaErrorSinLanzar() throws Exception {
         ObjectNode p = (ObjectNode) mapper.readTree("{\"data\":{\"origen\":\"Pegado\",\"tipoMuestra\":\"CajaPegada\"}}");
         BridgeResult r = handler("").crear(p, ana); // no lanza UpstreamNoAutorizadoException: la sesión web no se cierra
