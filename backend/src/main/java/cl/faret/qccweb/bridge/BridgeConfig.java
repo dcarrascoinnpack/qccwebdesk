@@ -32,6 +32,7 @@ import cl.faret.qccweb.upstream.FaretProperties;
 import cl.faret.qccweb.upstream.FpsApiClient;
 import cl.faret.qccweb.upstream.FpsProperties;
 import cl.faret.qccweb.upstream.InnpackApiClient;
+import cl.faret.qccweb.upstream.InnpackApiClientServicio;
 import cl.faret.qccweb.upstream.CuentaServicioInnpack;
 import cl.faret.qccweb.upstream.InnpackServicioProperties;
 import cl.faret.qccweb.upstream.PlanificacionApiClient;
@@ -314,8 +315,13 @@ public class BridgeConfig {
 
     @Bean
     public FaretLaboratorioBridgeHandler faretLaboratorioBridgeHandler(
-            InnpackApiClient api, CuentaServicioInnpack cuentaServicio, ObjectMapper mapper) {
-        return new FaretLaboratorioBridgeHandler(api, cuentaServicio, mapper);
+            InnpackApiClient api, CuentaServicioInnpack cuentaServicio, AuthProperties authProperties, FpsApiClient fps,
+            PlanificacionApiClient planificacion, SapApiClient sap, ObjectMapper mapper) {
+        // Cliente aparte (no es un bean): mismas rutas de muestra-laboratorio, pero contra api/faret-laboratorio y con la cuenta de servicio.
+        InnpackApiClient apiFaretLab = new InnpackApiClientServicio(
+                authProperties, cuentaServicio, "/api/muestra-laboratorio", "/api/faret-laboratorio");
+        return new FaretLaboratorioBridgeHandler(api, cuentaServicio, mapper,
+                new MuestraLaboratorioBridgeHandler(apiFaretLab, fps, planificacion, sap, mapper));
     }
 
     @Bean
@@ -962,6 +968,10 @@ public class BridgeConfig {
         reglas.add(new ActionPolicy.Regla("faretLab.detalle", Set.of("FARET"), ROLES_FARET, Map.of(), faretLab::detalle));
         reglas.add(new ActionPolicy.Regla(
                 "faretLab.especificacion.list", Set.of("FARET"), ROLES_FARET, Map.of(), faretLab::especificacionList));
+        // Laboratorio FARET, ESCRITURAS (por pasos): misma validacion y identidad de sesion que muestraLab.*, contra api/faret-laboratorio.
+        reglas.add(new ActionPolicy.Regla(
+                "faretLab.crear", Set.of("FARET"), ROLES_FARET, Map.of(), faretLab::crear,
+                (p, d) -> FaretLaboratorioBridgeHandler.recurso(MuestraLaboratorioBridgeHandler.recursoCrear(p, d))));
         // Photino 1.8.23 - ESCRITURAS de Gestion de Usuarios FARET: solo admin_ti de la sesion FARET (la API lo exige), lista cerrada de
         // claves, rol validado, sin identidad del navegador y recurso auditado sin claves ni nombres.
         reglas.add(new ActionPolicy.Regla(

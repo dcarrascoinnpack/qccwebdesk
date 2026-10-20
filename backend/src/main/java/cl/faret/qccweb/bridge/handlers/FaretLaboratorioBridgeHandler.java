@@ -30,11 +30,29 @@ public class FaretLaboratorioBridgeHandler {
     private final InnpackApiClient api;
     private final CuentaServicioInnpack cuentaServicio;
     private final ObjectMapper mapper;
+    /**
+     * Escrituras: se reutiliza la lógica (claves permitidas, validación, identidad de sesión) de MuestraLaboratorioBridgeHandler,
+     * porque faretLab.* de Photino es su réplica (mismos DTOs y rutas). Su cliente ya apunta a api/faret-laboratorio con la cuenta
+     * de servicio. Solo se exponen las acciones registradas en BridgeConfig; el resto de sus métodos no se usa.
+     */
+    private final MuestraLaboratorioBridgeHandler escrituras;
 
-    public FaretLaboratorioBridgeHandler(InnpackApiClient api, CuentaServicioInnpack cuentaServicio, ObjectMapper mapper) {
+    public FaretLaboratorioBridgeHandler(InnpackApiClient api, CuentaServicioInnpack cuentaServicio, ObjectMapper mapper,
+            MuestraLaboratorioBridgeHandler escrituras) {
         this.api = api;
         this.cuentaServicio = cuentaServicio;
         this.mapper = mapper;
+        this.escrituras = escrituras;
+    }
+
+    /** faretLab.crear → POST api/faret-laboratorio (Photino 1.8.23, FaretLaboratorioHandler.cs). */
+    public BridgeResult crear(ObjectNode payload, SessionUser usuario) {
+        return escrituras.crear(payload, usuario);
+    }
+
+    /** Recurso auditado de una escritura de faretLab: el de muestraLab con su prefijo ("faretLab:&lt;id&gt;:crear"). */
+    public static String recurso(String recursoMuestraLab) {
+        return recursoMuestraLab.replaceFirst("^muestraLab:", "faretLab:");
     }
 
     /** faretLab.list → GET api/faret-laboratorio[?estado=..&tipoMuestra=..&np=..] (solo filtros no vacíos). */

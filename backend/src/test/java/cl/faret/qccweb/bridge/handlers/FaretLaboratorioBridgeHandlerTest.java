@@ -43,7 +43,7 @@ class FaretLaboratorioBridgeHandlerTest {
             logins.incrementAndGet();
             return login;
         }, new InnpackServicioProperties(usuario, password, Duration.ofSeconds(60)), Clock.systemUTC());
-        return new FaretLaboratorioBridgeHandler(api, cuenta, mapper);
+        return new FaretLaboratorioBridgeHandler(api, cuenta, mapper, null);
     }
 
     private ObjectNode payload(String json) throws Exception {
