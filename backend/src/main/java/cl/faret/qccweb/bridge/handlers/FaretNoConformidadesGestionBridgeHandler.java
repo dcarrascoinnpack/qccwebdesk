@@ -143,8 +143,9 @@ public class FaretNoConformidadesGestionBridgeHandler {
      * actualiza tipo, origen, titulo, descripcion, severidad, proceso, norma y responsable; ignora reportadoPor, fechaDeteccion y el
      * vínculo). Lost update por huella (ver la clase). Una NC cerrada se puede editar, igual que en Photino. Respuesta {mensaje}.
      *
-     * Ojo (comportamiento de Photino, replicado): la API pisa `responsable` sin COALESCE; el formulario "Editar" de la lista lo envía
-     * vacío (la vista no lo precarga) y lo borra; el detalle de "Gestionar" sí manda el responsable actual.
+     * Endurecimiento F4 (decisión del usuario 2026-10-20), distinto de Photino: la API pisa `responsable` sin COALESCE y el formulario
+     * "Editar" de la lista lo envía vacío (la vista no lo precarga), lo que lo borraba; un responsable vacío o ausente se reemplaza
+     * por el vigente de la NC (ver conservarResponsable). Ya no se puede vaciar el responsable desde aquí.
      */
     public BridgeResult actualizar(ObjectNode payload, SessionUser usuario) {
         if (!mejoraContinua.configurada()) {
@@ -159,10 +160,12 @@ public class FaretNoConformidadesGestionBridgeHandler {
         } catch (Invalido e) {
             return BridgeResult.error(e.getMessage());
         }
-        BridgeResult conflicto = verificarHuella(id, usuario);
+        JsonNode[] vigente = new JsonNode[1];
+        BridgeResult conflicto = verificarHuella(id, usuario, vigente);
         if (conflicto != null) {
             return conflicto;
         }
+        conservarResponsable(cuerpo, vigente[0]);
         BridgeResult resultado = proyectar(FaretRespuestas.crudoMc(mejoraContinua.putJson(usuario, RUTA + "/" + id, cuerpo), mapper), "mensaje");
         if (resultado.ok()) {
             reregistrar(id, usuario);
@@ -423,6 +426,11 @@ public class FaretNoConformidadesGestionBridgeHandler {
 
     /** null = la sesión leyó la NC y sigue igual; si no, el resultado de error (sin leer, inexistente o modificada). */
     private BridgeResult verificarHuella(int id, SessionUser usuario) {
+        return verificarHuella(id, usuario, null);
+    }
+
+    /** Igual, y deja en vigenteOut[0] la NC releída (la que coincide con la huella) para quien necesite sus valores actuales. */
+    private BridgeResult verificarHuella(int id, SessionUser usuario, JsonNode[] vigenteOut) {
         String leida = HuellasNc.leida(id);
         if (leida == null) {
             return BridgeResult.error(MENSAJE_NC_SIN_LEER);
@@ -434,7 +442,24 @@ public class FaretNoConformidadesGestionBridgeHandler {
         if (!HuellasNc.de(vigente.data()).equals(leida)) {
             return BridgeResult.error(MENSAJE_NC_CONFLICTO);
         }
+        if (vigenteOut != null && vigente.data() instanceof JsonNode nc) {
+            vigenteOut[0] = nc;
+        }
         return null;
+    }
+
+    /**
+     * La API pisa `responsable` en el PUT completo (sin COALESCE) y el formulario "Editar" de la lista lo manda vacío porque la vista
+     * no lo precarga: un responsable vacío o ausente se reemplaza por el vigente de la NC releída, para que editar otros campos no lo
+     * borre. Un responsable informado se respeta; si la NC tampoco tiene, queda como vino.
+     */
+    private static void conservarResponsable(ObjectNode cuerpo, JsonNode vigente) {
+        JsonNode enviado = cuerpo.get("responsable");
+        boolean vacio = enviado == null || enviado.isNull() || (enviado.isString() && enviado.asString().isBlank());
+        JsonNode actual = vigente != null && vigente.isObject() ? vigente.get("responsable") : null;
+        if (vacio && actual != null && actual.isString() && !actual.asString().isBlank()) {
+            cuerpo.put("responsable", actual.asString());
+        }
     }
 
     /** Tras escribir: la NC que la vista queda mostrando es la recién guardada; si no se puede releer, la huella queda inválida. */

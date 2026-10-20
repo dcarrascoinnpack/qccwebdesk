@@ -249,6 +249,39 @@ class BridgeFaseF4Test {
     }
 
     @Test
+    void updateConResponsableVacioOAusenteConservaElVigenteDeLaNcYUnoInformadoSeRespeta() throws Exception {
+        MockHttpSession ana = login("ana");
+        MC.responder("GET", NC + "/7", 200, NC7);
+        MC.responder("PUT", NC + "/7", 200, "{\"mensaje\":\"ok\"}");
+        accion(ana, "faret.nc.get", Map.of("id", 7));
+        MC.limpiar();
+        MC.responder("GET", NC + "/7", 200, NC7);
+        MC.responder("PUT", NC + "/7", 200, "{\"mensaje\":\"ok\"}");
+        // "Editar" de la lista manda responsable "": se conserva el vigente (Pedro) en vez de borrarlo.
+        accion(ana, UPDATE, con(ncUpdate(), "responsable", "")).andExpect(jsonPath("$.ok").value(true));
+        assertThat(MC.cuerpos().get(1)).contains("\"responsable\":\"Pedro\"");
+        // Ausente o solo espacios: igual.
+        accion(ana, UPDATE, ncUpdate()).andExpect(jsonPath("$.ok").value(true));
+        assertThat(MC.cuerpos().get(4)).contains("\"responsable\":\"Pedro\"");
+        accion(ana, UPDATE, con(ncUpdate(), "responsable", "   ")).andExpect(jsonPath("$.ok").value(true));
+        assertThat(MC.cuerpos().get(7)).contains("\"responsable\":\"Pedro\"");
+        // Uno informado se respeta.
+        accion(ana, UPDATE, con(ncUpdate(), "responsable", " Luisa ")).andExpect(jsonPath("$.ok").value(true));
+        assertThat(MC.cuerpos().get(10)).contains("\"responsable\":\"Luisa\"");
+        // Si la NC no tiene responsable, queda como vino.
+        MC.limpiar();
+        String sinResponsable = NC7.replace("\"responsable\":\"Pedro\"", "\"responsable\":null");
+        MC.responder("GET", NC + "/7", 200, sinResponsable);
+        MC.responder("PUT", NC + "/7", 200, "{\"mensaje\":\"ok\"}");
+        accion(ana, "faret.nc.get", Map.of("id", 7));
+        MC.limpiar();
+        MC.responder("GET", NC + "/7", 200, sinResponsable);
+        MC.responder("PUT", NC + "/7", 200, "{\"mensaje\":\"ok\"}");
+        accion(ana, UPDATE, con(ncUpdate(), "responsable", "")).andExpect(jsonPath("$.ok").value(true));
+        assertThat(MC.cuerpos().get(1)).contains("\"responsable\":\"\"");
+    }
+
+    @Test
     void updateConHuellaDeFarEtNcGetYLostUpdateDetectado() throws Exception {
         MockHttpSession ana = login("ana");
         MC.responder("GET", NC + "/7", 200, NC7);
