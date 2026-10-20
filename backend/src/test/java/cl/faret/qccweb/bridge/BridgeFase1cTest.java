@@ -204,7 +204,7 @@ class BridgeFase1cTest {
                 "faret.inspecciones.list", "faret.inspecciones.adjuntos", "faret.inspeccionesPallet.list", "faret.inspeccionesPallet.get",
                 "faret.nc.adjuntos.abrir", "faret.usuarios.list", "faret.usuarios.permisos.get", "faret.usuarios.create", "faret.usuarios.cambiarRol", "faret.usuarios.resetPassword",
                 "faret.usuarios.activar", "faret.usuarios.desactivar", "faret.usuarios.eliminarDefinitivo", "faret.usuarios.permisos.guardar",
-                "faret.usuarios.permisos.restablecer",
+                "faret.usuarios.permisos.restablecer", "faretLab.list", "faretLab.detalle", "faretLab.especificacion.list",
                 "controlDocumental.list", "controlDocumental.get", "controlDocumental.adjunto.abrir",
                 "controlDocumental.create", "controlDocumental.update", "controlDocumental.version.crear",
                 "controlDocumental.eliminar", "controlDocumental.adjunto.subir",

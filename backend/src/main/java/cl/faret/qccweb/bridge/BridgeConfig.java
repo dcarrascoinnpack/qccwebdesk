@@ -17,6 +17,7 @@ import cl.faret.qccweb.bridge.handlers.FormulariosBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.InicioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.LiberacionCalidadBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MaquinasSeguimientoBridgeHandler;
+import cl.faret.qccweb.bridge.handlers.FaretLaboratorioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.MuestraLaboratorioBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.NoConformidadesBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ProductoTerminadoBridgeHandler;
@@ -312,6 +313,12 @@ public class BridgeConfig {
     }
 
     @Bean
+    public FaretLaboratorioBridgeHandler faretLaboratorioBridgeHandler(
+            InnpackApiClient api, CuentaServicioInnpack cuentaServicio, ObjectMapper mapper) {
+        return new FaretLaboratorioBridgeHandler(api, cuentaServicio, mapper);
+    }
+
+    @Bean
     public TalleresExternosBridgeHandler talleresExternosBridgeHandler(InnpackApiClient api, ObjectMapper mapper) {
         return new TalleresExternosBridgeHandler(api, mapper);
     }
@@ -336,7 +343,7 @@ public class BridgeConfig {
             FaretNoConformidadesBridgeHandler faretNc, FaretNoConformidadesGestionBridgeHandler faretNcGestion,
             FaretNoConformidadesRegistroBridgeHandler faretNcRegistro, FaretBorradosBridgeHandler faretBorrados,
             FaretImportacionBridgeHandler faretImportacion, DespachosDiariosBridgeHandler despachos,
-            TrazabilidadBridgeHandler trazabilidad) {
+            TrazabilidadBridgeHandler trazabilidad, FaretLaboratorioBridgeHandler faretLab) {
         // "empresa" en Producto Terminado es contexto de sesión (cada módulo Photino la manda
         // hardcodeada), nunca un filtro elegible: se pisa con la sesión antes de llegar al handler.
         Map<String, IdentityOverride.Fuente> empresaDeSesion = Map.of("empresa", IdentityOverride.Fuente.EMPRESA);
@@ -949,6 +956,12 @@ public class BridgeConfig {
                 "faret.usuarios.list", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosList));
         reglas.add(new ActionPolicy.Regla(
                 "faret.usuarios.permisos.get", Set.of("FARET"), ROLES_ADMIN_TI_INNPACK, Map.of(), faret::usuariosPermisosGet));
+        // Laboratorio FARET, SOLO LECTURA: la API INNPACK api/faret-laboratorio exige JWT (sin roles) y se llama con la cuenta de
+        // servicio de bajo privilegio; sesion FARET con los 5 roles. Sin la cuenta configurada responde "no disponible".
+        reglas.add(new ActionPolicy.Regla("faretLab.list", Set.of("FARET"), ROLES_FARET, Map.of(), faretLab::list));
+        reglas.add(new ActionPolicy.Regla("faretLab.detalle", Set.of("FARET"), ROLES_FARET, Map.of(), faretLab::detalle));
+        reglas.add(new ActionPolicy.Regla(
+                "faretLab.especificacion.list", Set.of("FARET"), ROLES_FARET, Map.of(), faretLab::especificacionList));
         // Photino 1.8.23 - ESCRITURAS de Gestion de Usuarios FARET: solo admin_ti de la sesion FARET (la API lo exige), lista cerrada de
         // claves, rol validado, sin identidad del navegador y recurso auditado sin claves ni nombres.
         reglas.add(new ActionPolicy.Regla(
