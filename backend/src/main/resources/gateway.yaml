@@ -83,6 +83,14 @@ qcc:
       read-timeout: 25s          # = HttpClient.Timeout de SapRecepcionApiClient en Photino
       max-bytes-respuesta: 5242880
 
+    innpack-servicio:
+      # Cuenta de servicio INNPACK de BAJO privilegio para sesiones FARET (faretLab.*, Despachos y Formularios FARET): la misma
+      # idea que InnpackApiServiceAccount de Photino (SERVICIO_FARET_HIBRIDO, rol operador). Credenciales SOLO por variable de
+      # entorno (nunca en este archivo). El gateway rechaza una cuenta con rol admin / admin_ti. Sin credenciales = no disponible.
+      usuario: ${QCC_INNPACK_SERVICIO_USUARIO:}
+      password: ${QCC_INNPACK_SERVICIO_PASSWORD:}
+      margen-renovacion: 60s
+
     planificacion:
       # Planificacion FARET / Programa de Produccion (Trazabilidad, Laboratorio): misma API que Photino (config.json →
       # PlanificacionApi). Sin autenticacion (confirmado en Photino), por eso no hay API key. Sin base URL = "no configurada".

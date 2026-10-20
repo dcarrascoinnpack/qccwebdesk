@@ -1,6 +1,7 @@
 package cl.faret.qccweb.bridge;
 
 import cl.faret.qccweb.auth.AuthProperties;
+import cl.faret.qccweb.auth.InnpackAuthClient;
 import cl.faret.qccweb.bridge.handlers.CertificadosLiberacionBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.ControlDocumentalBridgeHandler;
 import cl.faret.qccweb.bridge.handlers.DashboardBridgeHandler;
@@ -30,6 +31,8 @@ import cl.faret.qccweb.upstream.FaretProperties;
 import cl.faret.qccweb.upstream.FpsApiClient;
 import cl.faret.qccweb.upstream.FpsProperties;
 import cl.faret.qccweb.upstream.InnpackApiClient;
+import cl.faret.qccweb.upstream.CuentaServicioInnpack;
+import cl.faret.qccweb.upstream.InnpackServicioProperties;
 import cl.faret.qccweb.upstream.PlanificacionApiClient;
 import cl.faret.qccweb.upstream.PlanificacionProperties;
 import cl.faret.qccweb.upstream.SapApiClient;
@@ -147,6 +150,16 @@ public class BridgeConfig {
     @Bean
     public FpsApiClient fpsApiClient(FpsProperties properties) {
         return new FpsApiClient(properties);
+    }
+
+    /**
+     * Cuenta de servicio INNPACK de bajo privilegio para las acciones de una sesión FARET que la API INNPACK atiende solo con JWT
+     * (faretLab.*, Despachos y Formularios FARET). Sin credenciales configuradas esas acciones no estarán disponibles.
+     */
+    @Bean
+    public CuentaServicioInnpack cuentaServicioInnpack(
+            InnpackAuthClient authClient, InnpackServicioProperties propiedades, java.time.Clock reloj) {
+        return new CuentaServicioInnpack(authClient::login, propiedades, reloj);
     }
 
     @Bean
