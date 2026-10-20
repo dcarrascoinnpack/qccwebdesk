@@ -359,6 +359,37 @@ class BridgeFaseF4Test {
         accion(ana, GESTION, ok).andExpect(jsonPath("$.error").value("Internal Server Error"));
     }
 
+    @Test
+    void gestionCerradaSoloLaPuedenAdminAdminTiYCalidadYPendienteQuedaAbiertoATodos() throws Exception {
+        String sinPermiso = "Solo administración o calidad puede dejar una no conformidad en estado CERRADA.";
+        for (String usuario : List.of("clara", "ines")) {
+            MockHttpSession s = login(usuario);
+            MC.responder("GET", NC + "/7", 200, NC7);
+            accion(s, "faret.nc.get", Map.of("id", 7));
+            MC.limpiar();
+            accion(s, GESTION, mapa("id", 7, "responsable", "P", "estadoGestion", "CERRADA", "fechaCompromiso", null))
+                    .andExpect(jsonPath("$.ok").value(false)).andExpect(jsonPath("$.error").value(sinPermiso));
+            // Rechazada antes de releer o escribir: ninguna llamada a la API.
+            assertThat(MC.peticiones()).isEmpty();
+            MC.responder("GET", NC + "/7", 200, NC7);
+            MC.responder("PATCH", NC + "/7/gestion", 200, "{\"mensaje\":\"Gestión actualizada correctamente\"}");
+            accion(s, GESTION, mapa("id", 7, "responsable", "P", "estadoGestion", "PENDIENTE", "fechaCompromiso", null))
+                    .andExpect(jsonPath("$.ok").value(true));
+            assertThat(MC.cuerpos().get(1)).contains("\"estadoGestion\":\"PENDIENTE\"");
+            MC.limpiar();
+        }
+        for (String usuario : List.of("admin", "ana", "tecnico")) {
+            MockHttpSession s = login(usuario);
+            MC.responder("GET", NC + "/7", 200, NC7);
+            MC.responder("PATCH", NC + "/7/gestion", 200, "{\"mensaje\":\"Gestión actualizada correctamente\"}");
+            accion(s, "faret.nc.get", Map.of("id", 7));
+            accion(s, GESTION, mapa("id", 7, "responsable", "P", "estadoGestion", "CERRADA", "fechaCompromiso", null))
+                    .andExpect(jsonPath("$.ok").value(true));
+            assertThat(MC.cuerpos().stream().anyMatch(c -> c.contains("\"estadoGestion\":\"CERRADA\""))).isTrue();
+            MC.limpiar();
+        }
+    }
+
     // ------------------------------------------------------------------------------- cerrar
 
     @Test

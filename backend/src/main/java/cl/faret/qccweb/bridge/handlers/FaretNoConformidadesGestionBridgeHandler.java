@@ -57,6 +57,7 @@ public class FaretNoConformidadesGestionBridgeHandler {
             + "Vuelve a abrir el análisis para ver los cambios.";
     static final String MENSAJE_CIERRE_SIN_SEGUIMIENTO = "La no conformidad quedó cerrada, pero no se pudo registrar el comentario de "
             + "cierre en el seguimiento. Agrégalo como comentario de seguimiento.";
+    static final String MENSAJE_CERRADA_SIN_PERMISO = "Solo administración o calidad puede dejar una no conformidad en estado CERRADA.";
     static final String MARCA_NC = "__qccAuditoriaNc";
 
     private static final String RUTA = "/api/no-conformidades";
@@ -78,7 +79,9 @@ public class FaretNoConformidadesGestionBridgeHandler {
     private static final Set<String> SISTEMAS_ORIGEN = Set.of("DATA_FARET", "INSPECCION_FARET");
     /** Opciones exactas del <select id="fnc-gestion-estado">: PENDIENTE y CERRADA (la API aún acepta ASIGNADA/EN_GESTION). */
     private static final Set<String> ESTADOS_GESTION = Set.of("PENDIENTE", "CERRADA");
-    private static final Set<String> ESTADOS_ACCION = Set.of("PENDIENTE", "EN_PROCESO", "COMPLETADA", "CANCELADA");
+    /** Mismos roles que faret.nc.cerrar (BridgeConfig.ROLES_FARET_NC_CERRAR): CERRADA por gestion.actualizar no puede saltarse esa restricción. */
+    private static final Set<String> ROLES_CIERRE = Set.of("admin", "admin_ti", "calidad");
+    private static final Set<String> ESTADOS_ACCION =Set.of("PENDIENTE", "EN_PROCESO", "COMPLETADA", "CANCELADA");
 
     private static final Set<String> CLAVES_NC_BASE = Set.of("action", "tipo", "origen", "titulo", "descripcion", "severidad", "proceso",
             "norma", "reportadoPor", "responsable", "fechaDeteccion");
@@ -173,8 +176,9 @@ public class FaretNoConformidadesGestionBridgeHandler {
      * faret.nc.gestion.actualizar -> PATCH api/no-conformidades/{id}/gestion {responsable, estadoGestion, fechaCompromiso,
      * actualizadoPor}. estadoGestion: PENDIENTE o CERRADA (las opciones de la vista; obligatorio: un "" lo guardaría la API como
      * estado vacío). La API usa COALESCE: un null no cambia el campo (no se puede borrar la fecha compromiso). CERRADA por esta vía
-     * NO registra fecha de cierre ni quién cerró (eso lo hace faret.nc.cerrar, restringido a admin/admin_ti/calidad): se replica porque
-     * la vista de Photino lo ofrece; está anotado como riesgo en la matriz. actualizadoPor = sesión. Lost update por huella.
+     * NO registra fecha de cierre ni quién cerró (eso lo hace faret.nc.cerrar): como Photino lo ofrece a todos los roles, aquí solo
+     * se permite a admin/admin_ti/calidad (endurecimiento F4, decisión del usuario 2026-10-20); PENDIENTE sigue abierto a todos los
+     * roles de la acción. actualizadoPor = sesión. Lost update por huella.
      */
     public BridgeResult gestionActualizar(ObjectNode payload, SessionUser usuario) {
         if (!mejoraContinua.configurada()) {
@@ -192,6 +196,9 @@ public class FaretNoConformidadesGestionBridgeHandler {
             }
             if (!ESTADOS_GESTION.contains(estado)) {
                 throw new Invalido("Estado de gestión inválido. Valores permitidos: PENDIENTE, CERRADA");
+            }
+            if ("CERRADA".equals(estado) && (usuario.rol() == null || !ROLES_CIERRE.contains(usuario.rol().toLowerCase(java.util.Locale.ROOT)))) {
+                throw new Invalido(MENSAJE_CERRADA_SIN_PERMISO);
             }
             String fecha = fechaOpcional(payload, "fechaCompromiso", "La fecha compromiso no es válida (formato AAAA-MM-DD).");
             ponerTexto(cuerpo, "responsable", responsable);
