@@ -54,6 +54,9 @@ public class FaretNoConformidadesBridgeHandler {
             "metodologia", "problemaDetectado", "porque1", "porque2", "porque3", "porque4", "porque5", "causaRaiz", "conclusion");
     private static final List<String> TEXTOS_ANALISIS = List.of("problemaDetectado", "porque1", "porque2", "porque3", "porque4",
             "porque5", "causaRaiz", "conclusion");
+    /** Textos del análisis que faret.nc.analisis.get entrega escapados (si traen marcado); los dos últimos solo se muestran. */
+    static final List<String> TEXTOS_ANALISIS_ESCAPADOS = List.of("problemaDetectado", "porque1", "porque2", "porque3", "porque4",
+            "porque5", "causaRaiz", "conclusion", "creadoPor", "actualizadoPor");
     /** textareas de la vista; el resto de los campos son inputs de una línea. */
     private static final Set<String> MULTILINEA = Set.of("problemaDetectado", "causaRaiz", "conclusion");
     /** NVARCHAR(MAX): tope anti-abuso, igual que los demás textos largos del gateway. */
@@ -252,6 +255,10 @@ public class FaretNoConformidadesBridgeHandler {
         }
         if (!huella(vigente.data()).equals(leida)) {
             return BridgeResult.error(NoConformidadesBridgeHandler.MENSAJE_ANALISIS_CONFLICTO);
+        }
+        // analisis.get entrega los textos escapados (si traen marcado) y la vista los reenvía: se vuelve al original vigente.
+        if (vigente.data() instanceof JsonNode original) {
+            FaretNoConformidadesGestionBridgeHandler.restaurarEscapados(cuerpo, original, TEXTOS_ANALISIS);
         }
         if (existe) {
             cuerpo.putNull("creadoPor");

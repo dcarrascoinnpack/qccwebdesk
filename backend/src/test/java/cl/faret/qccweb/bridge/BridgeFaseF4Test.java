@@ -282,6 +282,58 @@ class BridgeFaseF4Test {
     }
 
     @Test
+    void textosConMarcadoSalenEscapadosYElFormularioNoLosGuardaDoblementeCodificados() throws Exception {
+        String xss = "<img src=x onerror=alert(1)>";
+        String xssEsc = "&lt;img src=x onerror=alert(1)&gt;";
+        String nc = NC7.replace("\"titulo\":\"Sello abierto\"", "\"titulo\":\"" + xss + "\"")
+                .replace("\"descripcion\":\"D\"", "\"descripcion\":\"R&D <b>x</b>\"")
+                .replace("\"responsable\":\"Pedro\"", "\"responsable\":\"<i>Pedro</i>\"");
+        MockHttpSession ana = login("ana");
+        // list: lo que trae marcado sale escapado; el texto normal ("R&D 5<6") queda idéntico.
+        MC.responder(NC, 200, "[" + nc + ",{\"id\":8,\"titulo\":\"R&D 5<6\"}]");
+        accion(ana, "faret.nc.list", Map.of()).andExpect(jsonPath("$.ok").value(true))
+                .andExpect(jsonPath("$.data[0].titulo").value(xssEsc))
+                .andExpect(jsonPath("$.data[0].descripcion").value("R&amp;D &lt;b&gt;x&lt;/b&gt;"))
+                .andExpect(jsonPath("$.data[0].responsable").value("&lt;i&gt;Pedro&lt;/i&gt;"))
+                .andExpect(jsonPath("$.data[0].proceso").value("Sellado"))
+                .andExpect(jsonPath("$.data[1].titulo").value("R&D 5<6"));
+        // get (misma huella, también escapado).
+        MC.responder("GET", NC + "/7", 200, nc);
+        accion(ana, "faret.nc.get", Map.of("id", 7)).andExpect(jsonPath("$.data.titulo").value(xssEsc));
+        MC.limpiar();
+        MC.responder("GET", NC + "/7", 200, nc);
+        MC.responder("PUT", NC + "/7", 200, "{\"mensaje\":\"ok\"}");
+        MC.responder("PATCH", NC + "/7/gestion", 200, "{\"mensaje\":\"ok\"}");
+        // "Editar" reenvía el texto escapado tal cual salió: se guarda el ORIGINAL, no el escapado; responsable vacío conserva el original.
+        Map<String, Object> m = con(con(ncUpdate(), "titulo", xssEsc), "descripcion", "R&amp;D &lt;b&gt;x&lt;/b&gt;");
+        accion(ana, UPDATE, con(m, "responsable", "")).andExpect(jsonPath("$.ok").value(true));
+        String put = MC.cuerpos().get(1);
+        assertThat(put).contains("\"titulo\":\"" + xss + "\"").contains("\"descripcion\":\"R&D <b>x</b>\"")
+                .contains("\"responsable\":\"<i>Pedro</i>\"").doesNotContain("&lt;").doesNotContain("&amp;");
+        // Si el usuario cambia el texto, se respeta lo que escribió.
+        accion(ana, UPDATE, con(con(m, "titulo", "Título nuevo"), "responsable", "&lt;i&gt;Pedro&lt;/i&gt;")).andExpect(jsonPath("$.ok").value(true));
+        String put2 = MC.cuerpos().get(4);
+        assertThat(put2).contains("\"titulo\":\"Título nuevo\"").contains("\"responsable\":\"<i>Pedro</i>\"");
+        // gestion.actualizar: el responsable escapado vuelve a su original.
+        accion(ana, GESTION, mapa("id", 7, "responsable", "&lt;i&gt;Pedro&lt;/i&gt;", "estadoGestion", "PENDIENTE", "fechaCompromiso", null))
+                .andExpect(jsonPath("$.ok").value(true));
+        assertThat(MC.cuerpos().stream().filter(c -> c.contains("\"actualizadoPor\"")).findFirst().orElseThrow())
+                .contains("\"responsable\":\"<i>Pedro</i>\"");
+        // análisis: sale escapado y guardar devuelve el original.
+        MC.limpiar();
+        String analisis = "{\"id\":3,\"noConformidadId\":7,\"metodologia\":\"MIXTA\",\"problemaDetectado\":\"<script>x</script>\",\"causaRaiz\":\"C\","
+                + "\"creadoPor\":\"Pedro\",\"fechaCreacion\":\"2026-10-01T10:00:00\",\"actualizadoPor\":null,\"fechaActualizacion\":null}";
+        MC.responder("GET", NC + "/7/analisis", 200, analisis);
+        MC.responder("PUT", NC + "/7/analisis", 200, "{\"mensaje\":\"ok\"}");
+        accion(ana, "faret.nc.analisis.get", Map.of("id", 7)).andExpect(jsonPath("$.data.problemaDetectado").value("&lt;script&gt;x&lt;/script&gt;"))
+                .andExpect(jsonPath("$.data.causaRaiz").value("C"));
+        accion(ana, "faret.nc.analisis.guardar", mapa("id", 7, "metodologia", "MIXTA", "problemaDetectado", "&lt;script&gt;x&lt;/script&gt;",
+                "causaRaiz", "C")).andExpect(jsonPath("$.ok").value(true));
+        assertThat(MC.cuerpos().stream().filter(c -> c.contains("\"metodologia\"")).findFirst().orElseThrow())
+                .contains("\"problemaDetectado\":\"<script>x</script>\"").doesNotContain("&lt;");
+    }
+
+    @Test
     void updateConHuellaDeFarEtNcGetYLostUpdateDetectado() throws Exception {
         MockHttpSession ana = login("ana");
         MC.responder("GET", NC + "/7", 200, NC7);

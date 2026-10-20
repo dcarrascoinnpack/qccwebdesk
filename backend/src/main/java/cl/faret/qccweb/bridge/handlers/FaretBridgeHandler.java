@@ -387,6 +387,9 @@ public class FaretBridgeHandler {
             // Fase F4: la vista abre los formularios de edición/gestión con los datos de ESTA lista; se registra la huella de cada NC
             // para detectar lost update en faret.nc.update y faret.nc.gestion.actualizar.
             FaretNoConformidadesGestionBridgeHandler.HuellasNc.registrarLista(upstream.data());
+            // Endurecimiento F4: la vista pinta estos textos con innerHTML; se escapan (solo si traen marcado) DESPUÉS de la huella.
+            // update / gestion.actualizar devuelven el original si el formulario reenvía el texto escapado sin cambios.
+            FaretNoConformidadesGestionBridgeHandler.escaparTextos(upstream.data(), FaretNoConformidadesGestionBridgeHandler.TEXTOS_NC_ESCAPADOS);
         }
         return upstream;
     }
@@ -402,6 +405,7 @@ public class FaretBridgeHandler {
         if (sufijo.isEmpty() && upstream.ok() && ncId != null) {
             // Fase F4: huella de la NC que la sesión queda viendo (lost update en faret.nc.update / gestion.actualizar).
             FaretNoConformidadesGestionBridgeHandler.HuellasNc.registrar(ncId, upstream.data());
+            FaretNoConformidadesGestionBridgeHandler.escaparTextos(upstream.data(), FaretNoConformidadesGestionBridgeHandler.TEXTOS_NC_ESCAPADOS);
         }
         if ("/acciones".equals(sufijo) && upstream.ok() && ncId != null && upstream.data() instanceof ArrayNode items) {
             // Fase F4: ANTES de escapar se registra cada acción ORIGINAL (NC + JSON) para faret.nc.acciones.actualizar: la vista reenvía
@@ -443,6 +447,8 @@ public class FaretBridgeHandler {
         Integer id = enteroPositivo(payload.get("id"));
         if (upstream.ok() && id != null) {
             FaretNoConformidadesBridgeHandler.registrarLectura(id, upstream.data());
+            // Endurecimiento F4: igual que faret.nc.list, el escape va DESPUÉS de registrar la huella; analisis.guardar restaura el original.
+            FaretNoConformidadesGestionBridgeHandler.escaparTextos(upstream.data(), FaretNoConformidadesBridgeHandler.TEXTOS_ANALISIS_ESCAPADOS);
         }
         return upstream;
     }

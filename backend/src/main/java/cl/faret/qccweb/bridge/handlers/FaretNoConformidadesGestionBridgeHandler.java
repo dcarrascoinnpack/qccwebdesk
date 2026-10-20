@@ -26,6 +26,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Pattern;
+import org.springframework.web.util.HtmlUtils;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ArrayNode;
@@ -165,6 +166,7 @@ public class FaretNoConformidadesGestionBridgeHandler {
         if (conflicto != null) {
             return conflicto;
         }
+        restaurarEscapados(cuerpo, vigente[0], TEXTOS_NC_EDITABLES);
         conservarResponsable(cuerpo, vigente[0]);
         BridgeResult resultado = proyectar(FaretRespuestas.crudoMc(mejoraContinua.putJson(usuario, RUTA + "/" + id, cuerpo), mapper), "mensaje");
         if (resultado.ok()) {
@@ -211,10 +213,12 @@ public class FaretNoConformidadesGestionBridgeHandler {
         } catch (Invalido e) {
             return BridgeResult.error(e.getMessage());
         }
-        BridgeResult conflicto = verificarHuella(id, usuario);
+        JsonNode[] vigente = new JsonNode[1];
+        BridgeResult conflicto = verificarHuella(id, usuario, vigente);
         if (conflicto != null) {
             return conflicto;
         }
+        restaurarEscapados(cuerpo, vigente[0], List.of("responsable"));
         BridgeResult resultado = proyectar(
                 FaretRespuestas.crudoMc(mejoraContinua.patchJson(usuario, RUTA + "/" + id + "/gestion", cuerpo), mapper), "mensaje");
         if (resultado.ok()) {
@@ -425,11 +429,7 @@ public class FaretNoConformidadesGestionBridgeHandler {
     }
 
     /** null = la sesión leyó la NC y sigue igual; si no, el resultado de error (sin leer, inexistente o modificada). */
-    private BridgeResult verificarHuella(int id, SessionUser usuario) {
-        return verificarHuella(id, usuario, null);
-    }
-
-    /** Igual, y deja en vigenteOut[0] la NC releída (la que coincide con la huella) para quien necesite sus valores actuales. */
+    /** Además deja en vigenteOut[0] la NC releída (la que coincide con la huella) para quien necesite sus valores actuales. */
     private BridgeResult verificarHuella(int id, SessionUser usuario, JsonNode[] vigenteOut) {
         String leida = HuellasNc.leida(id);
         if (leida == null) {
@@ -446,6 +446,55 @@ public class FaretNoConformidadesGestionBridgeHandler {
             vigenteOut[0] = nc;
         }
         return null;
+    }
+
+    /** Campos de texto libre de una NC que faret.nc.list / get entregan escapados (si traen marcado) y que los formularios reenvían. */
+    static final List<String> TEXTOS_NC_ESCAPADOS = List.of("titulo", "descripcion", "proceso", "norma", "reportadoPor", "responsable",
+            "comentarioCierre", "creadoPor", "cerradoPor");
+    private static final List<String> TEXTOS_NC_EDITABLES = List.of("titulo", "descripcion", "proceso", "norma", "reportadoPor", "responsable");
+
+    /** Mismo criterio que NoConformidadesBridgeHandler.escaparCampos: solo se escapa un texto que trae marcado HTML. */
+    static String escaparSiMarcado(String texto) {
+        return texto != null && MARCADO_HTML.matcher(texto).find() ? HtmlUtils.htmlEscape(texto, "UTF-8") : texto;
+    }
+
+    /** Escapa in situ (solo los que traen marcado) los campos de texto de un objeto, o de cada objeto de un arreglo. */
+    static void escaparTextos(Object data, List<String> campos) {
+        if (data instanceof ArrayNode items) {
+            for (JsonNode item : items) {
+                escaparTextos(item, campos);
+            }
+        } else if (data instanceof ObjectNode objeto) {
+            for (String campo : campos) {
+                JsonNode v = objeto.get(campo);
+                if (v != null && v.isString()) {
+                    objeto.put(campo, escaparSiMarcado(v.asString()));
+                }
+            }
+        }
+    }
+
+    /**
+     * Inversa de escaparTextos para lo que el navegador reenvía: si un campo llega IGUAL al texto escapado que esta pasarela entregó
+     * (la vista lo copia a un input con .value), se vuelve al original vigente de la API, para no guardar el texto doblemente codificado.
+     * Un texto distinto (el usuario lo cambió) se respeta tal cual. `vigente` es la lectura que coincide con la huella de la sesión.
+     */
+    static void restaurarEscapados(ObjectNode cuerpo, JsonNode vigente, List<String> campos) {
+        if (vigente == null || !vigente.isObject()) {
+            return;
+        }
+        for (String campo : campos) {
+            JsonNode original = vigente.get(campo);
+            JsonNode enviado = cuerpo.get(campo);
+            if (original == null || !original.isString() || enviado == null || !enviado.isString()) {
+                continue;
+            }
+            String o = original.asString();
+            String escapado = escaparSiMarcado(o);
+            if (!escapado.equals(o) && (enviado.asString().equals(escapado) || enviado.asString().equals(escaparSiMarcado(o.strip())))) {
+                cuerpo.put(campo, o);
+            }
+        }
     }
 
     /**
